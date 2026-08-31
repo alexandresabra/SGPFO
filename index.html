@@ -1961,8 +1961,8 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
    funcionando 100% localmente, como até agora — nada quebra.
    Crie antes a tabela com o SQL do arquivo supabase_schema.sql. */
 const SUPABASE_CONFIG = {
-  url: '',      // ex.: 'https://xxxxxxxxxxxx.supabase.co'
-  anonKey: ''   // ex.: 'eyJhbGciOiJIUzI1NiIs...' (chave "anon public")
+  url: 'https://vcddqojqjuvdrluflfdu.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjZGRxb2pxanV2ZHJsdWZsZmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTM1MDcsImV4cCI6MjEwMzc2OTUwN30.8GcH4RV-5BiXi3TdksWwSheXv13qf9lAJXNtbKvq4UM'
 };
 let supabaseClient = null;
 let supabaseReady = false;
