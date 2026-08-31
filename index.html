@@ -1490,13 +1490,10 @@
         <div class="field full"><label>Nome completo</label><input type="text" id="respNome"></div>
         <div class="field">
           <label>Papel</label>
-          <select id="respPapel">
-            <option value="Gerente">Gerente</option>
-            <option value="Engenheiro">Engenheiro</option>
-            <option value="Administrativo">Administrativo</option>
-            <option value="Almoxarife">Almoxarife</option>
-            <option value="RH">RH</option>
-          </select>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select id="respPapel" style="flex:1;"></select>
+            <button type="button" class="btn small secondary" onclick="openPapeisResponsavelModal()">Gerenciar</button>
+          </div>
         </div>
         <div class="field">
           <label>Status</label>
@@ -1508,6 +1505,7 @@
         </div>
         <div class="field"><label>Telefone</label><input type="tel" id="respTelefone"></div>
         <div class="field"><label>E-mail</label><input type="email" id="respEmail"></div>
+        <div class="field full"><div class="step-note">Esse e-mail precisa ser exatamente o mesmo usado para criar o login dessa pessoa no painel do Supabase (Authentication → Users) — é assim que o sistema reconhece automaticamente quem está logado e libera o papel certo (ex.: acesso ao Financeiro para Gerente/Administrativo/RH).</div></div>
       </div>
       <div class="form-actions">
         <button class="btn secondary" onclick="closeModal('modalResponsavel')">Cancelar</button>
@@ -1592,6 +1590,27 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalPapeisResponsavel">
+  <div class="modal">
+    <div class="modal-head"><h3>Gerenciar papéis de Responsáveis</h3><button class="modal-close" onclick="closeModal('modalPapeisResponsavel')">&times;</button></div>
+    <div class="modal-body">
+      <div class="step-note" style="margin-bottom:12px;">Papéis controlam o acesso a áreas sensíveis do sistema (Financeiro, Rateio de Mão de Obra, salário/benefício de funcionários). Gerente, Administrativo e RH/DP têm acesso ao Financeiro; Gerente, Administrativo e RH/DP também têm acesso aos dados de salário/benefício.</div>
+      <table>
+        <thead><tr><th>Papel</th><th></th></tr></thead>
+        <tbody id="papeisResponsavelListBody"></tbody>
+      </table>
+      <hr class="divider">
+      <div class="form-grid">
+        <div class="field full"><label>Novo papel</label><input type="text" id="novoPapelResponsavel" placeholder="Ex.: Coordenador, Jurídico..."></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn secondary" onclick="closeModal('modalPapeisResponsavel')">Fechar</button>
+        <button class="btn" onclick="addPapelResponsavel()">+ Adicionar papel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalTecnico">
   <div class="modal">
     <div class="modal-head"><h3 id="modalTecnicoTitle">Novo técnico</h3><button class="modal-close" onclick="closeModal('modalTecnico')">&times;</button></div>
@@ -1664,19 +1683,46 @@
             <option value="sim">Gerente — visão 360° do sistema</option>
           </select>
         </div>
+        <div class="field">
+          <label>Tipo de vínculo</label>
+          <select id="funcTipoVinculo" onchange="toggleTipoVinculoFuncionario()">
+            <option value="clt">CLT</option>
+            <option value="pj">PJ (Indireto)</option>
+          </select>
+        </div>
       </div>
       <hr class="divider">
-      <h4 style="font-family:var(--serif);margin:0 0 6px;">Encargos fixos e referências (Rateio de Mão de Obra)</h4>
-      <div class="step-note" style="margin-bottom:12px;">Seguro, PCMSO, Vale Alimentação, Plano de Saúde e Refeição são valores fixos do funcionário. Salário Base e Vale Transporte "de referência" só servem para pré-preencher o lançamento mensal — em cada mês, na tela de Rateio de Mão de Obra, eles continuam editáveis.</div>
-      <div class="form-grid cols-3">
-        <div class="field"><label>Salário base — referência (R$)</label><input type="number" id="funcSalarioBaseRef" step="0.01"></div>
-        <div class="field"><label>Vale transporte — referência (R$)</label><input type="number" id="funcValeTransporteRef" step="0.01"></div>
-        <div class="field"><label>Seguro de vida (R$)</label><input type="number" id="funcSeguroVida" step="0.01" placeholder="Ex.: 6.72"></div>
-        <div class="field"><label>PCMSO (R$)</label><input type="number" id="funcPcmso" step="0.01" placeholder="Ex.: 40"></div>
-        <div class="field"><label>Vale alimentação (R$)</label><input type="number" id="funcValeAlimentacao" step="0.01"></div>
-        <div class="field"><label>Plano de saúde (R$)</label><input type="number" id="funcPlanoSaude" step="0.01"></div>
-        <div class="field"><label>Café, almoço, lanche (R$)</label><input type="number" id="funcCafeAlmocoLanche" step="0.01"></div>
+
+      <div id="funcRHSemAcesso" class="empty-state" style="display:none;">
+        <div class="big">🔒</div>Acesso restrito.<br>
+        <div class="step-note" style="margin-top:6px;">Salário, benefícios e encargos são visíveis apenas para os perfis Gerente, RH, DP e Administrativo.</div>
       </div>
+
+      <div id="funcRHConteudo">
+        <h4 style="font-family:var(--serif);margin:0 0 6px;" id="funcRHTitulo">Encargos fixos e referências (Rateio de Mão de Obra)</h4>
+
+        <div id="funcCLTBloco">
+          <div class="step-note" style="margin-bottom:12px;">Seguro, PCMSO, Vale Alimentação, Plano de Saúde e Refeição são valores fixos do funcionário. Salário Base e Vale Transporte "de referência" só servem para pré-preencher o lançamento mensal — em cada mês, na tela de Rateio de Mão de Obra, eles continuam editáveis.</div>
+          <div class="form-grid cols-3">
+            <div class="field"><label>Salário base — referência (R$)</label><input type="number" id="funcSalarioBaseRef" step="0.01"></div>
+            <div class="field"><label>Vale transporte — referência (R$)</label><input type="number" id="funcValeTransporteRef" step="0.01"></div>
+            <div class="field"><label>Seguro de vida (R$)</label><input type="number" id="funcSeguroVida" step="0.01" placeholder="Ex.: 6.72"></div>
+            <div class="field"><label>PCMSO (R$)</label><input type="number" id="funcPcmso" step="0.01" placeholder="Ex.: 40"></div>
+            <div class="field"><label>Vale alimentação (R$)</label><input type="number" id="funcValeAlimentacao" step="0.01"></div>
+            <div class="field"><label>Plano de saúde (R$)</label><input type="number" id="funcPlanoSaude" step="0.01"></div>
+            <div class="field"><label>Café, almoço, lanche (R$)</label><input type="number" id="funcCafeAlmocoLanche" step="0.01"></div>
+          </div>
+        </div>
+
+        <div id="funcPJBloco" style="display:none;">
+          <div class="step-note" style="margin-bottom:12px;">Funcionário indireto (Pessoa Jurídica) — não entra no cálculo de encargos CLT, apenas valor mensal e benefícios contratados.</div>
+          <div class="form-grid cols-3">
+            <div class="field"><label>Salário / Pró-labore mensal — PJ (R$)</label><input type="number" id="funcPjSalario" step="0.01"></div>
+            <div class="field"><label>Benefícios — PJ (R$)</label><input type="number" id="funcPjBeneficios" step="0.01"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn secondary" onclick="closeModal('modalFuncionario')">Cancelar</button>
         <button class="btn" onclick="saveFuncionario()">Salvar funcionário</button>
@@ -2523,6 +2569,63 @@ function deleteStatusObra(index){
   toast('Status excluído.');
 }
 
+/* ---------------- Papéis de Responsáveis (gerenciável) ---------------- */
+function ensurePapeisResponsavelDefaults(){
+  let papeis = load('papeisResponsavelOptions');
+  if(!papeis.length){
+    papeis = ['Gerente','Engenheiro','Administrativo','Almoxarife','RH/DP'];
+    save('papeisResponsavelOptions', papeis);
+  }
+  return papeis;
+}
+
+function refreshRespPapelSelect(){
+  const papeis = ensurePapeisResponsavelDefaults();
+  document.getElementById('respPapel').innerHTML = papeis.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+}
+
+function openPapeisResponsavelModal(){
+  renderPapeisResponsavelList();
+  document.getElementById('novoPapelResponsavel').value = '';
+  openModal('modalPapeisResponsavel');
+}
+
+function renderPapeisResponsavelList(){
+  const papeis = ensurePapeisResponsavelDefaults();
+  document.getElementById('papeisResponsavelListBody').innerHTML = papeis.map((p,i)=>`
+    <tr>
+      <td>${esc(p)}</td>
+      <td style="text-align:right;"><button class="btn small danger" onclick="deletePapelResponsavel(${i})">Excluir</button></td>
+    </tr>`).join('');
+}
+
+function addPapelResponsavel(){
+  const val = document.getElementById('novoPapelResponsavel').value.trim();
+  if(!val){ toast('Informe o nome do papel.'); return; }
+  let papeis = ensurePapeisResponsavelDefaults();
+  if(papeis.some(p=>p.toLowerCase()===val.toLowerCase())){ toast('Esse papel já existe.'); return; }
+  papeis.push(val);
+  save('papeisResponsavelOptions', papeis);
+  document.getElementById('novoPapelResponsavel').value = '';
+  renderPapeisResponsavelList();
+  refreshRespPapelSelect();
+  toast('Papel adicionado.');
+}
+
+function deletePapelResponsavel(index){
+  let papeis = ensurePapeisResponsavelDefaults();
+  const emUso = load('responsaveis').some(r=>r.papel===papeis[index]);
+  const msg = emUso
+    ? `Este papel está em uso por um ou mais responsáveis. Excluí-lo não altera os responsáveis já cadastrados, mas ele deixará de aparecer na lista. Continuar?`
+    : 'Excluir este papel?';
+  if(!confirm(msg)) return;
+  papeis.splice(index,1);
+  save('papeisResponsavelOptions', papeis);
+  renderPapeisResponsavelList();
+  refreshRespPapelSelect();
+  toast('Papel excluído.');
+}
+
 /* ---------------- Papéis por obra (multi-seleção de funcionários) ---------------- */
 function refreshObraRoleSelects(){
   const responsaveis = load('responsaveis');
@@ -3257,6 +3360,7 @@ function refreshRespObraSelect(){
 
 function openResponsavelModal(id){
   refreshRespObraSelect();
+  refreshRespPapelSelect();
   document.getElementById('modalResponsavelTitle').textContent = id ? 'Editar responsável' : 'Novo responsável';
   ['respId','respNome','respTelefone','respEmail'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('respPapel').value = 'Gerente';
@@ -3649,13 +3753,28 @@ function refreshFuncionarioSetorSelect(){
   sel.innerHTML = '<option value="">— Sem setor —</option>' + setores.map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('');
 }
 
+function toggleTipoVinculoFuncionario(){
+  const tipo = document.getElementById('funcTipoVinculo').value;
+  document.getElementById('funcCLTBloco').style.display = tipo==='pj' ? 'none' : 'block';
+  document.getElementById('funcPJBloco').style.display = tipo==='pj' ? 'block' : 'none';
+  document.getElementById('funcRHTitulo').textContent = tipo==='pj'
+    ? 'Salário e benefícios (PJ — Indireto)'
+    : 'Encargos fixos e referências (Rateio de Mão de Obra)';
+}
+
 function openFuncionarioModal(id){
   refreshFuncionarioSetorSelect();
   document.getElementById('modalFuncionarioTitle').textContent = id ? 'Editar funcionário' : 'Novo funcionário';
-  ['funcId','funcNome','funcMatricula','funcCargo','funcAdmissao','funcTelefone','funcEmail','funcSalarioBaseRef','funcValeTransporteRef','funcSeguroVida','funcPcmso','funcValeAlimentacao','funcPlanoSaude','funcCafeAlmocoLanche'].forEach(f=>document.getElementById(f).value='');
+  ['funcId','funcNome','funcMatricula','funcCargo','funcAdmissao','funcTelefone','funcEmail','funcSalarioBaseRef','funcValeTransporteRef','funcSeguroVida','funcPcmso','funcValeAlimentacao','funcPlanoSaude','funcCafeAlmocoLanche','funcPjSalario','funcPjBeneficios'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('funcStatus').value = 'ativo';
   document.getElementById('funcGerente').value = 'nao';
   document.getElementById('funcSetor').value = '';
+  document.getElementById('funcTipoVinculo').value = 'clt';
+
+  const podeVerRH = temAcessoRH();
+  document.getElementById('funcRHSemAcesso').style.display = podeVerRH ? 'none' : 'block';
+  document.getElementById('funcRHConteudo').style.display = podeVerRH ? 'block' : 'none';
+
   if(id){
     const f = load('funcionarios').find(x=>x.id===id);
     if(f){
@@ -3669,15 +3788,21 @@ function openFuncionarioModal(id){
       document.getElementById('funcEmail').value = f.email||'';
       document.getElementById('funcStatus').value = f.status||'ativo';
       document.getElementById('funcGerente').value = f.gerente ? 'sim' : 'nao';
-      document.getElementById('funcSalarioBaseRef').value = f.salarioBaseReferencia||'';
-      document.getElementById('funcValeTransporteRef').value = f.valeTransporteReferencia||'';
-      document.getElementById('funcSeguroVida').value = f.seguroVida||'';
-      document.getElementById('funcPcmso').value = f.pcmso||'';
-      document.getElementById('funcValeAlimentacao').value = f.valeAlimentacao||'';
-      document.getElementById('funcPlanoSaude').value = f.planoSaude||'';
-      document.getElementById('funcCafeAlmocoLanche').value = f.cafeAlmocoLanche||'';
+      document.getElementById('funcTipoVinculo').value = f.tipoVinculo || 'clt';
+      if(podeVerRH){
+        document.getElementById('funcSalarioBaseRef').value = f.salarioBaseReferencia||'';
+        document.getElementById('funcValeTransporteRef').value = f.valeTransporteReferencia||'';
+        document.getElementById('funcSeguroVida').value = f.seguroVida||'';
+        document.getElementById('funcPcmso').value = f.pcmso||'';
+        document.getElementById('funcValeAlimentacao').value = f.valeAlimentacao||'';
+        document.getElementById('funcPlanoSaude').value = f.planoSaude||'';
+        document.getElementById('funcCafeAlmocoLanche').value = f.cafeAlmocoLanche||'';
+        document.getElementById('funcPjSalario').value = f.pjSalario||'';
+        document.getElementById('funcPjBeneficios').value = f.pjBeneficios||'';
+      }
     }
   }
+  toggleTipoVinculoFuncionario();
   openModal('modalFuncionario');
 }
 
@@ -3686,6 +3811,9 @@ function saveFuncionario(){
   if(!nome){ toast('Informe o nome do funcionário.'); return; }
   const id = document.getElementById('funcId').value || uid();
   let funcs = load('funcionarios');
+  const existente = funcs.find(f=>f.id===id);
+  const podeVerRH = temAcessoRH();
+
   const record = {
     id, nome,
     matricula: document.getElementById('funcMatricula').value.trim(),
@@ -3696,13 +3824,19 @@ function saveFuncionario(){
     email: document.getElementById('funcEmail').value.trim(),
     status: document.getElementById('funcStatus').value,
     gerente: document.getElementById('funcGerente').value === 'sim',
-    salarioBaseReferencia: parseFloat(document.getElementById('funcSalarioBaseRef').value) || 0,
-    valeTransporteReferencia: parseFloat(document.getElementById('funcValeTransporteRef').value) || 0,
-    seguroVida: parseFloat(document.getElementById('funcSeguroVida').value) || 0,
-    pcmso: parseFloat(document.getElementById('funcPcmso').value) || 0,
-    valeAlimentacao: parseFloat(document.getElementById('funcValeAlimentacao').value) || 0,
-    planoSaude: parseFloat(document.getElementById('funcPlanoSaude').value) || 0,
-    cafeAlmocoLanche: parseFloat(document.getElementById('funcCafeAlmocoLanche').value) || 0
+    // Campos de salário/benefício: só lidos do formulário se o usuário tem
+    // acesso RH; sem acesso, preserva o que já estava salvo (o campo fica
+    // oculto na tela, então nunca deve ser lido/zerado por quem não pode vê-lo).
+    tipoVinculo: podeVerRH ? document.getElementById('funcTipoVinculo').value : (existente?.tipoVinculo || 'clt'),
+    salarioBaseReferencia: podeVerRH ? (parseFloat(document.getElementById('funcSalarioBaseRef').value) || 0) : (existente?.salarioBaseReferencia || 0),
+    valeTransporteReferencia: podeVerRH ? (parseFloat(document.getElementById('funcValeTransporteRef').value) || 0) : (existente?.valeTransporteReferencia || 0),
+    seguroVida: podeVerRH ? (parseFloat(document.getElementById('funcSeguroVida').value) || 0) : (existente?.seguroVida || 0),
+    pcmso: podeVerRH ? (parseFloat(document.getElementById('funcPcmso').value) || 0) : (existente?.pcmso || 0),
+    valeAlimentacao: podeVerRH ? (parseFloat(document.getElementById('funcValeAlimentacao').value) || 0) : (existente?.valeAlimentacao || 0),
+    planoSaude: podeVerRH ? (parseFloat(document.getElementById('funcPlanoSaude').value) || 0) : (existente?.planoSaude || 0),
+    cafeAlmocoLanche: podeVerRH ? (parseFloat(document.getElementById('funcCafeAlmocoLanche').value) || 0) : (existente?.cafeAlmocoLanche || 0),
+    pjSalario: podeVerRH ? (parseFloat(document.getElementById('funcPjSalario').value) || 0) : (existente?.pjSalario || 0),
+    pjBeneficios: podeVerRH ? (parseFloat(document.getElementById('funcPjBeneficios').value) || 0) : (existente?.pjBeneficios || 0)
   };
   const idx = funcs.findIndex(f=>f.id===id);
   if(idx>=0) funcs[idx] = record; else funcs.push(record);
@@ -5889,12 +6023,30 @@ function getCurrentUserSelection(){
 // o mesmo padrão de "visão 360" já usado no restante do dashboard.
 let contaSemCadastroVinculado = false;
 
+// Papéis com acesso ao Financeiro e a dados de salário/benefício de
+// funcionários. "RH" e "DP" continuam aceitos aqui para não quebrar
+// cadastros antigos feitos antes da unificação em "RH/DP".
+const PAPEIS_ACESSO_FINANCEIRO = ['Gerente','Administrativo','RH/DP','RH','DP'];
+const PAPEIS_ACESSO_RH = ['Gerente','Administrativo','RH/DP','RH','DP'];
+
 function temAcessoFinanceiro(){
   if(contaSemCadastroVinculado) return false;
   const sel = getCurrentUserSelection();
   if(!sel) return true;
   if(sel.tipo === 'responsavel'){
-    return ['Gerente','Administrativo','RH'].includes(sel.registro.papel);
+    return PAPEIS_ACESSO_FINANCEIRO.includes(sel.registro.papel);
+  }
+  return false;
+}
+
+// Acesso a dados de salário/benefício do Funcionário (CLT e PJ):
+// apenas Gerente, Administrativo e RH/DP.
+function temAcessoRH(){
+  if(contaSemCadastroVinculado) return false;
+  const sel = getCurrentUserSelection();
+  if(!sel) return true;
+  if(sel.tipo === 'responsavel'){
+    return PAPEIS_ACESSO_RH.includes(sel.registro.papel);
   }
   return false;
 }
