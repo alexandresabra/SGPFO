@@ -282,6 +282,23 @@
 </style>
 </head>
 <body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="width:100%;max-width:360px;padding:0 24px;">
+    <div style="text-align:center;margin-bottom:28px;">
+      <div class="brand-icon" style="margin:0 auto 14px;"></div>
+      <div style="font-family:var(--serif);font-size:20px;color:var(--ink);">SGPFO - Alumínio</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Construtora Calper</div>
+    </div>
+    <div class="field"><label>E-mail</label><input type="email" id="loginEmail" autocomplete="username" onkeydown="if(event.key==='Enter') document.getElementById('loginSenha').focus();"></div>
+    <div class="field" style="margin-top:12px;"><label>Senha</label><input type="password" id="loginSenha" autocomplete="current-password" onkeydown="if(event.key==='Enter') fazerLogin();"></div>
+    <div id="loginErro" class="step-note" style="color:var(--danger);margin-top:10px;display:none;"></div>
+    <button class="btn" style="width:100%;margin-top:18px;" onclick="fazerLogin()" id="loginBtn">Entrar</button>
+    <div style="font-size:11.5px;color:var(--ink-soft);margin-top:16px;text-align:center;">Não tem acesso? Peça ao Gerente para criar seu login no painel do Supabase.</div>
+  </div>
+</div>
+
 <div id="app">
 
   <!-- ===================== SIDEBAR ===================== -->
@@ -293,6 +310,7 @@
         <div class="tagline">Sistema de Gestão Projetos, Fábrica e Obra</div>
         <div class="sub">Construtora Calper</div>
         <div id="syncIndicator" style="font-size:10.5px;margin-top:4px;color:var(--ink-soft);">● Modo local (Supabase não configurado)</div>
+        <div id="loginInfo" style="font-size:10.5px;margin-top:2px;color:var(--ink-soft);display:none;"></div>
       </div>
     </div>
     <nav id="navList">
@@ -321,6 +339,9 @@
       <div class="nav-group-label">Outros Sistemas</div>
       <div class="nav-item" data-section="chamados"><span class="ico">☏</span><span class="label">Revisão de Esquadrias</span></div>
     </nav>
+    <div style="padding:10px 18px;">
+      <button class="btn secondary" id="btnLogout" style="width:100%;display:none;" onclick="fazerLogout()">Sair</button>
+    </div>
     <div class="sidebar-foot">Pedidos são cadastrados dentro de cada obra ↗<br>SGPT v0.1 · Divisão Alumínio</div>
   </div>
 
@@ -1959,7 +1980,71 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
    Preencha SUPABASE_CONFIG.url e .anonKey (Configurações > API do seu
    projeto Supabase) para ativar. Sem preencher, o sistema continua
    funcionando 100% localmente, como até agora — nada quebra.
-   Crie antes a tabela com o SQL do arquivo supabase_schema.sql. */
+
+   Antes de preencher, rode o SQL abaixo no seu projeto Supabase, em
+   Painel > SQL Editor > New query > cole tudo > Run. Ele cria a
+   tabela onde os dados do sistema ficam guardados na nuvem.
+
+   -- ============================================================
+   -- SGPT - Alumínio | Schema Supabase
+   -- ============================================================
+
+   -- Tabela única de chave/valor. O sistema inteiro (obras, itens,
+   -- funcionários, lançamentos financeiros, etc.) é salvo aqui como
+   -- pares (chave, valor JSON em texto), um registro por "tabela"
+   -- interna do sistema (ex.: chave = 'sgpt_obras').
+   create table if not exists sgpt_kv (
+     key        text primary key,
+     value      text not null,
+     updated_at timestamptz not null default now()
+   );
+
+   -- Atualiza automaticamente o campo updated_at a cada alteração.
+   create or replace function sgpt_kv_set_updated_at()
+   returns trigger as $$
+   begin
+     new.updated_at = now();
+     return new;
+   end;
+   $$ language plpgsql;
+
+   drop trigger if exists trg_sgpt_kv_updated_at on sgpt_kv;
+   create trigger trg_sgpt_kv_updated_at
+     before update on sgpt_kv
+     for each row execute function sgpt_kv_set_updated_at();
+
+   -- ------------------------------------------------------------
+   -- Segurança (RLS - Row Level Security)
+   -- ------------------------------------------------------------
+   -- Por padrão o Supabase já bloqueia tudo quando RLS está ligado.
+   -- Como este é um sistema interno (acesso pela "anon key" do
+   -- próprio app, sem login individual por enquanto), a policy
+   -- abaixo libera leitura e escrita para quem tiver a anon key —
+   -- ou seja, para quem tiver o link do sistema.
+   --
+   -- IMPORTANTE: isso significa que qualquer pessoa com a URL do
+   -- Supabase + anon key consegue ler/escrever os dados. Adequado
+   -- para uso interno da divisão, mas se um dia o sistema sair do
+   -- ambiente controlado da empresa, o ideal é evoluir para
+   -- autenticação de usuário (Supabase Auth) e policies por usuário.
+   alter table sgpt_kv enable row level security;
+
+   drop policy if exists "sgpt_kv_select_all" on sgpt_kv;
+   create policy "sgpt_kv_select_all"
+     on sgpt_kv for select
+     using (true);
+
+   drop policy if exists "sgpt_kv_insert_all" on sgpt_kv;
+   create policy "sgpt_kv_insert_all"
+     on sgpt_kv for insert
+     with check (true);
+
+   drop policy if exists "sgpt_kv_update_all" on sgpt_kv;
+   create policy "sgpt_kv_update_all"
+     on sgpt_kv for update
+     using (true)
+     with check (true);
+   ---------------------------------------------------------------- */
 const SUPABASE_CONFIG = {
   url: 'https://vcddqojqjuvdrluflfdu.supabase.co',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjZGRxb2pxanV2ZHJsdWZsZmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxOTM1MDcsImV4cCI6MjEwMzc2OTUwN30.8GcH4RV-5BiXi3TdksWwSheXv13qf9lAJXNtbKvq4UM'
@@ -2019,6 +2104,92 @@ localStorage.setItem = function(key, value){
     pushToSupabase(key, value);
   }
 };
+
+/* ---------------- Login (Supabase Auth) ----------------
+   Contas são criadas pelo Gerente direto no painel do Supabase
+   (Authentication > Users > Add user), não há autocadastro pelo
+   sistema — evita que qualquer pessoa com o link crie o próprio
+   acesso. O e-mail usado no login é automaticamente comparado ao
+   cadastro de Funcionários/Responsáveis para identificar quem
+   está logado e aplicar as permissões (ex.: acesso ao Financeiro)
+   sem precisar escolher manualmente no seletor "Perfil ativo". */
+function mostrarTelaLogin(){
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function esconderTelaLogin(){
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  const btnOut = document.getElementById('btnLogout');
+  if(btnOut) btnOut.style.display = 'block';
+}
+
+async function fazerLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const senha = document.getElementById('loginSenha').value;
+  const erroEl = document.getElementById('loginErro');
+  const btn = document.getElementById('loginBtn');
+  erroEl.style.display = 'none';
+  if(!email || !senha){ erroEl.textContent = 'Informe e-mail e senha.'; erroEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  try{
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+    if(error) throw error;
+    await pullFromSupabase();
+    vincularUsuarioLogado(data.user.email);
+    esconderTelaLogin();
+    toggleS1Fields(); toggleOrigemPressaoPerfil(); toggleOrigemPressaoVidro(); renderDashboard();
+  }catch(e){
+    erroEl.textContent = 'E-mail ou senha inválidos.';
+    erroEl.style.display = 'block';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+async function fazerLogout(){
+  if(!confirm('Sair do sistema?')) return;
+  await supabaseClient.auth.signOut();
+  localStorage.removeItem(CURRENT_USER_KEY);
+  location.reload();
+}
+
+// Compara o e-mail logado com Funcionários e Responsáveis já
+// cadastrados e, se achar, define automaticamente esse registro
+// como "Perfil ativo" — assim as permissões (Financeiro etc.)
+// passam a valer para quem realmente está logado, não para
+// quem a pessoa escolher no seletor.
+function vincularUsuarioLogado(email){
+  const emailLower = (email||'').toLowerCase();
+  const info = document.getElementById('loginInfo');
+  const resp = load('responsaveis').find(r => (r.email||'').toLowerCase() === emailLower);
+  if(resp){
+    contaSemCadastroVinculado = false;
+    localStorage.setItem(CURRENT_USER_KEY, 'r:'+resp.id);
+    if(info){ info.style.display='block'; info.textContent = `Logado como ${resp.nome} (${resp.papel})`; }
+    return;
+  }
+  const func = load('funcionarios').find(f => (f.email||'').toLowerCase() === emailLower);
+  if(func){
+    contaSemCadastroVinculado = false;
+    localStorage.setItem(CURRENT_USER_KEY, 'f:'+func.id);
+    if(info){ info.style.display='block'; info.textContent = `Logado como ${func.nome}`; }
+    return;
+  }
+  contaSemCadastroVinculado = true;
+  localStorage.setItem(CURRENT_USER_KEY, '');
+  if(info){ info.style.display='block'; info.textContent = `Logado como ${email} (sem cadastro vinculado — acesso restrito)`; }
+}
+
+async function verificarSessaoExistente(){
+  const { data } = await supabaseClient.auth.getSession();
+  if(data && data.session && data.session.user){
+    vincularUsuarioLogado(data.session.user.email);
+    return true;
+  }
+  return false;
+}
+
 
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 
@@ -5716,7 +5887,10 @@ function getCurrentUserSelection(){
 // Acesso ao Controle Financeiro: apenas Gerente, Administrativo e RH
 // (papéis do cadastro de Responsáveis). Sem ninguém selecionado, mantém
 // o mesmo padrão de "visão 360" já usado no restante do dashboard.
+let contaSemCadastroVinculado = false;
+
 function temAcessoFinanceiro(){
+  if(contaSemCadastroVinculado) return false;
   const sel = getCurrentUserSelection();
   if(!sel) return true;
   if(sel.tipo === 'responsavel'){
@@ -5938,10 +6112,17 @@ const FUNCIONARIOS_PLANILHA_SEED = [
 (async function iniciarSGPT(){
   supabaseReady = initSupabase();
   if(supabaseReady){
+    // Supabase configurado: exige login antes de carregar qualquer dado.
+    mostrarTelaLogin();
+    const jaLogado = await verificarSessaoExistente();
+    if(!jaLogado){
+      return; // fica na tela de login; fazerLogin() continua a partir daqui
+    }
     const el = document.getElementById('syncIndicator');
     if(el){ el.textContent = '● Sincronizando...'; el.style.color = 'var(--ink-soft)'; }
     const ok = await pullFromSupabase();
     marcarSincronizado(ok);
+    esconderTelaLogin();
   }
   toggleS1Fields();
   toggleOrigemPressaoPerfil();
