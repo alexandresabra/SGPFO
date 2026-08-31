@@ -1328,28 +1328,50 @@
       <section class="section" id="sec-rateiomdo">
         <div id="rateioSemAcesso" class="empty-state" style="display:none;">
           <div class="big">🔒</div>Acesso restrito.<br>
-          <div class="step-note" style="margin-top:6px;">O Rateio de Mão de Obra é visível apenas para os perfis Gerente, Administrativo ou RH, selecionados em "Perfil ativo" no Dashboard.</div>
+          <div class="step-note" style="margin-top:6px;">O Rateio de Mão de Obra é visível apenas para os perfis Gerente, Administrativo ou RH/DP, selecionados em "Perfil ativo" no Dashboard.</div>
         </div>
         <div id="rateioConteudo">
           <div class="disclaimer">
-            Segue a mesma metodologia da planilha de rateio da divisão: GPS (45%), FGTS (12%), SECONCI (1,5%), provisão de 13º, férias, aviso prévio, GPS sobre provisões e FGTS rescisório, calculados automaticamente sobre o salário bruto. Cada rateio lançado gera automaticamente uma despesa de "Mão de obra" no Controle Financeiro da obra selecionada.
+            Segue a mesma metodologia da planilha de rateio da divisão: GPS (45%), FGTS (12%), SECONCI (1,5%), provisão de 13º, férias, aviso prévio, GPS sobre provisões e FGTS rescisório, calculados automaticamente sobre o salário bruto. Um mesmo funcionário pode ser dividido entre mais de uma obra no mês (por dias trabalhados ou horas de tarefas lançadas) — cada fatia gera automaticamente uma despesa de "Mão de obra" proporcional no Controle Financeiro da obra correspondente.
           </div>
           <div class="toolbar" style="margin-top:16px;">
             <div style="display:flex;gap:10px;align-items:center;">
               <label style="font-size:12px;font-weight:600;color:var(--ink-soft);">Mês de referência</label>
               <input type="month" id="rateioMesFiltro" onchange="renderRateioMaoDeObra()">
             </div>
-            <button class="btn" onclick="openRateioModal()">+ Lançar rateio</button>
           </div>
           <div class="panel">
+            <div class="panel-head">Funcionários (CLT)</div>
             <div class="panel-body" style="padding:0;">
               <table>
                 <thead><tr>
-                  <th>Funcionário</th><th>Função</th><th>Obra</th><th>Sal. base</th><th>Hora extra</th><th>Hora prêmio</th><th>Vale transp.</th><th>Total c/ encargos</th><th></th>
+                  <th>Funcionário</th><th>Função</th><th>Obra(s) no mês</th><th>Total c/ encargos</th><th></th>
                 </tr></thead>
                 <tbody id="rateioTableBody"></tbody>
               </table>
-              <div class="empty-state" id="rateioEmpty" style="display:none;">Nenhum rateio lançado para este mês ainda.</div>
+              <div class="empty-state" id="rateioEmpty" style="display:none;">Nenhum funcionário CLT ativo cadastrado ainda.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">Rateio da Fábrica pelas obras (por Kg produzido)</div>
+            <div class="panel-body">
+              <div class="step-note" style="margin-bottom:12px;">Cadastre a Fábrica como uma obra comum (em Obras) e lance lá o rateio dos funcionários de fábrica normalmente. Aqui, o custo de mão de obra acumulado na Fábrica naquele mês é redistribuído entre as obras reais, proporcional ao Kg que você informar que cada uma produziu no mês.</div>
+              <div class="form-grid cols-3">
+                <div class="field">
+                  <label>Obra que representa a Fábrica</label>
+                  <select id="fabricaObraId" onchange="renderFabricaRateio()"></select>
+                </div>
+                <div class="field">
+                  <label>Custo de mão de obra da Fábrica no mês</label>
+                  <input type="text" id="fabricaCustoTotal" readonly style="background:#f6f5f3;">
+                </div>
+              </div>
+              <div id="fabricaKgWrap" style="margin-top:12px;"></div>
+              <div class="form-actions">
+                <button class="btn" onclick="ratearFabrica()">Ratear Fábrica pelas obras</button>
+              </div>
+              <div id="fabricaRateioResultado" style="margin-top:14px;"></div>
             </div>
           </div>
         </div>
@@ -1733,18 +1755,28 @@
 
 <div class="modal-overlay" id="modalRateio">
   <div class="modal">
-    <div class="modal-head"><h3 id="modalRateioTitle">Novo rateio de mão de obra</h3><button class="modal-close" onclick="closeModal('modalRateio')">&times;</button></div>
+    <div class="modal-head"><h3 id="modalRateioTitle">Rateio de mão de obra</h3><button class="modal-close" onclick="closeModal('modalRateio')">&times;</button></div>
     <div class="modal-body">
       <input type="hidden" id="rateioId">
+      <input type="hidden" id="rateioFuncionarioId">
       <div class="form-grid">
-        <div class="field"><label>Mês de referência</label><input type="month" id="rateioMes" onchange="atualizarPreviewRateio()"></div>
-        <div class="field"><label>Funcionário</label><select id="rateioFuncionarioId" onchange="preencherReferenciaRateio(); atualizarPreviewRateio();"></select></div>
-        <div class="field full"><label>Obra</label><select id="rateioObraId"></select></div>
+        <div class="field"><label>Mês de referência</label><input type="month" id="rateioMes" readonly style="background:#f6f5f3;"></div>
+        <div class="field"><label>Funcionário</label><input type="text" id="rateioFuncionarioNome" readonly style="background:#f6f5f3;"></div>
         <div class="field"><label>Salário base (R$)</label><input type="number" id="rateioSalarioBase" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Hora extra (R$)</label><input type="number" id="rateioHoraExtra" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Hora prêmio (R$)</label><input type="number" id="rateioHoraPremio" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Vale transporte (R$)</label><input type="number" id="rateioValeTransporte" step="0.01" oninput="atualizarPreviewRateio()"></div>
       </div>
+
+      <hr class="divider">
+      <h4 style="font-family:var(--serif);margin:0 0 6px;">Alocação entre obras no mês</h4>
+      <div class="step-note" style="margin-bottom:10px;">Informe quantos dias (ou horas) o funcionário trabalhou em cada obra neste mês — o custo total é dividido proporcionalmente entre elas.</div>
+      <div id="rateioAlocacoesBody"></div>
+      <div class="form-actions" style="margin-top:8px;justify-content:flex-start;">
+        <button type="button" class="btn small secondary" onclick="adicionarLinhaAlocacaoRateio()">+ Adicionar obra</button>
+        <button type="button" class="btn small secondary" onclick="usarHorasTarefasRateio()">Preencher com horas de tarefas lançadas</button>
+      </div>
+
       <div class="result-box" id="rateioPreview" style="display:none;margin-top:16px;"></div>
       <div class="form-actions">
         <button class="btn secondary" onclick="closeModal('modalRateio')">Cancelar</button>
@@ -1769,6 +1801,15 @@
         <div class="field">
           <label>Responsável</label>
           <select id="tarefaResponsavel"><option value="">— Não atribuído —</option></select>
+        </div>
+        <div class="field">
+          <label>Obra</label>
+          <select id="tarefaObraId"><option value="">— Não vinculada a uma obra —</option></select>
+        </div>
+        <div class="field">
+          <label>Horas utilizadas</label>
+          <input type="number" id="tarefaHoras" step="0.5" placeholder="Ex.: 4">
+          <small class="hint">Para tarefas de indiretos — essas horas entram, de forma proporcional, no rateio de mão de obra do responsável entre as obras do mês.</small>
         </div>
         <div class="field"><label>Data de início</label><input type="date" id="tarefaDataInicio"></div>
         <div class="field"><label>Data de término</label><input type="date" id="tarefaPrazo"></div>
@@ -3140,28 +3181,81 @@ function mesLabelCurto(mes){
   return meses[parseInt(m,10)-1] + '/' + ano;
 }
 
-function refreshRateioSelects(){
-  const funcs = load('funcionarios').filter(f=>f.status==='ativo');
-  document.getElementById('rateioFuncionarioId').innerHTML = '<option value="">Selecione</option>' +
-    funcs.map(f=>`<option value="${f.id}">${esc(f.nome)}${f.cargo?' — '+esc(f.cargo):''}</option>`).join('');
+function refreshRateioObraSelects(){
   const obras = load('obras');
-  document.getElementById('rateioObraId').innerHTML = '<option value="">Selecione</option>' +
-    obras.map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  return obras;
 }
 
-// Ao escolher o funcionário num lançamento novo (sem id ainda), pré-preenche
-// Salário Base e Vale Transporte com os valores de referência do cadastro —
-// continua editável, é só pra poupar digitação repetida mês a mês.
-function preencherReferenciaRateio(){
-  if(document.getElementById('rateioId').value) return; // edição: não sobrescreve o que já foi lançado
-  const funcionario = load('funcionarios').find(f=>f.id===document.getElementById('rateioFuncionarioId').value);
-  if(!funcionario) return;
-  if(!document.getElementById('rateioSalarioBase').value && funcionario.salarioBaseReferencia){
-    document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
-  }
-  if(!document.getElementById('rateioValeTransporte').value && funcionario.valeTransporteReferencia){
-    document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
-  }
+function calcularTotalPeso(alocacoes){
+  return alocacoes.reduce((s,a)=> s + (parseFloat(a.peso)||0), 0);
+}
+
+// Soma as horas utilizadas em tarefas de um funcionário, agrupadas por obra,
+// dentro de um mês de referência (YYYY-MM) — usado para sugerir a divisão
+// proporcional do rateio de mão de obra entre as obras daquele mês.
+function calcularHorasTarefasPorObra(funcionarioId, mes){
+  const tarefas = load('tarefas').filter(t=>
+    t.responsavel===funcionarioId && t.obraId && t.dataInicio && t.dataInicio.slice(0,7)===mes && t.horasUtilizadas>0
+  );
+  const porObra = {};
+  tarefas.forEach(t=>{ porObra[t.obraId] = (porObra[t.obraId]||0) + t.horasUtilizadas; });
+  return Object.entries(porObra).map(([obraId,horas])=>({obraId, horas}));
+}
+
+let tempAlocacoesRateio = [];
+
+function renderLinhasAlocacaoRateio(){
+  const obras = load('obras');
+  const totalPeso = calcularTotalPeso(tempAlocacoesRateio);
+  document.getElementById('rateioAlocacoesBody').innerHTML = tempAlocacoesRateio.map((a,i)=>{
+    const peso = parseFloat(a.peso)||0;
+    const pct = totalPeso>0 ? (peso/totalPeso*100) : 0;
+    return `<div class="form-grid cols-3" style="align-items:end;margin-bottom:6px;">
+      <div class="field full" style="grid-column:span 1;">
+        <label>Obra</label>
+        <select onchange="tempAlocacoesRateio[${i}].obraId=this.value;">
+          <option value="">Selecione</option>
+          ${obras.map(o=>`<option value="${o.id}" ${o.id===a.obraId?'selected':''}>${esc(o.nome)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Dias / horas trabalhados</label>
+        <input type="number" step="0.5" value="${a.peso||''}" oninput="tempAlocacoesRateio[${i}].peso=this.value; renderLinhasAlocacaoRateio(); atualizarPreviewRateio();">
+      </div>
+      <div class="field">
+        <label>% do custo</label>
+        <div style="padding:9px 0;font-weight:600;">${pct.toFixed(1)}%</div>
+      </div>
+      <div class="field" style="grid-column:1/-1;text-align:right;">
+        <button type="button" class="btn small danger" onclick="removerLinhaAlocacaoRateio(${i})">Remover obra</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="step-note">Nenhuma obra adicionada ainda.</div>';
+}
+
+function adicionarLinhaAlocacaoRateio(){
+  tempAlocacoesRateio.push({ obraId:'', peso:'', lancamentoId:null });
+  renderLinhasAlocacaoRateio();
+}
+
+function removerLinhaAlocacaoRateio(i){
+  tempAlocacoesRateio.splice(i,1);
+  renderLinhasAlocacaoRateio();
+  atualizarPreviewRateio();
+}
+
+// Substitui as linhas de alocação pelas horas de tarefas já lançadas pelo
+// funcionário naquele mês, agrupadas por obra — ponto de partida rápido para
+// indiretos que passam por mais de uma obra no mês.
+function usarHorasTarefasRateio(){
+  const funcionarioId = document.getElementById('rateioFuncionarioId').value;
+  const mes = document.getElementById('rateioMes').value;
+  const horasPorObra = calcularHorasTarefasPorObra(funcionarioId, mes);
+  if(!horasPorObra.length){ toast('Nenhuma hora de tarefa lançada para esse funcionário nesse mês.'); return; }
+  tempAlocacoesRateio = horasPorObra.map(h=>({ obraId:h.obraId, peso:h.horas, lancamentoId:null }));
+  renderLinhasAlocacaoRateio();
+  atualizarPreviewRateio();
+  toast('Alocação preenchida com base nas horas de tarefas lançadas.');
 }
 
 function atualizarPreviewRateio(){
@@ -3176,6 +3270,13 @@ function atualizarPreviewRateio(){
     valeTransporte: document.getElementById('rateioValeTransporte').value
   };
   const e = calcularEncargosMaoDeObra(funcionario, dados);
+  const obras = load('obras');
+  const totalPeso = calcularTotalPeso(tempAlocacoesRateio);
+  const linhasObras = tempAlocacoesRateio.filter(a=>a.obraId && parseFloat(a.peso)>0).map(a=>{
+    const o = obras.find(x=>x.id===a.obraId);
+    const valor = totalPeso>0 ? e.totalComEncargos * (parseFloat(a.peso)/totalPeso) : 0;
+    return `<div class="result-item"><div class="k">${esc(o?o.nome:'—')}</div><div class="v small">${fmtMoeda(valor)}</div></div>`;
+  }).join('');
   box.style.display = 'block';
   box.innerHTML = `
     <h4>Prévia dos encargos</h4>
@@ -3189,44 +3290,53 @@ function atualizarPreviewRateio(){
       <div class="result-item"><div class="k">Benefícios fixos (seguro, PCMSO, VA, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.pcmso+e.valeAlimentacao+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
       <div class="result-item"><div class="k">Vale transporte</div><div class="v small">${fmtMoeda(e.valeTransporte)}</div></div>
       <div class="result-item"><div class="k">Total com encargos</div><div class="v" style="font-size:18px;">${fmtMoeda(e.totalComEncargos)}</div></div>
-    </div>`;
+    </div>
+    ${linhasObras ? `<h4 style="margin-top:14px;">Divisão por obra</h4><div class="result-grid">${linhasObras}</div>` : ''}`;
 }
 
-function openRateioModal(id){
-  refreshRateioSelects();
-  document.getElementById('modalRateioTitle').textContent = id ? 'Editar rateio' : 'Novo rateio de mão de obra';
+function openRateioModal(funcionarioId){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência antes de lançar o rateio.'); return; }
+  const funcionario = load('funcionarios').find(f=>f.id===funcionarioId);
+  if(!funcionario){ toast('Funcionário não encontrado.'); return; }
+
+  document.getElementById('modalRateioTitle').textContent = `Rateio — ${funcionario.nome} (${mesLabelCurto(mes)})`;
+  document.getElementById('rateioFuncionarioId').value = funcionarioId;
+  document.getElementById('rateioFuncionarioNome').value = funcionario.nome + (funcionario.cargo ? ' — '+funcionario.cargo : '');
+  document.getElementById('rateioMes').value = mes;
   document.getElementById('rateioId').value = '';
-  document.getElementById('rateioMes').value = document.getElementById('rateioMesFiltro').value || '';
-  document.getElementById('rateioFuncionarioId').value = '';
-  document.getElementById('rateioObraId').value = '';
-  ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte'].forEach(f=>document.getElementById(f).value='');
-  document.getElementById('rateioPreview').style.display = 'none';
-  if(id){
-    const r = load('rateiosMaoDeObra').find(x=>x.id===id);
-    if(r){
-      document.getElementById('rateioId').value = r.id;
-      document.getElementById('rateioMes').value = r.mes;
-      document.getElementById('rateioFuncionarioId').value = r.funcionarioId;
-      document.getElementById('rateioObraId').value = r.obraId;
-      document.getElementById('rateioSalarioBase').value = r.salarioBase;
-      document.getElementById('rateioHoraExtra').value = r.horaExtra || '';
-      document.getElementById('rateioHoraPremio').value = r.horaPremio || '';
-      document.getElementById('rateioValeTransporte').value = r.valeTransporte || '';
-      atualizarPreviewRateio();
-    }
+  tempAlocacoesRateio = [];
+
+  const existente = load('rateiosMaoDeObra').find(r=>r.funcionarioId===funcionarioId && r.mes===mes);
+  if(existente){
+    document.getElementById('rateioId').value = existente.id;
+    document.getElementById('rateioSalarioBase').value = existente.salarioBase;
+    document.getElementById('rateioHoraExtra').value = existente.horaExtra || '';
+    document.getElementById('rateioHoraPremio').value = existente.horaPremio || '';
+    document.getElementById('rateioValeTransporte').value = existente.valeTransporte || '';
+    tempAlocacoesRateio = (existente.alocacoes||[]).map(a=>({...a}));
+  } else {
+    ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte'].forEach(f=>document.getElementById(f).value='');
+    if(funcionario.salarioBaseReferencia) document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
+    if(funcionario.valeTransporteReferencia) document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
   }
+  if(!tempAlocacoesRateio.length) tempAlocacoesRateio.push({obraId:'', peso:'', lancamentoId:null});
+
+  renderLinhasAlocacaoRateio();
+  atualizarPreviewRateio();
   openModal('modalRateio');
 }
 
 function saveRateio(){
   const mes = document.getElementById('rateioMes').value;
   const funcionarioId = document.getElementById('rateioFuncionarioId').value;
-  const obraId = document.getElementById('rateioObraId').value;
   const salarioBase = parseFloat(document.getElementById('rateioSalarioBase').value);
   if(!mes){ toast('Informe o mês de referência.'); return; }
-  if(!funcionarioId){ toast('Selecione o funcionário.'); return; }
-  if(!obraId){ toast('Selecione a obra.'); return; }
+  if(!funcionarioId){ toast('Funcionário não identificado.'); return; }
   if(!salarioBase || salarioBase<=0){ toast('Informe o salário base.'); return; }
+
+  const alocacoesValidas = tempAlocacoesRateio.filter(a=>a.obraId && parseFloat(a.peso)>0);
+  if(!alocacoesValidas.length){ toast('Adicione ao menos uma obra com dias/horas informados.'); return; }
 
   const funcionario = load('funcionarios').find(f=>f.id===funcionarioId);
   const dados = {
@@ -3236,51 +3346,67 @@ function saveRateio(){
     valeTransporte: document.getElementById('rateioValeTransporte').value
   };
   const encargos = calcularEncargosMaoDeObra(funcionario, dados);
+  const totalPeso = calcularTotalPeso(alocacoesValidas);
 
   const id = document.getElementById('rateioId').value || uid();
-  let rateios = load('rateiosMaoDeObra');
-  const existente = rateios.find(r=>r.id===id);
+  let lancamentos = load('lancamentosFinanceiros');
+  const descricaoBase = `Rateio mão de obra — ${funcionario.nome} (${mesLabelCurto(mes)})`;
+
+  // Remove lançamentos de alocações que existiam antes e foram retiradas desta
+  // edição — compara com o que estava REALMENTE salvo, não com o estado em
+  // memória (que já reflete as edições que o usuário acabou de fazer).
+  const registroExistente = load('rateiosMaoDeObra').find(r=>r.id===id);
+  const idsAntigos = (registroExistente ? registroExistente.alocacoes : []).map(a=>a.lancamentoId).filter(Boolean);
+  const idsNovos = alocacoesValidas.map(a=>a.lancamentoId).filter(Boolean);
+  const idsParaRemover = idsAntigos.filter(lid=>!idsNovos.includes(lid));
+  lancamentos = lancamentos.filter(l=>!idsParaRemover.includes(l.id));
+
+  const alocacoesFinal = alocacoesValidas.map(a=>{
+    const peso = parseFloat(a.peso);
+    const valor = totalPeso>0 ? encargos.totalComEncargos * (peso/totalPeso) : 0;
+    const obra = load('obras').find(o=>o.id===a.obraId);
+    if(a.lancamentoId && lancamentos.some(l=>l.id===a.lancamentoId)){
+      lancamentos = lancamentos.map(l=> l.id===a.lancamentoId ? {
+        ...l, obraId:a.obraId, categoria:'maoDeObra', tipo:'despesa',
+        descricao: `${descricaoBase} — ${obra?obra.nome:''}`, valor, data: mes+'-01'
+      } : l);
+      return { obraId:a.obraId, peso, valor, lancamentoId:a.lancamentoId };
+    } else {
+      const novoId = uid();
+      lancamentos.push({
+        id: novoId, obraId:a.obraId, tipo:'despesa', categoria:'maoDeObra',
+        descricao: `${descricaoBase} — ${obra?obra.nome:''}`, valor, data: mes+'-01'
+      });
+      return { obraId:a.obraId, peso, valor, lancamentoId:novoId };
+    }
+  });
+  save('lancamentosFinanceiros', lancamentos);
+
   const record = {
-    id, mes, funcionarioId, obraId,
+    id, mes, funcionarioId,
     salarioBase, horaExtra: parseFloat(dados.horaExtra)||0, horaPremio: parseFloat(dados.horaPremio)||0,
     valeTransporte: parseFloat(dados.valeTransporte)||0,
     totalComEncargos: encargos.totalComEncargos,
-    lancamentoId: existente ? existente.lancamentoId : null
+    alocacoes: alocacoesFinal
   };
-
-  // Upsert automático da despesa correspondente no Controle Financeiro da obra
-  let lancamentos = load('lancamentosFinanceiros');
-  const descricaoLancamento = `Rateio mão de obra — ${funcionario.nome} (${mesLabelCurto(mes)})`;
-  if(record.lancamentoId && lancamentos.some(l=>l.id===record.lancamentoId)){
-    lancamentos = lancamentos.map(l=> l.id===record.lancamentoId ? {
-      ...l, obraId, categoria:'maoDeObra', tipo:'despesa',
-      descricao: descricaoLancamento, valor: encargos.totalComEncargos, data: mes+'-01'
-    } : l);
-  } else {
-    record.lancamentoId = uid();
-    lancamentos.push({
-      id: record.lancamentoId, obraId, tipo:'despesa', categoria:'maoDeObra',
-      descricao: descricaoLancamento, valor: encargos.totalComEncargos, data: mes+'-01'
-    });
-  }
-  save('lancamentosFinanceiros', lancamentos);
-
+  let rateios = load('rateiosMaoDeObra');
   const idx = rateios.findIndex(r=>r.id===id);
   if(idx>=0) rateios[idx] = record; else rateios.push(record);
   save('rateiosMaoDeObra', rateios);
 
   closeModal('modalRateio');
   renderRateioMaoDeObra();
-  toast('Rateio salvo — despesa de mão de obra atualizada na obra.');
+  toast('Rateio salvo — despesas de mão de obra atualizadas nas obras.');
 }
 
-function deleteRateio(id){
-  if(!confirm('Excluir este rateio? A despesa correspondente no Controle Financeiro também será removida.')) return;
-  const rateio = load('rateiosMaoDeObra').find(r=>r.id===id);
-  if(rateio && rateio.lancamentoId){
-    save('lancamentosFinanceiros', load('lancamentosFinanceiros').filter(l=>l.id!==rateio.lancamentoId));
+function deleteRateio(funcionarioId, mes){
+  if(!confirm('Excluir este rateio? As despesas correspondentes em todas as obras alocadas também serão removidas.')) return;
+  const rateio = load('rateiosMaoDeObra').find(r=>r.funcionarioId===funcionarioId && r.mes===mes);
+  if(rateio){
+    const idsRemover = (rateio.alocacoes||[]).map(a=>a.lancamentoId).filter(Boolean);
+    save('lancamentosFinanceiros', load('lancamentosFinanceiros').filter(l=>!idsRemover.includes(l.id)));
+    save('rateiosMaoDeObra', load('rateiosMaoDeObra').filter(r=>r.id!==rateio.id));
   }
-  save('rateiosMaoDeObra', load('rateiosMaoDeObra').filter(r=>r.id!==id));
   renderRateioMaoDeObra();
   toast('Rateio excluído.');
 }
@@ -3297,32 +3423,138 @@ function renderRateioMaoDeObra(){
   conteudo.style.display = 'block';
 
   const filtroMes = document.getElementById('rateioMesFiltro').value;
-  const funcs = load('funcionarios');
   const obras = load('obras');
-  let rateios = load('rateiosMaoDeObra');
-  if(filtroMes) rateios = rateios.filter(r=>r.mes===filtroMes);
-  rateios = rateios.slice().sort((a,b)=> (b.mes||'').localeCompare(a.mes||''));
+  const funcsClt = load('funcionarios').filter(f=>f.status==='ativo' && (f.tipoVinculo||'clt')!=='pj');
+  const rateios = load('rateiosMaoDeObra').filter(r=> !filtroMes || r.mes===filtroMes);
 
-  document.getElementById('rateioEmpty').style.display = rateios.length ? 'none' : 'block';
-  document.getElementById('rateioTableBody').innerHTML = rateios.map(r=>{
-    const f = funcs.find(x=>x.id===r.funcionarioId) || {};
-    const o = obras.find(x=>x.id===r.obraId) || {};
+  document.getElementById('rateioEmpty').style.display = funcsClt.length ? 'none' : 'block';
+  document.getElementById('rateioTableBody').innerHTML = funcsClt.map(f=>{
+    const rateio = filtroMes ? rateios.find(r=>r.funcionarioId===f.id) : null;
+    const obrasTexto = rateio ? (rateio.alocacoes||[]).map(a=>{
+      const o = obras.find(x=>x.id===a.obraId);
+      return `${esc(o?o.nome:'—')} (${fmtMoeda(a.valor)})`;
+    }).join(', ') : '<span class="step-note">Sem rateio lançado</span>';
+    const acoes = !filtroMes
+      ? '<span class="step-note">Selecione o mês</span>'
+      : rateio
+        ? `<button class="btn small secondary" onclick="openRateioModal('${f.id}')">Editar</button>
+           <button class="btn small danger" onclick="deleteRateio('${f.id}','${filtroMes}')">Excluir</button>`
+        : `<button class="btn small" onclick="openRateioModal('${f.id}')">Lançar</button>`;
     return `<tr>
-      <td><strong>${esc(f.nome||'—')}</strong><div class="step-note">${mesLabelCurto(r.mes)}</div></td>
+      <td><strong>${esc(f.nome)}</strong></td>
       <td>${esc(f.cargo||'—')}</td>
-      <td>${esc(o.nome||'—')}</td>
-      <td>${fmtMoeda(r.salarioBase)}</td>
-      <td>${fmtMoeda(r.horaExtra)}</td>
-      <td>${fmtMoeda(r.horaPremio)}</td>
-      <td>${fmtMoeda(r.valeTransporte)}</td>
-      <td><strong>${fmtMoeda(r.totalComEncargos)}</strong></td>
-      <td style="text-align:right;white-space:nowrap;">
-        <button class="btn small secondary" onclick="openRateioModal('${r.id}')">Editar</button>
-        <button class="btn small danger" onclick="deleteRateio('${r.id}')">Excluir</button>
-      </td>
+      <td>${obrasTexto}</td>
+      <td><strong>${rateio ? fmtMoeda(rateio.totalComEncargos) : '—'}</strong></td>
+      <td style="text-align:right;white-space:nowrap;">${acoes}</td>
     </tr>`;
   }).join('');
+
+  renderFabricaObraSelect();
 }
+
+/* ---------------- Rateio da Fábrica pelas obras (por Kg produzido) ----------------
+   A Fábrica é cadastrada como uma obra comum (em Obras). O custo de mão de
+   obra lançado nela num mês é redistribuído para as obras reais, proporcional
+   ao Kg que o usuário informar que cada obra produziu naquele mês — ainda não
+   temos data de produção por item, então esse Kg mensal é informado à mão. */
+function renderFabricaObraSelect(){
+  const sel = document.getElementById('fabricaObraId');
+  if(!sel) return;
+  const valorAtual = sel.value;
+  const obras = load('obras');
+  sel.innerHTML = '<option value="">Selecione</option>' + obras.map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  if(valorAtual && obras.some(o=>o.id===valorAtual)) sel.value = valorAtual;
+  renderFabricaRateio();
+}
+
+function custoMaoDeObraObraNoMes(obraId, mes){
+  if(!obraId || !mes) return 0;
+  return load('lancamentosFinanceiros')
+    .filter(l=>l.obraId===obraId && l.categoria==='maoDeObra' && l.tipo==='despesa' && (l.data||'').slice(0,7)===mes)
+    .reduce((s,l)=>s+l.valor,0);
+}
+
+function renderFabricaRateio(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  const fabricaObraId = document.getElementById('fabricaObraId').value;
+  const custoTotal = custoMaoDeObraObraNoMes(fabricaObraId, mes);
+  document.getElementById('fabricaCustoTotal').value = fmtMoeda(custoTotal);
+
+  const wrap = document.getElementById('fabricaKgWrap');
+  if(!fabricaObraId || !mes){
+    wrap.innerHTML = '<div class="step-note">Selecione o mês (acima) e a obra que representa a Fábrica.</div>';
+    return;
+  }
+  const outrasObras = load('obras').filter(o=>o.id!==fabricaObraId);
+  if(!outrasObras.length){
+    wrap.innerHTML = '<div class="step-note">Cadastre outras obras para poder ratear a Fábrica entre elas.</div>';
+    return;
+  }
+  const rateioExistente = load('rateiosFabrica').find(r=>r.mes===mes && r.fabricaObraId===fabricaObraId);
+  wrap.innerHTML = `<table>
+    <thead><tr><th>Obra</th><th>Kg produzido no mês</th></tr></thead>
+    <tbody>
+      ${outrasObras.map(o=>{
+        const kgSalvo = rateioExistente ? (rateioExistente.kgPorObra||{})[o.id] : '';
+        return `<tr><td>${esc(o.nome)}</td><td><input type="number" step="0.01" id="fabricaKg_${o.id}" value="${kgSalvo||''}" style="max-width:140px;"></td></tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+
+  if(rateioExistente){
+    document.getElementById('fabricaRateioResultado').innerHTML = `<div class="step-note">Já existe um rateio da Fábrica lançado para este mês (total distribuído: ${fmtMoeda(rateioExistente.totalRateado)}). Ratear de novo atualiza os valores.</div>`;
+  } else {
+    document.getElementById('fabricaRateioResultado').innerHTML = '';
+  }
+}
+
+function ratearFabrica(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  const fabricaObraId = document.getElementById('fabricaObraId').value;
+  if(!mes){ toast('Selecione o mês de referência.'); return; }
+  if(!fabricaObraId){ toast('Selecione a obra que representa a Fábrica.'); return; }
+  const custoTotal = custoMaoDeObraObraNoMes(fabricaObraId, mes);
+  if(!custoTotal){ toast('Não há custo de mão de obra lançado na Fábrica para esse mês.'); return; }
+
+  const outrasObras = load('obras').filter(o=>o.id!==fabricaObraId);
+  const kgPorObra = {};
+  let totalKg = 0;
+  outrasObras.forEach(o=>{
+    const kg = parseFloat((document.getElementById('fabricaKg_'+o.id)||{}).value) || 0;
+    kgPorObra[o.id] = kg;
+    totalKg += kg;
+  });
+  if(totalKg<=0){ toast('Informe o Kg produzido em ao menos uma obra.'); return; }
+
+  let rateiosFabrica = load('rateiosFabrica');
+  const existente = rateiosFabrica.find(r=>r.mes===mes && r.fabricaObraId===fabricaObraId);
+  let lancamentos = load('lancamentosFinanceiros');
+  if(existente){
+    const idsAntigos = Object.values(existente.lancamentoIdPorObra||{});
+    lancamentos = lancamentos.filter(l=>!idsAntigos.includes(l.id));
+  }
+
+  const lancamentoIdPorObra = {};
+  const descricaoBase = `Rateio Fábrica (${mesLabelCurto(mes)})`;
+  outrasObras.forEach(o=>{
+    const kg = kgPorObra[o.id];
+    if(kg<=0) return;
+    const valor = custoTotal * (kg/totalKg);
+    const novoId = uid();
+    lancamentos.push({ id: novoId, obraId:o.id, tipo:'despesa', categoria:'maoDeObra', descricao: descricaoBase, valor, data: mes+'-01' });
+    lancamentoIdPorObra[o.id] = novoId;
+  });
+  save('lancamentosFinanceiros', lancamentos);
+
+  const record = { id: existente ? existente.id : uid(), mes, fabricaObraId, kgPorObra, totalRateado: custoTotal, lancamentoIdPorObra };
+  const idx = rateiosFabrica.findIndex(r=>r.id===record.id);
+  if(idx>=0) rateiosFabrica[idx] = record; else rateiosFabrica.push(record);
+  save('rateiosFabrica', rateiosFabrica);
+
+  renderFabricaRateio();
+  toast('Custo da Fábrica rateado entre as obras.');
+}
+
 
 /* ============================================================
    RESPONSÁVEIS — Gerente / Engenheiro / Administrativo / Almoxarife
@@ -4518,11 +4750,14 @@ function renderTarefas(){
 function openTarefaModal(id){
   refreshTarefaSetorSelect();
   refreshTarefaResponsavelSelect();
+  const selObra = document.getElementById('tarefaObraId');
+  selObra.innerHTML = '<option value="">— Não vinculada a uma obra —</option>' + load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
   document.getElementById('modalTarefaTitle').textContent = id ? 'Editar tarefa' : 'Nova tarefa';
-  ['tarefaId','tarefaTitulo','tarefaDescricao','tarefaDataInicio','tarefaPrazo'].forEach(f=>document.getElementById(f).value='');
+  ['tarefaId','tarefaTitulo','tarefaDescricao','tarefaDataInicio','tarefaPrazo','tarefaHoras'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('tarefaPrioridade').value = 'media';
   document.getElementById('tarefaStatus').value = 'pendente';
   document.getElementById('tarefaResponsavel').value = '';
+  document.getElementById('tarefaObraId').value = '';
   if(id){
     const t = load('tarefas').find(x=>x.id===id);
     if(t){
@@ -4531,6 +4766,8 @@ function openTarefaModal(id){
       document.getElementById('tarefaDescricao').value = t.descricao||'';
       document.getElementById('tarefaSetor').value = t.setor||'';
       document.getElementById('tarefaResponsavel').value = t.responsavel||'';
+      document.getElementById('tarefaObraId').value = t.obraId||'';
+      document.getElementById('tarefaHoras').value = t.horasUtilizadas||'';
       document.getElementById('tarefaDataInicio').value = t.dataInicio||'';
       document.getElementById('tarefaPrazo').value = t.prazo||'';
       document.getElementById('tarefaPrioridade').value = t.prioridade||'media';
@@ -4546,6 +4783,7 @@ function saveTarefa(){
   const id = document.getElementById('tarefaId').value || uid();
   let tarefas = load('tarefas');
   const existente = tarefas.find(t=>t.id===id);
+  const obraSelecionada = document.getElementById('tarefaObraId').value;
   const record = {
     id, titulo,
     descricao: document.getElementById('tarefaDescricao').value.trim(),
@@ -4555,7 +4793,10 @@ function saveTarefa(){
     prazo: document.getElementById('tarefaPrazo').value,
     prioridade: document.getElementById('tarefaPrioridade').value,
     status: document.getElementById('tarefaStatus').value,
-    obraId: existente ? existente.obraId : null,
+    horasUtilizadas: parseFloat(document.getElementById('tarefaHoras').value) || 0,
+    // Tarefas geradas automaticamente por um item já vêm com obra/origem; aqui
+    // só sobrescreve obraId se o usuário escolheu uma manualmente no formulário.
+    obraId: obraSelecionada || (existente ? existente.obraId : null),
     origemModulo: existente ? existente.origemModulo : null,
     origemItemId: existente ? existente.origemItemId : null,
     origemUnitKey: existente ? existente.origemUnitKey : null
@@ -4573,6 +4814,18 @@ function deleteTarefa(id){
   save('tarefas', load('tarefas').filter(t=>t.id!==id));
   renderTarefas();
   toast('Tarefa excluída.');
+}
+
+// Soma as horas utilizadas em tarefas de um funcionário, agrupadas por obra,
+// dentro de um mês de referência (YYYY-MM) — usado para sugerir a divisão
+// proporcional do rateio de mão de obra entre as obras daquele mês.
+function calcularHorasTarefasPorObra(funcionarioId, mes){
+  const tarefas = load('tarefas').filter(t=>
+    t.responsavel===funcionarioId && t.obraId && t.dataInicio && t.dataInicio.slice(0,7)===mes && t.horasUtilizadas>0
+  );
+  const porObra = {};
+  tarefas.forEach(t=>{ porObra[t.obraId] = (porObra[t.obraId]||0) + t.horasUtilizadas; });
+  return Object.entries(porObra).map(([obraId,horas])=>({obraId, horas}));
 }
 
 function renderMetas(){
