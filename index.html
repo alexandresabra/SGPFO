@@ -297,6 +297,9 @@
     <div id="loginErro" class="step-note" style="color:var(--danger);margin-top:10px;display:none;"></div>
     <button class="btn" style="width:100%;margin-top:18px;" onclick="fazerLogin()" id="loginBtn">Entrar</button>
     <div style="font-size:11.5px;color:var(--ink-soft);margin-top:16px;text-align:center;">Não tem acesso? Peça ao Gerente para criar seu login no painel do Supabase.</div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:10px;text-align:center;">
+      <button type="button" onclick="continuarSemLogin()" style="background:none;border:none;padding:0;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:11px;">Problema para entrar? Continuar sem sincronizar</button>
+    </div>
   </div>
 </div>
 
@@ -2161,12 +2164,39 @@ function initSupabase(){
 // localStorage antes do app iniciar — assim as centenas de load() já
 // existentes enxergam os dados sincronizados sem precisar saber que
 // vieram da nuvem.
+//
+// IMPORTANTE — proteção contra perda de dados: nunca sobrescreve uma chave
+// local que já tenha mais conteúdo do que o que está vindo do Supabase (por
+// exemplo, se a tabela sgpt_kv ainda estiver vazia ou desatualizada). Nesse
+// caso, o dado local mais completo é mantido e reenviado para o Supabase
+// em seguida, para não ficar divergente.
+function tamanhoAproximado(valor){
+  if(valor === null || valor === undefined) return 0;
+  try{
+    const parsed = JSON.parse(valor);
+    if(Array.isArray(parsed)) return parsed.length;
+    if(typeof parsed === 'object') return Object.keys(parsed).length;
+    return String(valor).length > 0 ? 1 : 0;
+  }catch(e){
+    return String(valor).length > 0 ? 1 : 0;
+  }
+}
+
 async function pullFromSupabase(){
   if(!supabaseClient) return false;
   try{
     const { data, error } = await supabaseClient.from('sgpt_kv').select('key,value');
     if(error) throw error;
-    (data || []).forEach(row => { localStorage.setItem(row.key, row.value); });
+    (data || []).forEach(row => {
+      const local = localStorage.getItem(row.key);
+      const localMaior = tamanhoAproximado(local) > tamanhoAproximado(row.value);
+      if(localMaior){
+        // Mantém o dado local (mais completo) e reenvia pro Supabase depois.
+        setTimeout(()=> pushToSupabase(row.key, local), 0);
+        return;
+      }
+      localStorage.setItem(row.key, row.value);
+    });
     return true;
   }catch(e){ console.error('Erro ao sincronizar do Supabase:', e); return false; }
 }
@@ -2218,6 +2248,21 @@ function esconderTelaLogin(){
   document.getElementById('app').style.display = '';
   const btnOut = document.getElementById('btnLogout');
   if(btnOut) btnOut.style.display = 'block';
+}
+
+// Saída de emergência: se o login travar ou não funcionar, o usuário ainda
+// consegue ver os dados que já estão salvos localmente neste navegador —
+// nunca deixa a pessoa presa fora do próprio sistema. Não sincroniza com o
+// Supabase nesta sessão (fica em modo local até recarregar a página).
+function continuarSemLogin(){
+  supabaseReady = false;
+  const el = document.getElementById('syncIndicator');
+  if(el){ el.textContent = '● Modo local (login não realizado)'; el.style.color = 'var(--warn, #b8590d)'; }
+  esconderTelaLogin();
+  toggleS1Fields();
+  toggleOrigemPressaoPerfil();
+  toggleOrigemPressaoVidro();
+  renderDashboard();
 }
 
 async function fazerLogin(){
