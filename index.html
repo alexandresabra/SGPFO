@@ -285,7 +285,7 @@
 <body>
 
 <!-- ===================== LOGIN ===================== -->
-<div id="loginOverlay" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:9999;display:flex;align-items:center;justify-content:center;">
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:9999;align-items:center;justify-content:center;">
   <div style="width:100%;max-width:360px;padding:0 24px;">
     <div style="text-align:center;margin-bottom:28px;">
       <div class="brand-icon" style="margin:0 auto 14px;"></div>
@@ -6637,6 +6637,8 @@ const FUNCIONARIOS_PLANILHA_SEED = [
   supabaseReady = initSupabase();
   if(supabaseReady){
     // Supabase configurado: exige login antes de carregar qualquer dado.
+    const elPre = document.getElementById('syncIndicator');
+    if(elPre){ elPre.textContent = '● Aguardando login'; elPre.style.color = 'var(--ink-soft)'; }
     mostrarTelaLogin();
     const jaLogado = await verificarSessaoExistente();
     if(!jaLogado){
