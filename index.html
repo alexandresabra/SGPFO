@@ -2378,8 +2378,27 @@ const sectionTitles = {
   chamados: ['Revisão de Esquadrias','Sistema de chamados de assistência técnica']
 };
 
+// Captura qualquer erro não tratado em qualquer parte do sistema e avisa na
+// tela, em vez de deixar a página "travada" sem nenhuma reação visível.
+window.addEventListener('error', function(ev){
+  console.error('Erro não tratado:', ev.error || ev.message);
+  if(typeof toast === 'function'){
+    toast('Ocorreu um erro inesperado. Veja o console (F12) para detalhes — e avise o suporte.');
+  }
+});
+window.addEventListener('unhandledrejection', function(ev){
+  console.error('Erro não tratado (promise):', ev.reason);
+});
+
 document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click', ()=> showSection(item.dataset.section));
+  item.addEventListener('click', ()=>{
+    try{
+      showSection(item.dataset.section);
+    }catch(e){
+      console.error('Erro ao abrir seção', item.dataset.section, e);
+      toast('Ocorreu um erro ao abrir esta tela. Veja o console (F12) para detalhes.');
+    }
+  });
 });
 
 let chamadosCarregado = false;
@@ -2395,19 +2414,26 @@ function showSection(id){
   document.getElementById('sec-'+id).classList.add('active');
   document.getElementById('pageTitle').textContent = sectionTitles[id][0];
   document.getElementById('pageCrumb').textContent = sectionTitles[id][1];
-  if(id==='dashboard') renderDashboard();
-  if(id==='obras') renderObras();
-  if(id==='responsaveis') renderResponsaveis();
-  if(id==='funcionarios') renderFuncionarios();
-  if(id==='perfiscatalogo') renderPerfisCatalogo();
-  if(id==='vidroscatalogo') renderVidrosCatalogo();
-  if(id==='tecnicos') renderTecnicos();
-  if(id==='setores') renderSetores();
-  if(id==='tarefas'){ refreshTarefaFiltroSetor(); refreshTarefaSetorSelect(); refreshTarefaResponsavelSelect(); renderTarefas(); }
-  if(id==='metas'){ refreshMetaFiltroSetor(); refreshMetaSetorSelect(); renderMetas(); }
-  if(id==='materiaisgeral') renderMateriaisGeral();
-  if(id==='rateiomdo') renderRateioMaoDeObra();
-  if(id==='chamados') carregarChamadosFrame();
+  try{
+    if(id==='dashboard') renderDashboard();
+    if(id==='obras') renderObras();
+    if(id==='responsaveis') renderResponsaveis();
+    if(id==='funcionarios') renderFuncionarios();
+    if(id==='perfiscatalogo') renderPerfisCatalogo();
+    if(id==='vidroscatalogo') renderVidrosCatalogo();
+    if(id==='tecnicos') renderTecnicos();
+    if(id==='setores') renderSetores();
+    if(id==='tarefas'){ refreshTarefaFiltroSetor(); refreshTarefaSetorSelect(); refreshTarefaResponsavelSelect(); renderTarefas(); }
+    if(id==='metas'){ refreshMetaFiltroSetor(); refreshMetaSetorSelect(); renderMetas(); }
+    if(id==='materiaisgeral') renderMateriaisGeral();
+    if(id==='rateiomdo') renderRateioMaoDeObra();
+    if(id==='chamados') carregarChamadosFrame();
+  }catch(e){
+    // A seção já ficou visível (linhas acima) mesmo que os dados dela
+    // falhem ao carregar — assim a tela nunca fica "travada" sem reação.
+    console.error('Erro ao carregar dados da seção', id, e);
+    toast('A tela abriu, mas houve um erro ao carregar os dados. Veja o console (F12).');
+  }
 }
 
 /* ---------------- Obra — Workspace (drill-down) ---------------- */
