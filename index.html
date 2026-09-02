@@ -201,6 +201,10 @@
   #rdoPrintArea .empty{color:#888;font-style:italic;margin-top:30px;}
   #rdoPrintArea .foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:12px;}
   #rdoPrintArea .foto-grid figure{margin:0;}
+  #rdoPrintArea table{width:100%;border-collapse:collapse;margin:10px 0 20px;font-size:11.5px;}
+  #rdoPrintArea th{background:#f6f6f5;text-align:left;padding:5px 8px;border-bottom:2px solid var(--red);font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;}
+  #rdoPrintArea td{padding:5px 8px;border-bottom:1px solid #eee;}
+  #rdoPrintArea tfoot td{border-top:2px solid var(--red);border-bottom:none;font-weight:700;}
   #rdoPrintArea .foto-grid img{width:100%;height:150px;object-fit:cover;border-radius:4px;border:1px solid #ddd;}
   #rdoPrintArea .foto-grid figcaption{font-size:10.5px;color:#666;margin-top:4px;}
 
@@ -220,6 +224,9 @@
   .field.full{grid-column:1/-1;}
   .field label{font-size:12px;font-weight:600;color:var(--ink-soft);}
   .field small.hint{font-size:11px;color:#8a8a8a;font-weight:400;}
+  .inline-edit-input{border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:4px;font:inherit;color:inherit;width:100%;min-width:100px;}
+  .inline-edit-input:hover{border-color:var(--line);}
+  .inline-edit-input:focus{border-color:var(--red-2);background:#fff;outline:none;}
   input[type=text],input[type=number],input[type=date],input[type=email],input[type=tel],select,textarea{
     padding:9px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;font-family:var(--sans);color:var(--ink);background:#fff;
   }
@@ -718,14 +725,7 @@
                 </div>
                 <button class="btn" onclick="openMaterialModal()">+ Novo pedido</button>
               </div>
-              <table>
-                <thead><tr>
-                  <th>Item / Material</th><th>Fornecedor</th><th>Nº Pedido</th>
-                  <th>Qtd. pedida</th><th>Qtd. recebida</th><th>Qtd. a receber</th>
-                  <th>Data pedido</th><th>Previsão</th><th>Status</th><th>Entregas</th><th></th>
-                </tr></thead>
-                <tbody id="materiaisTableBody"></tbody>
-              </table>
+              <div id="materiaisTableBody"></div>
               <div class="empty-state" id="materiaisEmpty" style="display:none;">
                 <div class="big">▧</div>Nenhum pedido de material cadastrado para esta obra ainda.<br>
                 <button class="btn small" style="margin-top:10px;" onclick="openMaterialModal()">Cadastrar primeiro pedido</button>
@@ -1164,6 +1164,7 @@
             <div class="panel">
               <div class="panel-head">Lançamentos financeiros</div>
               <div class="panel-body">
+                <input type="hidden" id="finLancamentoId">
                 <div class="form-grid cols-3">
                   <div class="field">
                     <label>Tipo</label>
@@ -1205,9 +1206,32 @@
                   </div>
                 </div>
                 <div class="form-actions">
-                  <button class="btn" onclick="addLancamentoFinanceiro()">+ Adicionar lançamento</button>
+                  <button class="btn secondary" id="finCancelEditBtn" style="display:none;" onclick="cancelarEdicaoLancamento()">Cancelar edição</button>
+                  <button class="btn" id="finSubmitBtn" onclick="salvarLancamentoFinanceiro()">+ Adicionar lançamento</button>
                 </div>
                 <hr class="divider">
+                <div class="toolbar" style="margin-bottom:10px;">
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <select id="finFiltroTipo" onchange="renderFinanceiro()">
+                      <option value="">Todos os tipos</option>
+                      <option value="despesa">Despesa</option>
+                      <option value="receita">Receita</option>
+                    </select>
+                    <select id="finFiltroCategoria" onchange="renderFinanceiro()">
+                      <option value="">Todas as categorias</option>
+                      <option value="aluminio">Material — Alumínio</option>
+                      <option value="acessorios">Material — Acessórios</option>
+                      <option value="maoDeObra">Mão de obra</option>
+                      <option value="vidro">Vidro</option>
+                      <option value="sucata">Sucata</option>
+                      <option value="vendaObra">Venda / Transferência entre Obras</option>
+                      <option value="equipamento">Equipamentos</option>
+                      <option value="administrativo">Administrativo</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                    <input type="text" id="finFiltroDescricao" placeholder="Buscar por descrição..." oninput="renderFinanceiro()" style="min-width:200px;">
+                  </div>
+                </div>
                 <table>
                   <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
                   <tbody id="finLancamentosBody"></tbody>
@@ -1344,6 +1368,13 @@
               <label style="font-size:12px;font-weight:600;color:var(--ink-soft);">Mês de referência</label>
               <input type="month" id="rateioMesFiltro" onchange="renderRateioMaoDeObra()">
             </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn small secondary" onclick="gerarRelatorioRateioResumo()">Relatório — Resumo</button>
+              <button class="btn small secondary" onclick="gerarRelatorioRateioCompleto()">Relatório — Completo</button>
+            </div>
+          </div>
+          <div class="kpi-row" style="margin-top:0;margin-bottom:16px;">
+            <div class="kpi"><div class="num" id="rateioKpiTotalFolha">R$ 0</div><div class="lbl">Total da folha no mês (todas as obras)</div></div>
           </div>
           <div class="panel">
             <div class="panel-head">Funcionários (CLT)</div>
@@ -1881,16 +1912,22 @@
     <div class="modal-body">
       <input type="hidden" id="matId">
       <div class="form-grid">
-        <div class="field full"><label>Item / Material</label><input type="text" id="matItem" placeholder="Ex.: Perfil de alumínio linha 25, Vidro temperado 8mm..."></div>
         <div class="field"><label>Fornecedor</label><input type="text" id="matFornecedor"></div>
         <input type="hidden" id="matObraId">
         <div class="field"><label>Nº do pedido</label><input type="text" id="matNumPedido"></div>
-        <div class="field"><label>Quantidade pedida (total)</label><input type="number" id="matQtdPedida" step="0.01"></div>
-        <div class="field"><label>Unidade</label><input type="text" id="matUnidade" placeholder="Ex.: un, kg, m, m², barra"></div>
         <div class="field"><label>Data do pedido</label><input type="date" id="matDataPedido"></div>
         <div class="field"><label>Data prevista de chegada</label><input type="date" id="matDataPrevista"></div>
-        <div class="field full"><label>Observações</label><textarea id="matObs"></textarea></div>
+        <div class="field full"><label>Observações do pedido</label><textarea id="matObs"></textarea></div>
       </div>
+
+      <hr class="divider">
+      <h4 style="font-family:var(--serif);margin:0 0 6px;">Itens do pedido</h4>
+      <div class="step-note" style="margin-bottom:10px;">Um mesmo pedido pode ter vários itens/materiais — cada um com sua própria quantidade e acompanhamento de entregas.</div>
+      <div id="itensPedidoBody"></div>
+      <div class="form-actions" style="margin-top:8px;justify-content:flex-start;">
+        <button type="button" class="btn small secondary" onclick="adicionarLinhaItemPedido()">+ Adicionar item</button>
+      </div>
+
       <div class="form-actions">
         <button class="btn secondary" onclick="closeModal('modalMaterial')">Cancelar</button>
         <button class="btn" onclick="saveMaterial()">Salvar pedido</button>
@@ -1904,6 +1941,7 @@
     <div class="modal-head"><h3 id="modalEntradaTitle">Entradas de material</h3><button class="modal-close" onclick="closeModal('modalEntradaMaterial')">&times;</button></div>
     <div class="modal-body">
       <input type="hidden" id="entradaMatId">
+      <input type="hidden" id="entradaItemId">
       <div id="entradaResumo" class="disclaimer" style="background:#f6f6f5;border-color:var(--line);border-left-color:var(--red-2);color:var(--ink-soft);"></div>
 
       <h4 style="font-family:var(--serif);margin:16px 0 10px;">Histórico de entregas</h4>
@@ -1958,6 +1996,14 @@
           <select id="itemBlocoId"></select>
         </div>
         <div class="field full"><label>Nomenclatura</label><input type="text" id="itemNomenclatura" placeholder="Ex.: Janela tipo J-01, Porta de vidro P-02..."></div>
+        <div class="field">
+          <label>Tipo de esquadria</label>
+          <select id="itemTipoEsquadria">
+            <option value="Janela e Porta">Janela e Porta</option>
+            <option value="Guarda-corpo">Guarda-corpo</option>
+            <option value="Fachada">Fachada</option>
+          </select>
+        </div>
         <div class="field"><label>Largura (mm)</label><input type="number" id="itemLargura" step="1"></div>
         <div class="field"><label>Altura (mm)</label><input type="number" id="itemAltura" step="1"></div>
         <div class="field"><label>Peso líquido da esquadria (Kg)</label><input type="number" id="itemPesoLiquido" step="0.01" placeholder="Ex.: 18.5"></div>
@@ -2973,7 +3019,7 @@ function toggleObraRelacionadaLancamento(){
   }
 }
 
-function addLancamentoFinanceiro(){
+function salvarLancamentoFinanceiro(){
   const valor = parseFloat(document.getElementById('finValor').value);
   if(!valor || valor<=0){ toast('Informe um valor válido.'); return; }
   const descricao = document.getElementById('finDescricao').value.trim();
@@ -2981,8 +3027,21 @@ function addLancamentoFinanceiro(){
   const data = document.getElementById('finData').value || todayISO();
   const categoria = document.getElementById('finCategoria').value;
   const tipo = document.getElementById('finTipo').value;
+  const idEdicao = document.getElementById('finLancamentoId').value;
 
   let lancamentos = load('lancamentosFinanceiros');
+
+  if(idEdicao){
+    const idx = lancamentos.findIndex(l=>l.id===idEdicao);
+    if(idx<0){ toast('Lançamento não encontrado.'); return; }
+    lancamentos[idx] = { ...lancamentos[idx], tipo, categoria, descricao, valor, data };
+    save('lancamentosFinanceiros', lancamentos);
+    cancelarEdicaoLancamento();
+    renderFinanceiro();
+    toast('Lançamento atualizado.');
+    return;
+  }
+
   const idPrincipal = uid();
 
   if(categoria === 'vendaObra'){
@@ -3015,6 +3074,32 @@ function addLancamentoFinanceiro(){
   renderFinanceiro();
 }
 
+function editarLancamentoFinanceiro(id){
+  const l = load('lancamentosFinanceiros').find(x=>x.id===id);
+  if(!l) return;
+  document.getElementById('finLancamentoId').value = l.id;
+  document.getElementById('finTipo').value = l.tipo;
+  document.getElementById('finCategoria').value = l.categoria;
+  toggleObraRelacionadaLancamento();
+  document.getElementById('finData').value = l.data;
+  document.getElementById('finDescricao').value = l.descricao;
+  document.getElementById('finValor').value = l.valor;
+  document.getElementById('finSubmitBtn').textContent = 'Salvar alterações';
+  document.getElementById('finCancelEditBtn').style.display = 'inline-flex';
+  if(l.lancamentoParId){
+    toast('Atenção: este lançamento tem uma contrapartida em outra obra — editar aqui não atualiza o outro lado automaticamente.');
+  }
+  document.getElementById('finLancamentosBody').closest('.panel')?.scrollIntoView({behavior:'smooth'});
+}
+
+function cancelarEdicaoLancamento(){
+  document.getElementById('finLancamentoId').value = '';
+  document.getElementById('finDescricao').value = '';
+  document.getElementById('finValor').value = '';
+  document.getElementById('finSubmitBtn').textContent = '+ Adicionar lançamento';
+  document.getElementById('finCancelEditBtn').style.display = 'none';
+}
+
 function deleteLancamentoFinanceiro(id){
   const lancamentos = load('lancamentosFinanceiros');
   const alvo = lancamentos.find(l=>l.id===id);
@@ -3026,6 +3111,7 @@ function deleteLancamentoFinanceiro(id){
   const idsParaExcluir = new Set([id]);
   if(alvo.lancamentoParId) idsParaExcluir.add(alvo.lancamentoParId);
   save('lancamentosFinanceiros', lancamentos.filter(l=>!idsParaExcluir.has(l.id)));
+  if(document.getElementById('finLancamentoId').value === id) cancelarEdicaoLancamento();
   renderFinanceiro();
 }
 
@@ -3202,9 +3288,19 @@ function renderFinanceiro(){
     </tbody>
   </table>`;
 
-  document.getElementById('finLancamentosEmpty').style.display = lancamentos.length ? 'none' : 'block';
+  const filtroTipo = document.getElementById('finFiltroTipo').value;
+  const filtroCategoria = document.getElementById('finFiltroCategoria').value;
+  const filtroDescricao = (document.getElementById('finFiltroDescricao').value || '').toLowerCase();
+  const lancamentosFiltrados = lancamentos.filter(l=>{
+    if(filtroTipo && l.tipo!==filtroTipo) return false;
+    if(filtroCategoria && l.categoria!==filtroCategoria) return false;
+    if(filtroDescricao && !(l.descricao||'').toLowerCase().includes(filtroDescricao)) return false;
+    return true;
+  });
+
+  document.getElementById('finLancamentosEmpty').style.display = lancamentosFiltrados.length ? 'none' : 'block';
   const todasObras = load('obras');
-  document.getElementById('finLancamentosBody').innerHTML = lancamentos.slice().reverse().map(l=>{
+  document.getElementById('finLancamentosBody').innerHTML = lancamentosFiltrados.slice().reverse().map(l=>{
     const obraRel = l.obraRelacionadaId ? todasObras.find(o=>o.id===l.obraRelacionadaId) : null;
     return `<tr>
       <td>${fmtDate(l.data)}</td>
@@ -3212,7 +3308,10 @@ function renderFinanceiro(){
       <td>${FIN_CATEGORIA_LABEL[l.categoria]||l.categoria}${obraRel?`<div class="step-note">↔ ${esc(obraRel.nome)}</div>`:''}</td>
       <td>${esc(l.descricao)}</td>
       <td>${fmtMoeda(l.valor)}</td>
-      <td style="text-align:right;"><button class="btn small danger" onclick="deleteLancamentoFinanceiro('${l.id}')">Excluir</button></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn small secondary" onclick="editarLancamentoFinanceiro('${l.id}')">Editar</button>
+        <button class="btn small danger" onclick="deleteLancamentoFinanceiro('${l.id}')">Excluir</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -3507,6 +3606,9 @@ function renderRateioMaoDeObra(){
   const funcsClt = load('funcionarios').filter(f=>f.status==='ativo' && (f.tipoVinculo||'clt')!=='pj');
   const rateios = load('rateiosMaoDeObra').filter(r=> !filtroMes || r.mes===filtroMes);
 
+  const totalFolha = filtroMes ? rateios.reduce((s,r)=> s + (r.totalComEncargos||0), 0) : 0;
+  document.getElementById('rateioKpiTotalFolha').textContent = filtroMes ? fmtMoeda(totalFolha) : '— selecione o mês —';
+
   document.getElementById('rateioEmpty').style.display = funcsClt.length ? 'none' : 'block';
   document.getElementById('rateioTableBody').innerHTML = funcsClt.map(f=>{
     const rateio = filtroMes ? rateios.find(r=>r.funcionarioId===f.id) : null;
@@ -3530,6 +3632,124 @@ function renderRateioMaoDeObra(){
   }).join('');
 
   renderFabricaObraSelect();
+}
+
+/* ---------------- Relatórios de rateio por obra (impressão) ----------------
+   Reaproveita a mesma área de impressão do RDO (#rdoPrintArea). Organiza o
+   rateio do mês selecionado agrupado por obra — em cada obra, o custo de
+   cada funcionário é rateado (fatiado) na mesma proporção da alocação dele. */
+function calcularRelatorioRateioPorObra(mes){
+  const rateios = load('rateiosMaoDeObra').filter(r=>r.mes===mes);
+  const funcionarios = load('funcionarios');
+  const obras = load('obras');
+  const porObra = {};
+
+  rateios.forEach(r=>{
+    const funcionario = funcionarios.find(f=>f.id===r.funcionarioId);
+    if(!funcionario) return;
+    const encargos = calcularEncargosMaoDeObra(funcionario, {
+      salarioBase: r.salarioBase, horaExtra: r.horaExtra, horaPremio: r.horaPremio, valeTransporte: r.valeTransporte
+    });
+    const alocacoes = r.alocacoes || [];
+    const totalPeso = alocacoes.reduce((s,a)=> s + (parseFloat(a.peso)||0), 0);
+    alocacoes.forEach(a=>{
+      const prop = totalPeso>0 ? (parseFloat(a.peso)||0)/totalPeso : 0;
+      if(!porObra[a.obraId]) porObra[a.obraId] = { obra: obras.find(o=>o.id===a.obraId), linhas: [], totalObra: 0 };
+      porObra[a.obraId].linhas.push({
+        funcionario: funcionario.nome,
+        cargo: funcionario.cargo,
+        proporcao: prop,
+        salarioBruto: encargos.salarioBruto*prop,
+        gps: encargos.gps*prop,
+        fgts: encargos.fgts*prop,
+        seconci: encargos.seconci*prop,
+        provisoes: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
+        beneficios: (encargos.seguroVida+encargos.pcmso+encargos.valeAlimentacao+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
+        valeTransporte: encargos.valeTransporte*prop,
+        total: a.valor || 0
+      });
+      porObra[a.obraId].totalObra += (a.valor || 0);
+    });
+  });
+  return porObra;
+}
+
+function ordenarChavesPorNomeObra(porObra){
+  return Object.keys(porObra).sort((a,b)=>{
+    const na = (porObra[a].obra ? porObra[a].obra.nome : '') || '';
+    const nb = (porObra[b].obra ? porObra[b].obra.nome : '') || '';
+    return na.localeCompare(nb);
+  });
+}
+
+function gerarRelatorioRateioResumo(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência antes de gerar o relatório.'); return; }
+  const porObra = calcularRelatorioRateioPorObra(mes);
+  const chaves = ordenarChavesPorNomeObra(porObra);
+  let totalGeral = 0;
+  const linhas = chaves.map(id=>{
+    const g = porObra[id];
+    totalGeral += g.totalObra;
+    return `<tr><td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td><td>${g.linhas.length}</td><td>${fmtMoeda(g.totalObra)}</td></tr>`;
+  }).join('');
+
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Relatório de Rateio de Mão de Obra — Resumo</h1>
+    <div class="meta">
+      Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    <table>
+      <thead><tr><th>Obra</th><th>Funcionários alocados</th><th>Total de mão de obra</th></tr></thead>
+      <tbody>${linhas || '<tr><td colspan="3">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
+      <tfoot><tr><td>TOTAL GERAL DA FOLHA NO MÊS</td><td></td><td>${fmtMoeda(totalGeral)}</td></tr></tfoot>
+    </table>`;
+  window.print();
+}
+
+function gerarRelatorioRateioCompleto(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência antes de gerar o relatório.'); return; }
+  const porObra = calcularRelatorioRateioPorObra(mes);
+  const chaves = ordenarChavesPorNomeObra(porObra);
+  let totalGeral = 0;
+
+  const secoes = chaves.map(id=>{
+    const g = porObra[id];
+    totalGeral += g.totalObra;
+    const linhasHtml = g.linhas.map(l=>`
+      <tr>
+        <td>${esc(l.funcionario)}${l.cargo?' — '+esc(l.cargo):''}</td>
+        <td>${(l.proporcao*100).toFixed(1)}%</td>
+        <td>${fmtMoeda(l.salarioBruto)}</td>
+        <td>${fmtMoeda(l.gps)}</td>
+        <td>${fmtMoeda(l.fgts)}</td>
+        <td>${fmtMoeda(l.seconci)}</td>
+        <td>${fmtMoeda(l.provisoes)}</td>
+        <td>${fmtMoeda(l.beneficios)}</td>
+        <td>${fmtMoeda(l.valeTransporte)}</td>
+        <td><strong>${fmtMoeda(l.total)}</strong></td>
+      </tr>`).join('');
+    return `<h2>${esc(g.obra ? g.obra.nome : 'Obra removida')} — Total: ${fmtMoeda(g.totalObra)}</h2>
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>% Alocado</th><th>Sal. Bruto</th><th>GPS (45%)</th><th>FGTS (12%)</th>
+          <th>SECONCI (1,5%)</th><th>Provisões</th><th>Benefícios</th><th>V. Transp.</th><th>Total</th>
+        </tr></thead>
+        <tbody>${linhasHtml}</tbody>
+      </table>`;
+  }).join('');
+
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Relatório de Rateio de Mão de Obra — Completo</h1>
+    <div class="meta">
+      Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
+      Total geral da folha no mês: <strong>${fmtMoeda(totalGeral)}</strong><br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}`;
+  window.print();
 }
 
 /* ---------------- Rateio da Fábrica pelas obras (por Kg produzido) ----------------
@@ -5066,17 +5286,29 @@ function deleteMeta(id){
    Cada pedido tem uma lista de "entregas" (recebimentos fracionados),
    cada uma com data de chegada, quantidade e Nº da NF.
    ============================================================ */
-function qtdRecebidaTotal(m){
-  return (m.entregas||[]).reduce((sum,e)=> sum + (parseFloat(e.quantidade)||0), 0);
+function qtdRecebidaItem(item){
+  return (item.entregas||[]).reduce((sum,e)=> sum + (parseFloat(e.quantidade)||0), 0);
 }
 
-function calcularStatusMaterial(m){
-  const pedida = parseFloat(m.qtdPedida) || 0;
-  const recebida = qtdRecebidaTotal(m);
+function calcularStatusItemPedido(item, dataPrevista){
+  const pedida = parseFloat(item.qtdPedida) || 0;
+  const recebida = qtdRecebidaItem(item);
   const hoje = todayISO();
   if(recebida >= pedida && pedida > 0) return 'completo';
   if(recebida > 0 && recebida < pedida) return 'parcial';
-  if(recebida <= 0 && m.dataPrevista && m.dataPrevista < hoje) return 'atrasado';
+  if(recebida <= 0 && dataPrevista && dataPrevista < hoje) return 'atrasado';
+  return 'pendente';
+}
+
+// Status do pedido como um todo = o "pior" status entre os itens dele
+// (atrasado > parcial > pendente > completo só quando todos completos).
+function calcularStatusPedido(pedido){
+  const itens = pedido.itens || [];
+  if(!itens.length) return 'pendente';
+  const statusItens = itens.map(it=>calcularStatusItemPedido(it, pedido.dataPrevista));
+  if(statusItens.some(s=>s==='atrasado')) return 'atrasado';
+  if(statusItens.some(s=>s==='parcial')) return 'parcial';
+  if(statusItens.every(s=>s==='completo')) return 'completo';
   return 'pendente';
 }
 
@@ -5091,103 +5323,149 @@ function statusMaterialPill(status){
   return `<span class="status-pill ${cls}">${label}</span>`;
 }
 
+/* ---------------- Itens do pedido (lista dinâmica no modal) ---------------- */
+let tempItensPedido = [];
+
+function renderTempItensPedido(){
+  document.getElementById('itensPedidoBody').innerHTML = tempItensPedido.map((it,i)=>`
+    <div class="form-grid cols-3" style="align-items:end;margin-bottom:6px;">
+      <div class="field full">
+        <label>Item / Material</label>
+        <input type="text" value="${esc(it.item||'')}" placeholder="Ex.: Perfil de alumínio linha 25, Vidro temperado 8mm..."
+          oninput="tempItensPedido[${i}].item=this.value;">
+      </div>
+      <div class="field">
+        <label>Quantidade pedida</label>
+        <input type="number" step="0.01" value="${it.qtdPedida||''}" oninput="tempItensPedido[${i}].qtdPedida=this.value;">
+      </div>
+      <div class="field">
+        <label>Unidade</label>
+        <input type="text" value="${esc(it.unidade||'')}" placeholder="Ex.: un, kg, m, m², barra" oninput="tempItensPedido[${i}].unidade=this.value;">
+      </div>
+      <div class="field" style="text-align:right;">
+        <button type="button" class="btn small danger" onclick="removerLinhaItemPedido(${i})">Remover item</button>
+      </div>
+    </div>`).join('') || '<div class="step-note">Nenhum item adicionado ainda.</div>';
+}
+
+function adicionarLinhaItemPedido(){
+  tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[] });
+  renderTempItensPedido();
+}
+
+function removerLinhaItemPedido(i){
+  tempItensPedido.splice(i,1);
+  renderTempItensPedido();
+}
+
 function renderMateriais(){
-  const materiais = load('materiais').filter(m=>m.obraId===currentObraId);
+  const pedidos = load('materiais').filter(m=>m.obraId===currentObraId);
   const search = (document.getElementById('matSearch').value || '').toLowerCase();
   const filtroStatus = document.getElementById('matFiltroStatus').value;
 
-  const withStatus = materiais.map(m => ({
-    ...m,
-    statusCalc: calcularStatusMaterial(m),
-    recebidaCalc: qtdRecebidaTotal(m)
-  }));
+  const withStatus = pedidos.map(p => ({ ...p, statusCalc: calcularStatusPedido(p) }));
 
-  document.getElementById('kpiMatTotal').textContent = materiais.length;
-  document.getElementById('kpiMatPendente').textContent = withStatus.filter(m=>m.statusCalc==='pendente').length;
-  document.getElementById('kpiMatParcial').textContent = withStatus.filter(m=>m.statusCalc==='parcial').length;
-  document.getElementById('kpiMatAtrasado').textContent = withStatus.filter(m=>m.statusCalc==='atrasado').length;
-  document.getElementById('kpiMatCompleto').textContent = withStatus.filter(m=>m.statusCalc==='completo').length;
+  document.getElementById('kpiMatTotal').textContent = pedidos.length;
+  document.getElementById('kpiMatPendente').textContent = withStatus.filter(p=>p.statusCalc==='pendente').length;
+  document.getElementById('kpiMatParcial').textContent = withStatus.filter(p=>p.statusCalc==='parcial').length;
+  document.getElementById('kpiMatAtrasado').textContent = withStatus.filter(p=>p.statusCalc==='atrasado').length;
+  document.getElementById('kpiMatCompleto').textContent = withStatus.filter(p=>p.statusCalc==='completo').length;
 
-  const filtered = withStatus.filter(m=>{
-    const nfs = (m.entregas||[]).map(e=>e.numNF||'').join(' ');
-    const matchSearch = !search || [m.item, m.fornecedor, m.numPedido, nfs].some(v=>(v||'').toLowerCase().includes(search));
-    const matchStatus = !filtroStatus || m.statusCalc===filtroStatus;
+  const filtered = withStatus.filter(p=>{
+    const itensTexto = (p.itens||[]).map(it=>it.item||'').join(' ');
+    const nfs = (p.itens||[]).flatMap(it=>(it.entregas||[]).map(e=>e.numNF||'')).join(' ');
+    const matchSearch = !search || [itensTexto, p.fornecedor, p.numPedido, nfs].some(v=>(v||'').toLowerCase().includes(search));
+    const matchStatus = !filtroStatus || p.statusCalc===filtroStatus;
     return matchSearch && matchStatus;
   });
 
-  document.getElementById('materiaisEmpty').style.display = materiais.length ? 'none' : 'block';
+  document.getElementById('materiaisEmpty').style.display = pedidos.length ? 'none' : 'block';
 
-  document.getElementById('materiaisTableBody').innerHTML = filtered.slice().reverse().map(m=>{
-    const pedida = parseFloat(m.qtdPedida) || 0;
-    const recebida = m.recebidaCalc;
-    const aReceber = Math.max(0, pedida - recebida);
-    const numEntregas = (m.entregas||[]).length;
-    return `<tr>
-      <td><strong>${esc(m.item)}</strong></td>
-      <td>${esc(m.fornecedor||'—')}</td>
-      <td>${esc(m.numPedido||'—')}</td>
-      <td>${pedida} ${esc(m.unidade||'')}</td>
-      <td>${recebida} ${esc(m.unidade||'')}</td>
-      <td><strong>${aReceber} ${esc(m.unidade||'')}</strong></td>
-      <td>${fmtDate(m.dataPedido)}</td>
-      <td>${fmtDate(m.dataPrevista)}</td>
-      <td>${statusMaterialPill(m.statusCalc)}</td>
-      <td><span class="tag" style="cursor:pointer;" onclick="openEntradaModal('${m.id}')">${numEntregas} entrega${numEntregas===1?'':'s'}</span></td>
-      <td style="text-align:right;white-space:nowrap;">
-        <button class="btn small" onclick="openEntradaModal('${m.id}')">+ Entrada</button>
-        <button class="btn small secondary" onclick="openMaterialModal('${m.id}')">Editar</button>
-        <button class="btn small danger" onclick="deleteMaterial('${m.id}')">Excluir</button>
-      </td>
-    </tr>`;
+  document.getElementById('materiaisTableBody').innerHTML = filtered.slice().reverse().map(p=>{
+    const itens = p.itens || [];
+    const rows = itens.map(it=>{
+      const pedida = parseFloat(it.qtdPedida) || 0;
+      const recebida = qtdRecebidaItem(it);
+      const aReceber = Math.max(0, pedida - recebida);
+      const numEntregas = (it.entregas||[]).length;
+      const statusItem = calcularStatusItemPedido(it, p.dataPrevista);
+      return `<tr>
+        <td>${esc(it.item)}</td>
+        <td>${pedida} ${esc(it.unidade||'')}</td>
+        <td>${recebida} ${esc(it.unidade||'')}</td>
+        <td><strong>${aReceber} ${esc(it.unidade||'')}</strong></td>
+        <td>${statusMaterialPill(statusItem)}</td>
+        <td><span class="tag" style="cursor:pointer;" onclick="openEntradaModal('${p.id}','${it.id}')">${numEntregas} entrega${numEntregas===1?'':'s'}</span></td>
+        <td style="text-align:right;white-space:nowrap;"><button class="btn small" onclick="openEntradaModal('${p.id}','${it.id}')">+ Entrada</button></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="7" class="step-note" style="padding:10px;">Nenhum item neste pedido.</td></tr>`;
+    return `<details class="item-group" open>
+      <summary>${esc(p.fornecedor||'Fornecedor não informado')} ${p.numPedido?'· Pedido nº '+esc(p.numPedido):''}
+        <span class="count">${itens.length} item${itens.length===1?'':'s'}</span>
+        ${statusMaterialPill(p.statusCalc)}
+        <span style="float:right;">
+          <button class="btn small secondary" onclick="event.preventDefault();event.stopPropagation();openMaterialModal('${p.id}')">Editar pedido</button>
+          <button class="btn small danger" onclick="event.preventDefault();event.stopPropagation();deleteMaterial('${p.id}')">Excluir pedido</button>
+        </span>
+      </summary>
+      <div class="step-note" style="padding:6px 14px;">Pedido: ${fmtDate(p.dataPedido)} · Previsão: ${fmtDate(p.dataPrevista)}${p.observacoes?' · '+esc(p.observacoes):''}</div>
+      <table>
+        <thead><tr><th>Item</th><th>Pedida</th><th>Recebida</th><th>A receber</th><th>Status</th><th>Entregas</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </details>`;
   }).join('');
 }
 document.getElementById('matSearch').addEventListener('input', renderMateriais);
 
 function openMaterialModal(id){
   document.getElementById('modalMaterialTitle').textContent = id ? 'Editar pedido de material' : 'Novo pedido de material';
-  ['matId','matItem','matFornecedor','matNumPedido','matQtdPedida','matUnidade','matDataPedido','matDataPrevista','matObs'].forEach(f=>document.getElementById(f).value='');
+  ['matId','matFornecedor','matNumPedido','matDataPedido','matDataPrevista','matObs'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('matObraId').value = currentObraId || '';
+  tempItensPedido = [];
   if(id){
-    const m = load('materiais').find(x=>x.id===id);
-    if(m){
-      document.getElementById('matId').value = m.id;
-      document.getElementById('matItem').value = m.item||'';
-      document.getElementById('matFornecedor').value = m.fornecedor||'';
-      document.getElementById('matObraId').value = m.obraId||'';
-      document.getElementById('matNumPedido').value = m.numPedido||'';
-      document.getElementById('matQtdPedida').value = m.qtdPedida||'';
-      document.getElementById('matUnidade').value = m.unidade||'';
-      document.getElementById('matDataPedido').value = m.dataPedido||'';
-      document.getElementById('matDataPrevista').value = m.dataPrevista||'';
-      document.getElementById('matObs').value = m.observacoes||'';
+    const p = load('materiais').find(x=>x.id===id);
+    if(p){
+      document.getElementById('matId').value = p.id;
+      document.getElementById('matFornecedor').value = p.fornecedor||'';
+      document.getElementById('matObraId').value = p.obraId||'';
+      document.getElementById('matNumPedido').value = p.numPedido||'';
+      document.getElementById('matDataPedido').value = p.dataPedido||'';
+      document.getElementById('matDataPrevista').value = p.dataPrevista||'';
+      document.getElementById('matObs').value = p.observacoes||'';
+      tempItensPedido = (p.itens||[]).map(it=>({...it, entregas: (it.entregas||[]).slice()}));
     }
   }
+  if(!tempItensPedido.length) tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[] });
+  renderTempItensPedido();
   openModal('modalMaterial');
 }
 
 function saveMaterial(){
-  const item = document.getElementById('matItem').value.trim();
-  const qtdPedida = parseFloat(document.getElementById('matQtdPedida').value);
-  if(!item){ toast('Informe o item / material.'); return; }
-  if(!qtdPedida || qtdPedida<=0){ toast('Informe a quantidade pedida.'); return; }
+  const fornecedor = document.getElementById('matFornecedor').value.trim();
+  const itensValidos = tempItensPedido.filter(it => (it.item||'').trim() && parseFloat(it.qtdPedida) > 0);
+  if(!itensValidos.length){ toast('Adicione ao menos um item com nome e quantidade pedida.'); return; }
   const id = document.getElementById('matId').value || uid();
-  let materiais = load('materiais');
-  const existente = materiais.find(m=>m.id===id);
+  let pedidos = load('materiais');
   const record = {
-    id, item,
-    fornecedor: document.getElementById('matFornecedor').value.trim(),
+    id,
+    fornecedor,
     obraId: document.getElementById('matObraId').value,
     numPedido: document.getElementById('matNumPedido').value.trim(),
-    qtdPedida,
-    unidade: document.getElementById('matUnidade').value.trim(),
     dataPedido: document.getElementById('matDataPedido').value,
     dataPrevista: document.getElementById('matDataPrevista').value,
     observacoes: document.getElementById('matObs').value.trim(),
-    entregas: existente ? (existente.entregas||[]) : []
+    itens: itensValidos.map(it=>({
+      id: it.id || uid(),
+      item: it.item.trim(),
+      qtdPedida: parseFloat(it.qtdPedida),
+      unidade: (it.unidade||'').trim(),
+      entregas: it.entregas || []
+    }))
   };
-  const idx = materiais.findIndex(m=>m.id===id);
-  if(idx>=0) materiais[idx] = record; else materiais.push(record);
-  save('materiais', materiais);
+  const idx = pedidos.findIndex(p=>p.id===id);
+  if(idx>=0) pedidos[idx] = record; else pedidos.push(record);
+  save('materiais', pedidos);
   closeModal('modalMaterial');
   renderMateriais();
   renderMateriaisGeral();
@@ -5195,58 +5473,64 @@ function saveMaterial(){
 }
 
 function deleteMaterial(id){
-  if(!confirm('Excluir este pedido de material? Todo o histórico de entregas será perdido.')) return;
-  save('materiais', load('materiais').filter(m=>m.id!==id));
+  if(!confirm('Excluir este pedido de material inteiro? Todos os itens e o histórico de entregas serão perdidos.')) return;
+  save('materiais', load('materiais').filter(p=>p.id!==id));
   renderMateriais();
   renderMateriaisGeral();
   toast('Pedido excluído.');
 }
 
-/* ---------------- Entradas (recebimentos fracionados) ---------------- */
-function openEntradaModal(materialId){
-  document.getElementById('entradaMatId').value = materialId;
+/* ---------------- Entradas (recebimentos fracionados, por item do pedido) ---------------- */
+function openEntradaModal(pedidoId, itemId){
+  document.getElementById('entradaMatId').value = pedidoId;
+  document.getElementById('entradaItemId').value = itemId;
   document.getElementById('entradaData').value = todayISO();
   document.getElementById('entradaQtd').value = '';
   document.getElementById('entradaNF').value = '';
   document.getElementById('entradaObs').value = '';
-  renderEntradaModalContent(materialId);
+  renderEntradaModalContent(pedidoId, itemId);
   openModal('modalEntradaMaterial');
 }
 
-function renderEntradaModalContent(materialId){
-  const m = load('materiais').find(x=>x.id===materialId);
-  if(!m) return;
-  const recebida = qtdRecebidaTotal(m);
-  const aReceber = Math.max(0, (parseFloat(m.qtdPedida)||0) - recebida);
-  document.getElementById('modalEntradaTitle').textContent = `Entradas — ${m.item}`;
+function renderEntradaModalContent(pedidoId, itemId){
+  const p = load('materiais').find(x=>x.id===pedidoId);
+  if(!p) return;
+  const it = (p.itens||[]).find(x=>x.id===itemId);
+  if(!it) return;
+  const recebida = qtdRecebidaItem(it);
+  const aReceber = Math.max(0, (parseFloat(it.qtdPedida)||0) - recebida);
+  document.getElementById('modalEntradaTitle').textContent = `Entradas — ${it.item}`;
   document.getElementById('entradaResumo').innerHTML =
-    `<strong>${esc(m.item)}</strong> · Fornecedor: ${esc(m.fornecedor||'—')} · Pedido nº ${esc(m.numPedido||'—')}<br>
-     Pedido: <strong>${m.qtdPedida} ${esc(m.unidade||'')}</strong> &nbsp;|&nbsp;
-     Recebido até agora: <strong>${recebida} ${esc(m.unidade||'')}</strong> &nbsp;|&nbsp;
-     A receber: <strong>${aReceber} ${esc(m.unidade||'')}</strong>`;
+    `<strong>${esc(it.item)}</strong> · Fornecedor: ${esc(p.fornecedor||'—')} · Pedido nº ${esc(p.numPedido||'—')}<br>
+     Pedido: <strong>${it.qtdPedida} ${esc(it.unidade||'')}</strong> &nbsp;|&nbsp;
+     Recebido até agora: <strong>${recebida} ${esc(it.unidade||'')}</strong> &nbsp;|&nbsp;
+     A receber: <strong>${aReceber} ${esc(it.unidade||'')}</strong>`;
 
-  const entregas = (m.entregas||[]).slice().sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+  const entregas = (it.entregas||[]).slice().sort((a,b)=> (b.data||'').localeCompare(a.data||''));
   document.getElementById('entradasHistEmpty').style.display = entregas.length ? 'none' : 'block';
   document.getElementById('entradasHistBody').innerHTML = entregas.map(e=>`
     <tr>
       <td>${fmtDate(e.data)}</td>
-      <td>${e.quantidade} ${esc(m.unidade||'')}</td>
+      <td>${e.quantidade} ${esc(it.unidade||'')}</td>
       <td>${esc(e.numNF||'—')}</td>
       <td>${esc(e.observacoes||'—')}</td>
-      <td style="text-align:right;"><button class="btn small danger" onclick="deleteEntrada('${m.id}','${e.id}')">Excluir</button></td>
+      <td style="text-align:right;"><button class="btn small danger" onclick="deleteEntrada('${p.id}','${it.id}','${e.id}')">Excluir</button></td>
     </tr>`).join('');
 }
 
 function registrarEntrada(){
-  const materialId = document.getElementById('entradaMatId').value;
+  const pedidoId = document.getElementById('entradaMatId').value;
+  const itemId = document.getElementById('entradaItemId').value;
   const data = document.getElementById('entradaData').value;
   const quantidade = parseFloat(document.getElementById('entradaQtd').value);
   if(!data){ toast('Informe a data de chegada.'); return; }
   if(!quantidade || quantidade<=0){ toast('Informe a quantidade recebida nesta entrega.'); return; }
 
-  let materiais = load('materiais');
-  const idx = materiais.findIndex(m=>m.id===materialId);
-  if(idx<0){ toast('Pedido não encontrado.'); return; }
+  let pedidos = load('materiais');
+  const idxPedido = pedidos.findIndex(p=>p.id===pedidoId);
+  if(idxPedido<0){ toast('Pedido não encontrado.'); return; }
+  const idxItem = (pedidos[idxPedido].itens||[]).findIndex(it=>it.id===itemId);
+  if(idxItem<0){ toast('Item não encontrado.'); return; }
 
   const entrega = {
     id: uid(),
@@ -5255,36 +5539,40 @@ function registrarEntrada(){
     numNF: document.getElementById('entradaNF').value.trim(),
     observacoes: document.getElementById('entradaObs').value.trim()
   };
-  if(!materiais[idx].entregas) materiais[idx].entregas = [];
-  materiais[idx].entregas.push(entrega);
-  save('materiais', materiais);
+  if(!pedidos[idxPedido].itens[idxItem].entregas) pedidos[idxPedido].itens[idxItem].entregas = [];
+  pedidos[idxPedido].itens[idxItem].entregas.push(entrega);
+  save('materiais', pedidos);
 
-  logAtividade(materiais[idx].obraId, 'material',
-    `Entrada de material: ${materiais[idx].item} — ${quantidade} ${materiais[idx].unidade||''}${entrega.numNF?' (NF '+entrega.numNF+')':''}${materiais[idx].fornecedor?' — Fornecedor: '+materiais[idx].fornecedor:''}`);
+  const item = pedidos[idxPedido].itens[idxItem];
+  logAtividade(pedidos[idxPedido].obraId, 'material',
+    `Entrada de material: ${item.item} — ${quantidade} ${item.unidade||''}${entrega.numNF?' (NF '+entrega.numNF+')':''}${pedidos[idxPedido].fornecedor?' — Fornecedor: '+pedidos[idxPedido].fornecedor:''}`);
 
   document.getElementById('entradaData').value = todayISO();
   document.getElementById('entradaQtd').value = '';
   document.getElementById('entradaNF').value = '';
   document.getElementById('entradaObs').value = '';
 
-  renderEntradaModalContent(materialId);
+  renderEntradaModalContent(pedidoId, itemId);
   renderMateriais();
   renderMateriaisGeral();
   toast('Entrada registrada — quantidade abatida automaticamente.');
 }
 
-function deleteEntrada(materialId, entregaId){
+function deleteEntrada(pedidoId, itemId, entregaId){
   if(!confirm('Excluir esta entrada do histórico?')) return;
-  let materiais = load('materiais');
-  const idx = materiais.findIndex(m=>m.id===materialId);
-  if(idx<0) return;
-  materiais[idx].entregas = (materiais[idx].entregas||[]).filter(e=>e.id!==entregaId);
-  save('materiais', materiais);
-  renderEntradaModalContent(materialId);
+  let pedidos = load('materiais');
+  const idxPedido = pedidos.findIndex(p=>p.id===pedidoId);
+  if(idxPedido<0) return;
+  const idxItem = (pedidos[idxPedido].itens||[]).findIndex(it=>it.id===itemId);
+  if(idxItem<0) return;
+  pedidos[idxPedido].itens[idxItem].entregas = (pedidos[idxPedido].itens[idxItem].entregas||[]).filter(e=>e.id!==entregaId);
+  save('materiais', pedidos);
+  renderEntradaModalContent(pedidoId, itemId);
   renderMateriais();
   renderMateriaisGeral();
   toast('Entrada excluída.');
 }
+
 
 /* ============================================================
    ITENS DA OBRA — Obra → Bloco → Item (catálogo único)
@@ -5468,6 +5756,7 @@ function openItemModal(id){
   if(!blocos.length && !id){ toast('Cadastre um bloco antes de adicionar itens.'); return; }
   document.getElementById('modalItemTitle').textContent = id ? 'Editar item' : 'Novo item';
   ['itemId','itemNomenclatura','itemLargura','itemAltura','itemPesoLiquido'].forEach(f=>document.getElementById(f).value='');
+  document.getElementById('itemTipoEsquadria').value = 'Janela e Porta';
   document.getElementById('novoLocalTexto').value = '';
   document.getElementById('novoLocalQtd').value = '';
   tempLocalizacoes = [];
@@ -5477,6 +5766,7 @@ function openItemModal(id){
       document.getElementById('itemId').value = it.id;
       document.getElementById('itemBlocoId').value = it.blocoId||'';
       document.getElementById('itemNomenclatura').value = it.nomenclatura||'';
+      document.getElementById('itemTipoEsquadria').value = (it.tipoEsquadria==='Janela'||it.tipoEsquadria==='Porta') ? 'Janela e Porta' : (it.tipoEsquadria||'Janela e Porta');
       document.getElementById('itemLargura').value = it.largura||'';
       document.getElementById('itemAltura').value = it.altura||'';
       document.getElementById('itemPesoLiquido').value = it.pesoLiquido||'';
@@ -5502,6 +5792,7 @@ function saveItem(){
     obraId: currentObraId,
     blocoId,
     nomenclatura,
+    tipoEsquadria: document.getElementById('itemTipoEsquadria').value,
     largura: document.getElementById('itemLargura').value,
     altura: document.getElementById('itemAltura').value,
     pesoLiquido: parseFloat(document.getElementById('itemPesoLiquido').value) || 0,
@@ -5595,7 +5886,7 @@ function renderItensModulo(moduleKey){
       const locaisResumo = (it.localizacoes||[]).map(l=>`${esc(l.local)} (${l.quantidade})`).join(', ') || '—';
       const { done, total } = it.progresso;
       return `<tr>
-        <td><strong>${esc(it.nomenclatura)}</strong></td>
+        <td><strong>${esc(it.nomenclatura)}</strong>${it.tipoEsquadria?`<div class="step-note">${esc(it.tipoEsquadria)}</div>`:''}</td>
         <td>${medidas}</td>
         <td>${it.quantidade||0}</td>
         <td style="max-width:220px;">${locaisResumo}</td>
@@ -5749,6 +6040,21 @@ function getUnidadeState(item, unitKey){
   return store[unitKey] || { contramarco:{}, marco:{}, folha:{}, comentarios:'', fotos:[] };
 }
 
+// Permite renomear manualmente a "Localização" de cada unidade de instalação
+// (por padrão é "Unidade N", mas pode virar algo como "Apto 101"). Deixando
+// em branco volta a mostrar o padrão automático.
+function atualizarLocalizacaoUnidade(itemId, unitKey, valor){
+  let itens = load('itensObra');
+  const idx = itens.findIndex(it=>it.id===itemId);
+  if(idx<0) return;
+  if(!itens[idx].instalacaoUnidades) itens[idx].instalacaoUnidades = {};
+  if(!itens[idx].instalacaoUnidades[unitKey]) itens[idx].instalacaoUnidades[unitKey] = { contramarco:{}, marco:{}, folha:{}, comentarios:'', fotos:[] };
+  const valorFinal = (valor||'').trim();
+  itens[idx].instalacaoUnidades[unitKey].localizacaoLabel = valorFinal || null;
+  save('itensObra', itens);
+  renderInstalacaoTab();
+}
+
 function calcProgressoUnidade(state){
   let total = 0, done = 0;
   ETAPAS.forEach(et=>{
@@ -5894,9 +6200,10 @@ function renderInstalacaoTab(){
       const rows = grupo.unidades.map(u=>{
         const temFotos = (u.state.fotos||[]).length;
         const temComentario = (u.state.comentarios||'').trim().length > 0;
+        const labelUnidade = u.state.localizacaoLabel || `Unidade ${u.indice}`;
         return `<tr>
           <td>${esc(u.local)}</td>
-          <td>Unidade ${u.indice}</td>
+          <td><input type="text" value="${esc(labelUnidade)}" class="inline-edit-input" placeholder="Unidade ${u.indice}" onchange="atualizarLocalizacaoUnidade('${u.item.id}','${u.unitKey}',this.value)"></td>
           <td>${u.progresso.done}/${u.progresso.total} fases</td>
           <td>${statusProdInstPill(u.status)}</td>
           <td style="text-align:right;white-space:nowrap;">
@@ -5908,14 +6215,14 @@ function renderInstalacaoTab(){
       // Só uma unidade -> mostra direto, sem precisar recolher
       if(grupo.unidades.length === 1){
         return `<table class="item-group-single">
-          <thead><tr><th style="width:26%;">${esc(grupo.item.nomenclatura)}</th><th>Local</th><th>Unidade</th><th>Fases</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th style="width:26%;">${esc(grupo.item.nomenclatura)}</th><th>Local</th><th>Localização</th><th>Fases</th><th>Status</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
       }
       return `<details class="item-group">
         <summary>${esc(grupo.item.nomenclatura)} <span class="count">${grupo.unidades.length} unidades · ${concluidas} concluída${concluidas===1?'':'s'}</span></summary>
         <table>
-          <thead><tr><th>Local</th><th>Unidade</th><th>Fases</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Local</th><th>Localização</th><th>Fases</th><th>Status</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </details>`;
@@ -5943,11 +6250,12 @@ function renderFasesUnidadeContent(itemId, unitKey){
   const u = unidades.find(x=>x.unitKey===unitKey);
   const state = getUnidadeState(item, unitKey);
   const { done, total } = calcProgressoUnidade(state);
+  const labelUnidade = state.localizacaoLabel || (u ? `Unidade ${u.indice}` : '');
 
-  document.getElementById('modalFasesUnidadeTitle').textContent = `Instalação — ${item.nomenclatura} · Unidade ${u ? u.indice : ''}`;
+  document.getElementById('modalFasesUnidadeTitle').textContent = `Instalação — ${item.nomenclatura} · ${labelUnidade}`;
   document.getElementById('fuResumo').innerHTML =
     `<strong>${esc(item.nomenclatura)}</strong><br>
-     Local: ${esc(u ? u.local : '—')} · Unidade ${u ? u.indice : '—'}<br>
+     Local: ${esc(u ? u.local : '—')} · ${esc(labelUnidade)}<br>
      Progresso: <strong>${done}/${total} fases concluídas</strong>`;
 
   const camposPrazo = (label, prefixo) => `
@@ -6048,9 +6356,10 @@ function renderRdoModalContent(itemId, unitKey){
   const unidades = gerarUnidadesInstalacao(item);
   const u = unidades.find(x=>x.unitKey===unitKey);
   const state = getUnidadeState(item, unitKey);
+  const labelUnidade = state.localizacaoLabel || (u ? `Unidade ${u.indice}` : '');
 
-  document.getElementById('modalRdoUnidadeTitle').textContent = `RDO — ${item.nomenclatura} · Unidade ${u ? u.indice : ''}`;
-  document.getElementById('rdoResumo').innerHTML = `<strong>${esc(item.nomenclatura)}</strong><br>Local: ${esc(u ? u.local : '—')} · Unidade ${u ? u.indice : '—'}`;
+  document.getElementById('modalRdoUnidadeTitle').textContent = `RDO — ${item.nomenclatura} · ${labelUnidade}`;
+  document.getElementById('rdoResumo').innerHTML = `<strong>${esc(item.nomenclatura)}</strong><br>Local: ${esc(u ? u.local : '—')} · ${esc(labelUnidade)}`;
   document.getElementById('rdoComentarios').value = state.comentarios || '';
   renderFotosGaleria(state);
 }
@@ -6314,76 +6623,79 @@ function gerarTarefasModulo(moduleKey){
    MATERIAIS — VISÃO GERAL (todas as obras, agrupado por obra)
    ============================================================ */
 function renderMateriaisGeral(){
-  const materiais = load('materiais');
+  const pedidos = load('materiais');
   const obras = load('obras');
   const search = (document.getElementById('mgSearch').value || '').toLowerCase();
   const filtroStatus = document.getElementById('mgFiltroStatus').value;
 
-  const withStatus = materiais.map(m => ({
-    ...m,
-    statusCalc: calcularStatusMaterial(m),
-    recebidaCalc: qtdRecebidaTotal(m)
-  }));
+  const withStatus = pedidos.map(p => ({ ...p, statusCalc: calcularStatusPedido(p) }));
 
-  document.getElementById('mgKpiTotal').textContent = materiais.length;
-  document.getElementById('mgKpiPendente').textContent = withStatus.filter(m=>m.statusCalc==='pendente').length;
-  document.getElementById('mgKpiParcial').textContent = withStatus.filter(m=>m.statusCalc==='parcial').length;
-  document.getElementById('mgKpiAtrasado').textContent = withStatus.filter(m=>m.statusCalc==='atrasado').length;
-  document.getElementById('mgKpiCompleto').textContent = withStatus.filter(m=>m.statusCalc==='completo').length;
+  document.getElementById('mgKpiTotal').textContent = pedidos.length;
+  document.getElementById('mgKpiPendente').textContent = withStatus.filter(p=>p.statusCalc==='pendente').length;
+  document.getElementById('mgKpiParcial').textContent = withStatus.filter(p=>p.statusCalc==='parcial').length;
+  document.getElementById('mgKpiAtrasado').textContent = withStatus.filter(p=>p.statusCalc==='atrasado').length;
+  document.getElementById('mgKpiCompleto').textContent = withStatus.filter(p=>p.statusCalc==='completo').length;
 
-  const filtered = withStatus.filter(m=>{
-    const nfs = (m.entregas||[]).map(e=>e.numNF||'').join(' ');
-    const matchSearch = !search || [m.item, m.fornecedor, m.numPedido, nfs].some(v=>(v||'').toLowerCase().includes(search));
-    const matchStatus = !filtroStatus || m.statusCalc===filtroStatus;
+  const filtered = withStatus.filter(p=>{
+    const itensTexto = (p.itens||[]).map(it=>it.item||'').join(' ');
+    const nfs = (p.itens||[]).flatMap(it=>(it.entregas||[]).map(e=>e.numNF||'')).join(' ');
+    const matchSearch = !search || [itensTexto, p.fornecedor, p.numPedido, nfs].some(v=>(v||'').toLowerCase().includes(search));
+    const matchStatus = !filtroStatus || p.statusCalc===filtroStatus;
     return matchSearch && matchStatus;
   });
 
-  document.getElementById('mgEmpty').style.display = materiais.length ? 'none' : 'block';
+  document.getElementById('mgEmpty').style.display = pedidos.length ? 'none' : 'block';
 
   const groups = {};
-  filtered.forEach(m=>{
-    const key = m.obraId || '__sem_obra__';
+  filtered.forEach(p=>{
+    const key = p.obraId || '__sem_obra__';
     if(!groups[key]) groups[key] = [];
-    groups[key].push(m);
+    groups[key].push(p);
   });
 
   const obraGroupKeys = obras.map(o=>o.id).filter(id=>groups[id]);
   const orderedKeys = [...obraGroupKeys, ...(groups['__sem_obra__'] ? ['__sem_obra__'] : [])];
 
   document.getElementById('mgGroups').innerHTML = orderedKeys.map(key=>{
-    const items = groups[key].slice().reverse();
+    const pedidosDaObra = groups[key].slice().reverse();
     const obra = obras.find(o=>o.id===key);
     const obraNome = key==='__sem_obra__' ? 'Sem obra vinculada' : (obra ? obra.nome : '—');
     const abrirBtn = key==='__sem_obra__' ? '' : `<button class="btn small secondary" onclick="event.preventDefault();event.stopPropagation();openObraWorkspace('${key}')">Abrir obra</button>`;
-    const rows = items.map(m=>{
-      const pedida = parseFloat(m.qtdPedida) || 0;
-      const recebida = m.recebidaCalc;
-      const aReceber = Math.max(0, pedida - recebida);
-      const numEntregas = (m.entregas||[]).length;
-      return `<tr>
-        <td><strong>${esc(m.item)}</strong></td>
-        <td>${esc(m.fornecedor||'—')}</td>
-        <td>${esc(m.numPedido||'—')}</td>
-        <td>${pedida} ${esc(m.unidade||'')}</td>
-        <td>${recebida} ${esc(m.unidade||'')}</td>
-        <td><strong>${aReceber} ${esc(m.unidade||'')}</strong></td>
-        <td>${fmtDate(m.dataPedido)}</td>
-        <td>${fmtDate(m.dataPrevista)}</td>
-        <td>${statusMaterialPill(m.statusCalc)}</td>
-        <td><span class="tag" style="cursor:pointer;" onclick="openEntradaModal('${m.id}')">${numEntregas} entrega${numEntregas===1?'':'s'}</span></td>
-        <td style="text-align:right;white-space:nowrap;"><button class="btn small" onclick="openEntradaModal('${m.id}')">+ Entrada</button></td>
-      </tr>`;
+
+    const pedidosHtml = pedidosDaObra.map(p=>{
+      const itens = p.itens || [];
+      const rows = itens.map(it=>{
+        const pedida = parseFloat(it.qtdPedida) || 0;
+        const recebida = qtdRecebidaItem(it);
+        const aReceber = Math.max(0, pedida - recebida);
+        const numEntregas = (it.entregas||[]).length;
+        const statusItem = calcularStatusItemPedido(it, p.dataPrevista);
+        return `<tr>
+          <td>${esc(it.item)}</td>
+          <td>${pedida} ${esc(it.unidade||'')}</td>
+          <td>${recebida} ${esc(it.unidade||'')}</td>
+          <td><strong>${aReceber} ${esc(it.unidade||'')}</strong></td>
+          <td>${statusMaterialPill(statusItem)}</td>
+          <td><span class="tag" style="cursor:pointer;" onclick="openEntradaModal('${p.id}','${it.id}')">${numEntregas} entrega${numEntregas===1?'':'s'}</span></td>
+          <td style="text-align:right;white-space:nowrap;"><button class="btn small" onclick="openEntradaModal('${p.id}','${it.id}')">+ Entrada</button></td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="7" class="step-note" style="padding:10px;">Nenhum item neste pedido.</td></tr>`;
+      return `<details class="item-group">
+        <summary>${esc(p.fornecedor||'Fornecedor não informado')} ${p.numPedido?'· Pedido nº '+esc(p.numPedido):''}
+          <span class="count">${itens.length} item${itens.length===1?'':'s'}</span>
+          ${statusMaterialPill(p.statusCalc)}
+        </summary>
+        <div class="step-note" style="padding:6px 14px;">Pedido: ${fmtDate(p.dataPedido)} · Previsão: ${fmtDate(p.dataPrevista)}</div>
+        <table>
+          <thead><tr><th>Item</th><th>Pedida</th><th>Recebida</th><th>A receber</th><th>Status</th><th>Entregas</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </details>`;
     }).join('');
+
     return `<details class="obra-group" open>
-      <summary>${esc(obraNome)} <span class="count">${items.length} pedido${items.length===1?'':'s'}</span> ${abrirBtn}</summary>
-      <table>
-        <thead><tr>
-          <th>Item / Material</th><th>Fornecedor</th><th>Nº Pedido</th>
-          <th>Qtd. pedida</th><th>Qtd. recebida</th><th>Qtd. a receber</th>
-          <th>Data pedido</th><th>Previsão</th><th>Status</th><th>Entregas</th><th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <summary>${esc(obraNome)} <span class="count">${pedidosDaObra.length} pedido${pedidosDaObra.length===1?'':'s'}</span> ${abrirBtn}</summary>
+      ${pedidosHtml}
     </details>`;
   }).join('') || '';
 }
@@ -6492,7 +6804,7 @@ function renderDashboard(){
     document.getElementById('kpiCalcPerfil').textContent = cPerfil.length;
     document.getElementById('kpiCalcVidro').textContent = cVidro.length;
     document.getElementById('kpiTarefasPend').textContent = tarefas.filter(t=>t.status==='pendente'||t.status==='atrasada').length;
-    document.getElementById('kpiPedidosAtraso').textContent = materiais.filter(m=>calcularStatusMaterial(m)==='atrasado').length;
+    document.getElementById('kpiPedidosAtraso').textContent = materiais.filter(m=>calcularStatusPedido(m)==='atrasado').length;
 
     const recentObras = obras.slice(-5).reverse();
     document.getElementById('dashObrasRecentes').innerHTML = recentObras.length ? `
