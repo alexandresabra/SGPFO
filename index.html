@@ -1105,12 +1105,18 @@
             <div class="kpi-row" style="margin-top:16px;">
               <div class="kpi"><div class="num" id="finKpiOrcado">R$ 0</div><div class="lbl">Orçado / Planejado</div></div>
               <div class="kpi"><div class="num" id="finKpiGasto">R$ 0</div><div class="lbl">Atual (gasto real)</div></div>
-              <div class="kpi"><div class="num" id="finKpiSaldo">R$ 0</div><div class="lbl">Saldo</div></div>
+              <div class="kpi"><div class="num" id="finKpiSaldo">R$ 0</div><div class="lbl">Saldo x Orçado (falta gastar)</div></div>
               <div class="kpi"><div class="num" id="finKpiPercExec">0%</div><div class="lbl">% do orçamento executado</div></div>
               <div class="kpi"><div class="num" id="finKpiTendencia">—</div><div class="lbl">Tendência (projeção final)</div></div>
+              <div class="kpi"><div class="num" id="finKpiSaldoTendencia">—</div><div class="lbl">Saldo x Tendência (falta gastar)</div></div>
               <div class="kpi"><div class="num" id="finKpiReceita">R$ 0</div><div class="lbl">Receita total (sucata, vendas)</div></div>
             </div>
             <div class="step-note" style="margin-top:8px;" id="finTendenciaNota"></div>
+
+            <div class="kpi-row" style="margin-top:12px;">
+              <div class="kpi"><div class="num" id="finKpiPrevistoFuturo">R$ 0</div><div class="lbl">Previsto para gastar (futuro)</div></div>
+              <div class="kpi"><div class="num" id="finKpiSaldoProjetado">R$ 0</div><div class="lbl">Saldo projetado (orçado − atual − previsto)</div></div>
+            </div>
 
             <div class="panel">
               <div class="panel-head">Valores por categoria</div>
@@ -1167,8 +1173,52 @@
             <div class="panel">
               <div class="panel-head">Comparativo por categoria — Orçado x Tendência x Projeto x Engenharia de Valores x Atual</div>
               <div class="panel-body">
-                <div class="step-note" style="margin-bottom:12px;">Tendência = projeção do custo final de cada categoria, calculada dividindo o gasto atual pelo percentual físico já executado na obra (Projeto+Produção+Instalação, visto no Dashboard). Alumínio e Acessórios compõem Material; Mão de obra e Vidro são categorias independentes.</div>
+                <div class="step-note" style="margin-bottom:12px;">Tendência é informada manualmente pelo Planejamento em "Valores por categoria". Saldo x Orçado e Saldo x Tendência mostram quanto ainda dá pra gastar em cada categoria antes de estourar cada um desses limites. Alumínio e Acessórios compõem Material; Mão de obra e Vidro são categorias independentes.</div>
                 <div id="finComparativo"></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">Previsões de gastos futuros</div>
+              <div class="panel-body">
+                <div class="step-note" style="margin-bottom:12px;">Gastos que você já sabe que vêm por aí, mas que ainda não viraram lançamento — ajuda a enxergar se o que falta comprometer cabe no orçado antes de acontecer.</div>
+                <input type="hidden" id="finPrevisaoId">
+                <div class="form-grid cols-3">
+                  <div class="field">
+                    <label>Categoria</label>
+                    <select id="finPrevisaoCategoria">
+                      <option value="aluminio">Material — Alumínio</option>
+                      <option value="acessorios">Material — Acessórios</option>
+                      <option value="maoDeObra">Mão de obra</option>
+                      <option value="vidro">Vidro</option>
+                      <option value="equipamento">Equipamentos</option>
+                      <option value="administrativo">Administrativo</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Data prevista</label>
+                    <input type="date" id="finPrevisaoData">
+                  </div>
+                  <div class="field">
+                    <label>Valor previsto (R$)</label>
+                    <input type="number" id="finPrevisaoValor" step="0.01" placeholder="Ex.: 15000.00">
+                  </div>
+                  <div class="field full">
+                    <label>Descrição</label>
+                    <input type="text" id="finPrevisaoDescricao" placeholder="Ex.: Compra de vidros para a torre 2, prevista para próxima etapa">
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn secondary" id="finPrevisaoCancelEditBtn" style="display:none;" onclick="cancelarEdicaoPrevisao()">Cancelar edição</button>
+                  <button class="btn" id="finPrevisaoSubmitBtn" onclick="salvarPrevisaoGasto()">+ Adicionar previsão</button>
+                </div>
+                <hr class="divider">
+                <table>
+                  <thead><tr><th>Data prevista</th><th>Categoria</th><th>Descrição</th><th>Valor previsto</th><th></th></tr></thead>
+                  <tbody id="finPrevisoesBody"></tbody>
+                </table>
+                <div class="empty-state" id="finPrevisoesEmpty" style="display:none;">Nenhuma previsão de gasto futuro cadastrada ainda.</div>
               </div>
             </div>
 
@@ -3052,6 +3102,74 @@ function toggleObraRelacionadaLancamento(){
   }
 }
 
+/* ---------------- Previsões de gastos futuros ---------------- */
+function renderPrevisoesGastos(){
+  const previsoes = load('previsoesGastos').filter(p=>p.obraId===currentObraId).slice().sort((a,b)=>(a.dataPrevista||'').localeCompare(b.dataPrevista||''));
+  document.getElementById('finPrevisoesEmpty').style.display = previsoes.length ? 'none' : 'block';
+  document.getElementById('finPrevisoesBody').innerHTML = previsoes.map(p=>`
+    <tr>
+      <td>${fmtDate(p.dataPrevista)}</td>
+      <td>${FIN_CATEGORIA_LABEL[p.categoria]||p.categoria}</td>
+      <td>${esc(p.descricao)}</td>
+      <td>${fmtMoeda(p.valor)}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn small secondary" onclick="editarPrevisaoGasto('${p.id}')">Editar</button>
+        <button class="btn small danger" onclick="deletePrevisaoGasto('${p.id}')">Excluir</button>
+      </td>
+    </tr>`).join('');
+}
+
+function salvarPrevisaoGasto(){
+  const categoria = document.getElementById('finPrevisaoCategoria').value;
+  const dataPrevista = document.getElementById('finPrevisaoData').value;
+  const valor = parseFloat(document.getElementById('finPrevisaoValor').value);
+  const descricao = document.getElementById('finPrevisaoDescricao').value.trim();
+  if(!descricao){ toast('Informe a descrição da previsão.'); return; }
+  if(!valor || valor<=0){ toast('Informe um valor previsto válido.'); return; }
+
+  const id = document.getElementById('finPrevisaoId').value || uid();
+  let previsoes = load('previsoesGastos');
+  const record = { id, obraId: currentObraId, categoria, dataPrevista, valor, descricao };
+  const idx = previsoes.findIndex(p=>p.id===id);
+  if(idx>=0) previsoes[idx] = record; else previsoes.push(record);
+  save('previsoesGastos', previsoes);
+
+  cancelarEdicaoPrevisao();
+  renderPrevisoesGastos();
+  renderFinanceiro();
+  toast('Previsão de gasto salva.');
+}
+
+function editarPrevisaoGasto(id){
+  const p = load('previsoesGastos').find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('finPrevisaoId').value = p.id;
+  document.getElementById('finPrevisaoCategoria').value = p.categoria;
+  document.getElementById('finPrevisaoData').value = p.dataPrevista;
+  document.getElementById('finPrevisaoValor').value = p.valor;
+  document.getElementById('finPrevisaoDescricao').value = p.descricao;
+  document.getElementById('finPrevisaoSubmitBtn').textContent = 'Salvar alterações';
+  document.getElementById('finPrevisaoCancelEditBtn').style.display = 'inline-flex';
+}
+
+function cancelarEdicaoPrevisao(){
+  document.getElementById('finPrevisaoId').value = '';
+  document.getElementById('finPrevisaoData').value = '';
+  document.getElementById('finPrevisaoValor').value = '';
+  document.getElementById('finPrevisaoDescricao').value = '';
+  document.getElementById('finPrevisaoSubmitBtn').textContent = '+ Adicionar previsão';
+  document.getElementById('finPrevisaoCancelEditBtn').style.display = 'none';
+}
+
+function deletePrevisaoGasto(id){
+  if(!confirm('Excluir esta previsão de gasto futuro?')) return;
+  save('previsoesGastos', load('previsoesGastos').filter(p=>p.id!==id));
+  if(document.getElementById('finPrevisaoId').value === id) cancelarEdicaoPrevisao();
+  renderPrevisoesGastos();
+  renderFinanceiro();
+  toast('Previsão excluída.');
+}
+
 function salvarLancamentoFinanceiro(){
   const valor = parseFloat(document.getElementById('finValor').value);
   if(!valor || valor<=0){ toast('Informe um valor válido.'); return; }
@@ -3241,6 +3359,7 @@ function renderFinanceiro(){
 
   const obra = load('obras').find(o=>o.id===currentObraId) || {};
   renderOrcamentoCategoriasForm(obra);
+  renderPrevisoesGastos();
   renderParametrosCustoKg(obra);
   const financeiroCategorias = obra.financeiroCategorias || {};
 
@@ -3265,17 +3384,37 @@ function renderFinanceiro(){
   const orcTotal = FIN_CATEGORIAS_ORCAMENTO.reduce((s,c)=> s + ((financeiroCategorias[c.key]||{}).orcado||0), 0);
   const tendenciaTotal = FIN_CATEGORIAS_ORCAMENTO.reduce((s,c)=> s + ((financeiroCategorias[c.key]||{}).tendencia||0), 0);
 
+  // Previsões de gastos futuros — mesma lógica de mapeamento de categoria do
+  // gastoPorCategoria acima (Alumínio/Acessórios/Equipamentos/Administrativo
+  // caem dentro de Material/Outros no comparativo por categoria).
+  const previsoes = load('previsoesGastos').filter(p=>p.obraId===currentObraId);
+  const previsaoPorCategoria = { material:0, aluminio:0, acessorios:0, maoDeObra:0, vidro:0, equipamento:0, administrativo:0, outros:0 };
+  let previsaoTotal = 0;
+  previsoes.forEach(p=>{
+    previsaoPorCategoria[p.categoria] = (previsaoPorCategoria[p.categoria]||0) + p.valor;
+    previsaoTotal += p.valor;
+  });
+  previsaoPorCategoria.material += previsaoPorCategoria.aluminio + previsaoPorCategoria.acessorios;
+  previsaoPorCategoria.outros += previsaoPorCategoria.equipamento + previsaoPorCategoria.administrativo;
+
+  const saldoOrcado = orcTotal - gastoTotal;
+  const saldoTendencia = tendenciaTotal>0 ? (tendenciaTotal - gastoTotal) : null;
+  const saldoProjetado = orcTotal - gastoTotal - previsaoTotal;
+
   document.getElementById('finKpiOrcado').textContent = fmtMoeda(orcTotal);
   document.getElementById('finKpiGasto').textContent = fmtMoeda(gastoTotal);
-  document.getElementById('finKpiSaldo').textContent = fmtMoeda(orcTotal - gastoTotal);
+  document.getElementById('finKpiSaldo').textContent = fmtMoeda(saldoOrcado);
   document.getElementById('finKpiPercExec').textContent = orcTotal>0 ? Math.round((gastoTotal/orcTotal)*100)+'%' : '—';
   document.getElementById('finKpiTendencia').textContent = tendenciaTotal>0 ? fmtMoeda(tendenciaTotal) : '—';
+  document.getElementById('finKpiSaldoTendencia').textContent = saldoTendencia!==null ? fmtMoeda(saldoTendencia) : '—';
   document.getElementById('finKpiReceita').textContent = fmtMoeda(receitaTotal);
+  document.getElementById('finKpiPrevistoFuturo').textContent = fmtMoeda(previsaoTotal);
+  document.getElementById('finKpiSaldoProjetado').textContent = fmtMoeda(saldoProjetado);
   document.getElementById('finTendenciaNota').textContent = percFisico!==null
     ? `Tendência é informada manualmente pelo Planejamento — % físico executado da obra, como referência: ${percFisico.toFixed(1)}%.`
     : 'Tendência é informada manualmente pelo Planejamento, mês a mês, na tabela "Valores por categoria".';
 
-  let totOrcado=0, totTendencia=0, totProjeto=0, totEV=0, totAtual=0;
+  let totOrcado=0, totTendencia=0, totProjeto=0, totEV=0, totAtual=0, totPrevisto=0;
   const linhasComparativo = FIN_CATEGORIAS_ORCAMENTO.map(c=>{
     const v = financeiroCategorias[c.key] || {};
     const orcado = v.orcado || 0;
@@ -3283,8 +3422,11 @@ function renderFinanceiro(){
     const projeto = v.projeto || 0;
     const engenhariaValores = v.engenhariaValores || 0;
     const atual = gastoPorCategoria[c.key] || 0;
+    const previsto = previsaoPorCategoria[c.key] || 0;
+    const saldoCategoria = orcado - atual;
+    const saldoProjetadoCategoria = orcado - atual - previsto;
 
-    totOrcado += orcado; totTendencia += tendencia; totProjeto += projeto; totEV += engenhariaValores; totAtual += atual;
+    totOrcado += orcado; totTendencia += tendencia; totProjeto += projeto; totEV += engenhariaValores; totAtual += atual; totPrevisto += previsto;
 
     let situacaoTexto = 'Sem tendência informada', situacaoClasse = 'status-pausado';
     if(tendencia>0 && orcado>0){
@@ -3301,12 +3443,15 @@ function renderFinanceiro(){
       <td>${projeto>0 ? fmtMoeda(projeto) : '—'}</td>
       <td>${engenhariaValores>0 ? fmtMoeda(engenhariaValores) : '—'}</td>
       <td>${fmtMoeda(atual)}</td>
+      <td style="${saldoCategoria<0?'color:var(--danger);font-weight:700;':''}">${fmtMoeda(saldoCategoria)}</td>
+      <td>${previsto>0 ? fmtMoeda(previsto) : '—'}</td>
+      <td style="${saldoProjetadoCategoria<0?'color:var(--danger);font-weight:700;':''}">${fmtMoeda(saldoProjetadoCategoria)}</td>
       <td><span class="status-pill ${situacaoClasse}">${situacaoTexto}</span></td>
     </tr>`;
   }).join('');
 
   document.getElementById('finComparativo').innerHTML = `<table>
-    <thead><tr><th>Categoria</th><th>Orçado</th><th>Tendência</th><th>Valor Projeto</th><th>Engenharia de Valores</th><th>Atual</th><th>Situação</th></tr></thead>
+    <thead><tr><th>Categoria</th><th>Orçado</th><th>Tendência</th><th>Valor Projeto</th><th>Engenharia de Valores</th><th>Atual</th><th>Saldo x Orçado</th><th>Previsto (futuro)</th><th>Saldo projetado</th><th>Situação</th></tr></thead>
     <tbody>
       ${linhasComparativo}
       <tr style="font-weight:700;background:#faf9f8;">
@@ -3316,6 +3461,9 @@ function renderFinanceiro(){
         <td>${totProjeto>0 ? fmtMoeda(totProjeto) : '—'}</td>
         <td>${totEV>0 ? fmtMoeda(totEV) : '—'}</td>
         <td>${fmtMoeda(totAtual)}</td>
+        <td>${fmtMoeda(totOrcado-totAtual)}</td>
+        <td>${totPrevisto>0 ? fmtMoeda(totPrevisto) : '—'}</td>
+        <td>${fmtMoeda(totOrcado-totAtual-totPrevisto)}</td>
         <td></td>
       </tr>
     </tbody>
@@ -3721,6 +3869,39 @@ function calcularRelatorioRateioPorObra(mes){
       porObra[a.obraId].totalObra += (a.valor || 0);
     });
   });
+
+  // Custo da Fábrica, já rateado pelas obras conforme o % de Kg produzido
+  // (ferramenta "Rateio da Fábrica pelas obras"). Entra como uma linha única
+  // por obra — sem detalhamento de encargos, porque esse detalhamento já
+  // pertence aos funcionários da própria Fábrica, não desta obra.
+  const rateiosFabrica = load('rateiosFabrica').filter(r=>r.mes===mes);
+  const fabricaObraIds = new Set();
+  rateiosFabrica.forEach(rf=>{
+    fabricaObraIds.add(rf.fabricaObraId);
+    const kgPorObra = rf.kgPorObra || {};
+    const totalKg = Object.values(kgPorObra).reduce((s,kg)=> s + (parseFloat(kg)||0), 0);
+    if(totalKg<=0) return;
+    Object.entries(kgPorObra).forEach(([obraId, kg])=>{
+      const kgNum = parseFloat(kg) || 0;
+      if(kgNum<=0) return;
+      const prop = kgNum/totalKg;
+      const valor = rf.totalRateado * prop;
+      if(!porObra[obraId]) porObra[obraId] = { obra: obras.find(o=>o.id===obraId), linhas: [], totalObra: 0 };
+      porObra[obraId].linhas.push({
+        funcionario: 'Rateio da Fábrica',
+        cargo: `${kgNum.toFixed(0)} Kg produzidos (${(prop*100).toFixed(1)}% do total)`,
+        proporcao: prop,
+        salarioBruto: 0, gps: 0, fgts: 0, seconci: 0, provisoes: 0, beneficios: 0, valeTransporte: 0, alimentacao: 0,
+        total: valor
+      });
+      porObra[obraId].totalObra += valor;
+    });
+  });
+  // A Fábrica em si não entra como obra neste relatório — o custo dela já
+  // foi 100% redistribuído pelas linhas acima, então mostrá-la também
+  // contaria o mesmo custo duas vezes.
+  fabricaObraIds.forEach(id=>{ delete porObra[id]; });
+
   return porObra;
 }
 
@@ -3741,14 +3922,17 @@ function gerarRelatorioRateioResumo(){
   const linhas = chaves.map(id=>{
     const g = porObra[id];
     totalGeral += g.totalObra;
-    return `<tr><td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td><td>${g.linhas.length}</td><td>${fmtMoeda(g.totalObra)}</td></tr>`;
+    const funcionarios = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica').length;
+    const temFabrica = g.linhas.some(l=>l.funcionario==='Rateio da Fábrica');
+    return `<tr><td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td><td>${funcionarios}${temFabrica?' + Fábrica':''}</td><td>${fmtMoeda(g.totalObra)}</td></tr>`;
   }).join('');
 
   document.getElementById('rdoPrintArea').innerHTML = `
     <h1>Relatório de Rateio de Mão de Obra — Resumo</h1>
     <div class="meta">
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
-      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
+      Inclui o custo da Fábrica já rateado entre as obras conforme o % de Kg produzido.
     </div>
     <table>
       <thead><tr><th>Obra</th><th>Funcionários alocados</th><th>Total de mão de obra</th></tr></thead>
@@ -3797,7 +3981,8 @@ function gerarRelatorioRateioCompleto(){
     <div class="meta">
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
       Total geral da folha no mês: <strong>${fmtMoeda(totalGeral)}</strong><br>
-      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
+      A linha "Rateio da Fábrica" mostra a fatia do custo de mão de obra da Fábrica alocada àquela obra, proporcional ao Kg produzido — o detalhamento de encargos dela pertence ao relatório da própria Fábrica, não é repetido aqui.
     </div>
     ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}`;
   window.print();
