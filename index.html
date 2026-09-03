@@ -1116,6 +1116,8 @@
             <div class="kpi-row" style="margin-top:12px;">
               <div class="kpi"><div class="num" id="finKpiPrevistoFuturo">R$ 0</div><div class="lbl">Previsto para gastar (futuro)</div></div>
               <div class="kpi"><div class="num" id="finKpiSaldoProjetado">R$ 0</div><div class="lbl">Saldo projetado (orçado − atual − previsto)</div></div>
+              <div class="kpi"><div class="num" id="finKpiAtualPrevisto">R$ 0</div><div class="lbl">Atual + Previsto (futuro)</div></div>
+              <div class="kpi"><div class="num" id="finKpiVsTendencia">—</div><div class="lbl" id="finKpiVsTendenciaLbl">Atual + Previsto x Tendência</div></div>
             </div>
 
             <div class="panel">
@@ -1175,6 +1177,9 @@
               <div class="panel-body">
                 <div class="step-note" style="margin-bottom:12px;">Tendência é informada manualmente pelo Planejamento em "Valores por categoria". Saldo x Orçado e Saldo x Tendência mostram quanto ainda dá pra gastar em cada categoria antes de estourar cada um desses limites. Alumínio e Acessórios compõem Material; Mão de obra e Vidro são categorias independentes.</div>
                 <div id="finComparativo"></div>
+                <div class="form-actions" style="border-top:none;padding-top:0;margin-top:14px;">
+                  <button class="btn small secondary" onclick="gerarRelatorioDespesasPorCategoria()">Relatório de Despesas por Categoria</button>
+                </div>
               </div>
             </div>
 
@@ -1214,6 +1219,10 @@
                   <button class="btn" id="finPrevisaoSubmitBtn" onclick="salvarPrevisaoGasto()">+ Adicionar previsão</button>
                 </div>
                 <hr class="divider">
+                <div class="toolbar" style="margin-bottom:10px;">
+                  <div class="step-note">Relatório com todas as previsões desta obra, agrupadas mês a mês — útil pra planejar o fluxo de caixa dos próximos meses.</div>
+                  <button class="btn small secondary" onclick="gerarRelatorioPrevisaoGastos()">Relatório de Previsão de Gastos</button>
+                </div>
                 <table>
                   <thead><tr><th>Data prevista</th><th>Categoria</th><th>Descrição</th><th>Valor previsto</th><th></th></tr></thead>
                   <tbody id="finPrevisoesBody"></tbody>
@@ -3170,6 +3179,101 @@ function deletePrevisaoGasto(id){
   toast('Previsão excluída.');
 }
 
+// Relatório impresso das previsões de gastos futuros desta obra, agrupadas
+// mês a mês — pra dar uma visão de fluxo de caixa dos próximos meses.
+function gerarRelatorioPrevisaoGastos(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const previsoes = load('previsoesGastos').filter(p=>p.obraId===currentObraId);
+
+  if(!previsoes.length){
+    toast('Nenhuma previsão de gasto cadastrada nesta obra ainda.');
+    return;
+  }
+
+  const porMes = {};
+  previsoes.forEach(p=>{
+    const mes = (p.dataPrevista || '').slice(0,7) || 'sem-data';
+    if(!porMes[mes]) porMes[mes] = [];
+    porMes[mes].push(p);
+  });
+  const mesesOrdenados = Object.keys(porMes).sort();
+  let totalGeral = 0;
+
+  const secoes = mesesOrdenados.map(mes=>{
+    const itens = porMes[mes].slice().sort((a,b)=>(a.dataPrevista||'').localeCompare(b.dataPrevista||''));
+    const totalMes = itens.reduce((s,p)=> s + p.valor, 0);
+    totalGeral += totalMes;
+    const labelMes = mes==='sem-data' ? 'Sem data prevista' : mesLabelCurto(mes);
+    const linhas = itens.map(p=>`
+      <tr>
+        <td>${fmtDate(p.dataPrevista)}</td>
+        <td>${FIN_CATEGORIA_LABEL[p.categoria]||p.categoria}</td>
+        <td>${esc(p.descricao)}</td>
+        <td>${fmtMoeda(p.valor)}</td>
+      </tr>`).join('');
+    return `<h2>${esc(labelMes.charAt(0).toUpperCase()+labelMes.slice(1))} — Total: ${fmtMoeda(totalMes)}</h2>
+      <table>
+        <thead><tr><th>Data prevista</th><th>Categoria</th><th>Descrição</th><th>Valor previsto</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>`;
+  }).join('');
+
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Relatório de Previsão de Gastos</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Total previsto (todos os meses): <strong>${fmtMoeda(totalGeral)}</strong><br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    ${secoes}`;
+  window.print();
+}
+
+// Relatório impresso das despesas reais (lançamentos) desta obra, agrupadas
+// por categoria — mostra o valor e o % que cada categoria representa do
+// total gasto até agora.
+function gerarRelatorioDespesasPorCategoria(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const despesas = load('lancamentosFinanceiros').filter(l=>l.obraId===currentObraId && l.tipo==='despesa');
+
+  if(!despesas.length){
+    toast('Nenhuma despesa lançada nesta obra ainda.');
+    return;
+  }
+
+  const porCategoria = {};
+  let totalGeral = 0;
+  despesas.forEach(l=>{
+    porCategoria[l.categoria] = (porCategoria[l.categoria]||0) + l.valor;
+    totalGeral += l.valor;
+  });
+
+  const categoriasOrdenadas = Object.keys(porCategoria).sort((a,b)=> porCategoria[b]-porCategoria[a]);
+  const linhas = categoriasOrdenadas.map(cat=>{
+    const valor = porCategoria[cat];
+    const pct = totalGeral>0 ? (valor/totalGeral*100) : 0;
+    return `<tr>
+      <td>${FIN_CATEGORIA_LABEL[cat]||cat}</td>
+      <td>${fmtMoeda(valor)}</td>
+      <td>${pct.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Relatório de Despesas por Categoria</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Total de despesas lançadas: <strong>${fmtMoeda(totalGeral)}</strong><br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    <table>
+      <thead><tr><th>Categoria</th><th>Valor</th><th>% do total</th></tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr><td>TOTAL</td><td>${fmtMoeda(totalGeral)}</td><td>100,0%</td></tr></tfoot>
+    </table>`;
+  window.print();
+}
+
 function salvarLancamentoFinanceiro(){
   const valor = parseFloat(document.getElementById('finValor').value);
   if(!valor || valor<=0){ toast('Informe um valor válido.'); return; }
@@ -3400,6 +3504,8 @@ function renderFinanceiro(){
   const saldoOrcado = orcTotal - gastoTotal;
   const saldoTendencia = tendenciaTotal>0 ? (tendenciaTotal - gastoTotal) : null;
   const saldoProjetado = orcTotal - gastoTotal - previsaoTotal;
+  const atualMaisPrevisto = gastoTotal + previsaoTotal;
+  const vsTendencia = tendenciaTotal>0 ? (tendenciaTotal - atualMaisPrevisto) : null;
 
   document.getElementById('finKpiOrcado').textContent = fmtMoeda(orcTotal);
   document.getElementById('finKpiGasto').textContent = fmtMoeda(gastoTotal);
@@ -3410,6 +3516,22 @@ function renderFinanceiro(){
   document.getElementById('finKpiReceita').textContent = fmtMoeda(receitaTotal);
   document.getElementById('finKpiPrevistoFuturo').textContent = fmtMoeda(previsaoTotal);
   document.getElementById('finKpiSaldoProjetado').textContent = fmtMoeda(saldoProjetado);
+  document.getElementById('finKpiAtualPrevisto').textContent = fmtMoeda(atualMaisPrevisto);
+  const elVsTendencia = document.getElementById('finKpiVsTendencia');
+  const elVsTendenciaLbl = document.getElementById('finKpiVsTendenciaLbl');
+  if(vsTendencia===null){
+    elVsTendencia.textContent = '—';
+    elVsTendencia.style.color = '';
+    elVsTendenciaLbl.textContent = 'Atual + Previsto x Tendência';
+  } else if(vsTendencia>=0){
+    elVsTendencia.textContent = fmtMoeda(vsTendencia);
+    elVsTendencia.style.color = 'var(--green,#1e7a4c)';
+    elVsTendenciaLbl.textContent = 'Folga até a Tendência (Atual + Previsto)';
+  } else {
+    elVsTendencia.textContent = fmtMoeda(Math.abs(vsTendencia));
+    elVsTendencia.style.color = 'var(--danger)';
+    elVsTendenciaLbl.textContent = 'Acima da Tendência (Atual + Previsto)';
+  }
   document.getElementById('finTendenciaNota').textContent = percFisico!==null
     ? `Tendência é informada manualmente pelo Planejamento — % físico executado da obra, como referência: ${percFisico.toFixed(1)}%.`
     : 'Tendência é informada manualmente pelo Planejamento, mês a mês, na tabela "Valores por categoria".';
@@ -3425,6 +3547,8 @@ function renderFinanceiro(){
     const previsto = previsaoPorCategoria[c.key] || 0;
     const saldoCategoria = orcado - atual;
     const saldoProjetadoCategoria = orcado - atual - previsto;
+    const atualMaisPrevistoCategoria = atual + previsto;
+    const vsTendenciaCategoria = tendencia>0 ? (tendencia - atualMaisPrevistoCategoria) : null;
 
     totOrcado += orcado; totTendencia += tendencia; totProjeto += projeto; totEV += engenhariaValores; totAtual += atual; totPrevisto += previsto;
 
@@ -3446,12 +3570,14 @@ function renderFinanceiro(){
       <td style="${saldoCategoria<0?'color:var(--danger);font-weight:700;':''}">${fmtMoeda(saldoCategoria)}</td>
       <td>${previsto>0 ? fmtMoeda(previsto) : '—'}</td>
       <td style="${saldoProjetadoCategoria<0?'color:var(--danger);font-weight:700;':''}">${fmtMoeda(saldoProjetadoCategoria)}</td>
+      <td>${fmtMoeda(atualMaisPrevistoCategoria)}</td>
+      <td style="${vsTendenciaCategoria!==null && vsTendenciaCategoria<0 ? 'color:var(--danger);font-weight:700;' : (vsTendenciaCategoria!==null ? 'color:var(--green,#1e7a4c);' : '')}">${vsTendenciaCategoria!==null ? fmtMoeda(vsTendenciaCategoria) : '—'}</td>
       <td><span class="status-pill ${situacaoClasse}">${situacaoTexto}</span></td>
     </tr>`;
   }).join('');
 
   document.getElementById('finComparativo').innerHTML = `<table>
-    <thead><tr><th>Categoria</th><th>Orçado</th><th>Tendência</th><th>Valor Projeto</th><th>Engenharia de Valores</th><th>Atual</th><th>Saldo x Orçado</th><th>Previsto (futuro)</th><th>Saldo projetado</th><th>Situação</th></tr></thead>
+    <thead><tr><th>Categoria</th><th>Orçado</th><th>Tendência</th><th>Valor Projeto</th><th>Engenharia de Valores</th><th>Atual</th><th>Saldo x Orçado</th><th>Previsto (futuro)</th><th>Saldo projetado</th><th>Atual + Previsto</th><th>Folga x Tendência</th><th>Situação</th></tr></thead>
     <tbody>
       ${linhasComparativo}
       <tr style="font-weight:700;background:#faf9f8;">
@@ -3464,6 +3590,8 @@ function renderFinanceiro(){
         <td>${fmtMoeda(totOrcado-totAtual)}</td>
         <td>${totPrevisto>0 ? fmtMoeda(totPrevisto) : '—'}</td>
         <td>${fmtMoeda(totOrcado-totAtual-totPrevisto)}</td>
+        <td>${fmtMoeda(totAtual+totPrevisto)}</td>
+        <td>${totTendencia>0 ? fmtMoeda(totTendencia-(totAtual+totPrevisto)) : '—'}</td>
         <td></td>
       </tr>
     </tbody>
