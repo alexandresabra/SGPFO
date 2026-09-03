@@ -430,6 +430,17 @@
             <div class="panel-head">Minhas tarefas</div>
             <div class="panel-body" id="dashMinhasTarefas"></div>
           </div>
+
+          <div class="panel">
+            <div class="panel-head">Horas livres (sem tarefa vinculada)</div>
+            <div class="panel-body">
+              <div class="toolbar" style="margin-bottom:12px;">
+                <div class="step-note">Horas trabalhadas numa obra sem precisar criar uma tarefa — entram no rateio de mão de obra do mês, igual às horas de tarefa.</div>
+                <button class="btn small" onclick="openHoraLivreModal()">+ Lançar hora livre</button>
+              </div>
+              <div id="dashHorasLivres"></div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1809,6 +1820,7 @@
         <div class="field"><label>Hora extra (R$)</label><input type="number" id="rateioHoraExtra" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Hora prêmio (R$)</label><input type="number" id="rateioHoraPremio" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Vale transporte (R$)</label><input type="number" id="rateioValeTransporte" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field"><label>Alimentação (R$)</label><input type="number" id="rateioAlimentacao" step="0.01" oninput="atualizarPreviewRateio()"></div>
       </div>
 
       <hr class="divider">
@@ -1824,6 +1836,27 @@
       <div class="form-actions">
         <button class="btn secondary" onclick="closeModal('modalRateio')">Cancelar</button>
         <button class="btn" onclick="saveRateio()">Salvar rateio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalHoraLivre">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalHoraLivreTitle">Lançar hora livre</h3><button class="modal-close" onclick="closeModal('modalHoraLivre')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="hlId">
+      <input type="hidden" id="hlFuncionarioId">
+      <div class="step-note" style="margin-bottom:12px;">Para horas trabalhadas numa obra que não vieram de uma tarefa específica — ex.: reunião, visita, apoio pontual. Entram no rateio de mão de obra do mês, junto com as horas de tarefas.</div>
+      <div class="form-grid">
+        <div class="field"><label>Obra</label><select id="hlObraId"></select></div>
+        <div class="field"><label>Data</label><input type="date" id="hlData"></div>
+        <div class="field"><label>Horas</label><input type="number" id="hlHoras" step="0.5" placeholder="Ex.: 3"></div>
+        <div class="field full"><label>Descrição (opcional)</label><input type="text" id="hlDescricao" placeholder="Ex.: Reunião de obra, visita técnica..."></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn secondary" onclick="closeModal('modalHoraLivre')">Cancelar</button>
+        <button class="btn" onclick="salvarHoraLivre()">Salvar hora</button>
       </div>
     </div>
   </div>
@@ -3340,16 +3373,20 @@ function calcularEncargosMaoDeObra(funcionario, dados){
   const gpsSobreProvisoes = avisoPrevio * 0.45;
   const fgtsRescisorio = fgts * 0.4;
   const valeTransporte = parseFloat(dados.valeTransporte) || 0;
-  const valeAlimentacao = parseFloat(funcionario && funcionario.valeAlimentacao) || 0;
+  // Alimentação agora é preenchida mês a mês (igual Vale Transporte) — se não
+  // vier em `dados`, cai no valor de referência do cadastro do funcionário.
+  const alimentacao = dados.alimentacao !== undefined
+    ? (parseFloat(dados.alimentacao) || 0)
+    : (parseFloat(funcionario && funcionario.valeAlimentacao) || 0);
   const planoSaude = parseFloat(funcionario && funcionario.planoSaude) || 0;
   const cafeAlmocoLanche = parseFloat(funcionario && funcionario.cafeAlmocoLanche) || 0;
 
   const totalComEncargos = salarioBruto + gps + fgts + seconci + seguroVida + pcmso +
     provisao13 + ferias + avisoPrevio + gpsSobreProvisoes + fgtsRescisorio +
-    valeTransporte + valeAlimentacao + planoSaude + cafeAlmocoLanche;
+    valeTransporte + alimentacao + planoSaude + cafeAlmocoLanche;
 
   return { salarioBruto, gps, fgts, seconci, seguroVida, pcmso, provisao13, ferias,
-    avisoPrevio, gpsSobreProvisoes, fgtsRescisorio, valeTransporte, valeAlimentacao,
+    avisoPrevio, gpsSobreProvisoes, fgtsRescisorio, valeTransporte, alimentacao,
     planoSaude, cafeAlmocoLanche, totalComEncargos };
 }
 
@@ -3370,14 +3407,19 @@ function calcularTotalPeso(alocacoes){
 }
 
 // Soma as horas utilizadas em tarefas de um funcionário, agrupadas por obra,
-// dentro de um mês de referência (YYYY-MM) — usado para sugerir a divisão
-// proporcional do rateio de mão de obra entre as obras daquele mês.
+// dentro de um mês de referência (YYYY-MM) — inclui tanto horas lançadas em
+// tarefas quanto horas livres (sem tarefa vinculada). Usado para sugerir a
+// divisão proporcional do rateio de mão de obra entre as obras daquele mês.
 function calcularHorasTarefasPorObra(funcionarioId, mes){
   const tarefas = load('tarefas').filter(t=>
     t.responsavel===funcionarioId && t.obraId && t.dataInicio && t.dataInicio.slice(0,7)===mes && t.horasUtilizadas>0
   );
+  const horasLivres = load('horasLivres').filter(h=>
+    h.funcionarioId===funcionarioId && h.obraId && h.data && h.data.slice(0,7)===mes && h.horas>0
+  );
   const porObra = {};
   tarefas.forEach(t=>{ porObra[t.obraId] = (porObra[t.obraId]||0) + t.horasUtilizadas; });
+  horasLivres.forEach(h=>{ porObra[h.obraId] = (porObra[h.obraId]||0) + h.horas; });
   return Object.entries(porObra).map(([obraId,horas])=>({obraId, horas}));
 }
 
@@ -3446,7 +3488,8 @@ function atualizarPreviewRateio(){
     salarioBase: document.getElementById('rateioSalarioBase').value,
     horaExtra: document.getElementById('rateioHoraExtra').value,
     horaPremio: document.getElementById('rateioHoraPremio').value,
-    valeTransporte: document.getElementById('rateioValeTransporte').value
+    valeTransporte: document.getElementById('rateioValeTransporte').value,
+    alimentacao: document.getElementById('rateioAlimentacao').value
   };
   const e = calcularEncargosMaoDeObra(funcionario, dados);
   const obras = load('obras');
@@ -3466,8 +3509,9 @@ function atualizarPreviewRateio(){
       <div class="result-item"><div class="k">SECONCI (1,5%)</div><div class="v small">${fmtMoeda(e.seconci)}</div></div>
       <div class="result-item"><div class="k">Provisão 13º + Férias + Aviso Prévio</div><div class="v small">${fmtMoeda(e.provisao13+e.ferias+e.avisoPrevio)}</div></div>
       <div class="result-item"><div class="k">GPS s/ Provisões + FGTS Rescisório</div><div class="v small">${fmtMoeda(e.gpsSobreProvisoes+e.fgtsRescisorio)}</div></div>
-      <div class="result-item"><div class="k">Benefícios fixos (seguro, PCMSO, VA, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.pcmso+e.valeAlimentacao+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
+      <div class="result-item"><div class="k">Benefícios fixos (seguro, PCMSO, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.pcmso+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
       <div class="result-item"><div class="k">Vale transporte</div><div class="v small">${fmtMoeda(e.valeTransporte)}</div></div>
+      <div class="result-item"><div class="k">Alimentação</div><div class="v small">${fmtMoeda(e.alimentacao)}</div></div>
       <div class="result-item"><div class="k">Total com encargos</div><div class="v" style="font-size:18px;">${fmtMoeda(e.totalComEncargos)}</div></div>
     </div>
     ${linhasObras ? `<h4 style="margin-top:14px;">Divisão por obra</h4><div class="result-grid">${linhasObras}</div>` : ''}`;
@@ -3493,11 +3537,13 @@ function openRateioModal(funcionarioId){
     document.getElementById('rateioHoraExtra').value = existente.horaExtra || '';
     document.getElementById('rateioHoraPremio').value = existente.horaPremio || '';
     document.getElementById('rateioValeTransporte').value = existente.valeTransporte || '';
+    document.getElementById('rateioAlimentacao').value = existente.alimentacao || '';
     tempAlocacoesRateio = (existente.alocacoes||[]).map(a=>({...a}));
   } else {
-    ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte'].forEach(f=>document.getElementById(f).value='');
+    ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte','rateioAlimentacao'].forEach(f=>document.getElementById(f).value='');
     if(funcionario.salarioBaseReferencia) document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
     if(funcionario.valeTransporteReferencia) document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
+    if(funcionario.valeAlimentacao) document.getElementById('rateioAlimentacao').value = funcionario.valeAlimentacao;
   }
   if(!tempAlocacoesRateio.length) tempAlocacoesRateio.push({obraId:'', peso:'', lancamentoId:null});
 
@@ -3522,7 +3568,8 @@ function saveRateio(){
     salarioBase,
     horaExtra: document.getElementById('rateioHoraExtra').value,
     horaPremio: document.getElementById('rateioHoraPremio').value,
-    valeTransporte: document.getElementById('rateioValeTransporte').value
+    valeTransporte: document.getElementById('rateioValeTransporte').value,
+    alimentacao: document.getElementById('rateioAlimentacao').value
   };
   const encargos = calcularEncargosMaoDeObra(funcionario, dados);
   const totalPeso = calcularTotalPeso(alocacoesValidas);
@@ -3565,6 +3612,7 @@ function saveRateio(){
     id, mes, funcionarioId,
     salarioBase, horaExtra: parseFloat(dados.horaExtra)||0, horaPremio: parseFloat(dados.horaPremio)||0,
     valeTransporte: parseFloat(dados.valeTransporte)||0,
+    alimentacao: parseFloat(dados.alimentacao)||0,
     totalComEncargos: encargos.totalComEncargos,
     alocacoes: alocacoesFinal
   };
@@ -3648,7 +3696,8 @@ function calcularRelatorioRateioPorObra(mes){
     const funcionario = funcionarios.find(f=>f.id===r.funcionarioId);
     if(!funcionario) return;
     const encargos = calcularEncargosMaoDeObra(funcionario, {
-      salarioBase: r.salarioBase, horaExtra: r.horaExtra, horaPremio: r.horaPremio, valeTransporte: r.valeTransporte
+      salarioBase: r.salarioBase, horaExtra: r.horaExtra, horaPremio: r.horaPremio,
+      valeTransporte: r.valeTransporte, alimentacao: r.alimentacao
     });
     const alocacoes = r.alocacoes || [];
     const totalPeso = alocacoes.reduce((s,a)=> s + (parseFloat(a.peso)||0), 0);
@@ -3664,8 +3713,9 @@ function calcularRelatorioRateioPorObra(mes){
         fgts: encargos.fgts*prop,
         seconci: encargos.seconci*prop,
         provisoes: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
-        beneficios: (encargos.seguroVida+encargos.pcmso+encargos.valeAlimentacao+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
+        beneficios: (encargos.seguroVida+encargos.pcmso+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
         valeTransporte: encargos.valeTransporte*prop,
+        alimentacao: encargos.alimentacao*prop,
         total: a.valor || 0
       });
       porObra[a.obraId].totalObra += (a.valor || 0);
@@ -3729,13 +3779,14 @@ function gerarRelatorioRateioCompleto(){
         <td>${fmtMoeda(l.provisoes)}</td>
         <td>${fmtMoeda(l.beneficios)}</td>
         <td>${fmtMoeda(l.valeTransporte)}</td>
+        <td>${fmtMoeda(l.alimentacao)}</td>
         <td><strong>${fmtMoeda(l.total)}</strong></td>
       </tr>`).join('');
     return `<h2>${esc(g.obra ? g.obra.nome : 'Obra removida')} — Total: ${fmtMoeda(g.totalObra)}</h2>
       <table>
         <thead><tr>
           <th>Funcionário</th><th>% Alocado</th><th>Sal. Bruto</th><th>GPS (45%)</th><th>FGTS (12%)</th>
-          <th>SECONCI (1,5%)</th><th>Provisões</th><th>Benefícios</th><th>V. Transp.</th><th>Total</th>
+          <th>SECONCI (1,5%)</th><th>Provisões</th><th>Benefícios</th><th>V. Transp.</th><th>Alimentação</th><th>Total</th>
         </tr></thead>
         <tbody>${linhasHtml}</tbody>
       </table>`;
@@ -5194,18 +5245,6 @@ function deleteTarefa(id){
   save('tarefas', load('tarefas').filter(t=>t.id!==id));
   renderTarefas();
   toast('Tarefa excluída.');
-}
-
-// Soma as horas utilizadas em tarefas de um funcionário, agrupadas por obra,
-// dentro de um mês de referência (YYYY-MM) — usado para sugerir a divisão
-// proporcional do rateio de mão de obra entre as obras daquele mês.
-function calcularHorasTarefasPorObra(funcionarioId, mes){
-  const tarefas = load('tarefas').filter(t=>
-    t.responsavel===funcionarioId && t.obraId && t.dataInicio && t.dataInicio.slice(0,7)===mes && t.horasUtilizadas>0
-  );
-  const porObra = {};
-  tarefas.forEach(t=>{ porObra[t.obraId] = (porObra[t.obraId]||0) + t.horasUtilizadas; });
-  return Object.entries(porObra).map(([obraId,horas])=>({obraId, horas}));
 }
 
 function renderMetas(){
@@ -6869,6 +6908,8 @@ function renderDashboard(){
         </tr>`;
       }).join('')}</tbody></table>
     ` : `<div class="empty-state"><div class="big">✓</div>Nenhuma tarefa atribuída a você no momento.</div>`;
+
+    renderDashHorasLivres(currentUser.id);
   }
 }
 
@@ -6894,6 +6935,91 @@ function atualizarHorasMinhaTarefa(id, valor){
   tarefas[idx].horasUtilizadas = parseFloat(valor) || 0;
   save('tarefas', tarefas);
   toast('Horas registradas — prontas para entrar no rateio de mão de obra da obra vinculada.');
+}
+
+/* ---------------- Horas livres (sem tarefa vinculada) ----------------
+   Pra quando a pessoa trabalhou numa obra sem uma tarefa formal por trás
+   (reunião, visita, apoio pontual). Entram no mesmo cálculo de horas por
+   obra usado no Rateio de Mão de Obra, junto com as horas de tarefas. */
+function openHoraLivreModal(id){
+  const sel = getCurrentUserSelection();
+  const currentUser = sel ? sel.registro : null;
+  if(!currentUser){ toast('Não foi possível identificar seu usuário — verifique se você está logado.'); return; }
+
+  document.getElementById('modalHoraLivreTitle').textContent = id ? 'Editar hora livre' : 'Lançar hora livre';
+  document.getElementById('hlFuncionarioId').value = currentUser.id;
+  document.getElementById('hlId').value = '';
+  document.getElementById('hlObraId').innerHTML = load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  document.getElementById('hlData').value = todayISO();
+  document.getElementById('hlHoras').value = '';
+  document.getElementById('hlDescricao').value = '';
+
+  if(id){
+    const h = load('horasLivres').find(x=>x.id===id);
+    if(h){
+      document.getElementById('hlId').value = h.id;
+      document.getElementById('hlObraId').value = h.obraId;
+      document.getElementById('hlData').value = h.data;
+      document.getElementById('hlHoras').value = h.horas;
+      document.getElementById('hlDescricao').value = h.descricao||'';
+    }
+  }
+  openModal('modalHoraLivre');
+}
+
+function salvarHoraLivre(){
+  const funcionarioId = document.getElementById('hlFuncionarioId').value;
+  const obraId = document.getElementById('hlObraId').value;
+  const data = document.getElementById('hlData').value;
+  const horas = parseFloat(document.getElementById('hlHoras').value);
+  if(!funcionarioId){ toast('Não foi possível identificar seu usuário.'); return; }
+  if(!obraId){ toast('Selecione a obra.'); return; }
+  if(!data){ toast('Informe a data.'); return; }
+  if(!horas || horas<=0){ toast('Informe as horas trabalhadas.'); return; }
+
+  const id = document.getElementById('hlId').value || uid();
+  let horasLivres = load('horasLivres');
+  const record = {
+    id, funcionarioId, obraId, data, horas,
+    descricao: document.getElementById('hlDescricao').value.trim()
+  };
+  const idx = horasLivres.findIndex(h=>h.id===id);
+  if(idx>=0) horasLivres[idx] = record; else horasLivres.push(record);
+  save('horasLivres', horasLivres);
+  closeModal('modalHoraLivre');
+  renderDashHorasLivres(funcionarioId);
+  toast('Hora livre registrada — pronta para entrar no rateio de mão de obra da obra vinculada.');
+}
+
+function deleteHoraLivre(id){
+  if(!confirm('Excluir este lançamento de hora livre?')) return;
+  const h = load('horasLivres').find(x=>x.id===id);
+  save('horasLivres', load('horasLivres').filter(x=>x.id!==id));
+  if(h) renderDashHorasLivres(h.funcionarioId);
+  toast('Hora livre excluída.');
+}
+
+function renderDashHorasLivres(funcionarioId){
+  const wrap = document.getElementById('dashHorasLivres');
+  if(!wrap) return;
+  const obras = load('obras');
+  const registros = load('horasLivres').filter(h=>h.funcionarioId===funcionarioId).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  wrap.innerHTML = registros.length ? `
+    <table><thead><tr><th>Data</th><th>Obra</th><th>Horas</th><th>Descrição</th><th></th></tr></thead>
+    <tbody>${registros.map(h=>{
+      const obraNome = (obras.find(o=>o.id===h.obraId)||{}).nome || '—';
+      return `<tr>
+        <td>${fmtDate(h.data)}</td>
+        <td>${esc(obraNome)}</td>
+        <td>${h.horas}</td>
+        <td>${esc(h.descricao||'—')}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="btn small secondary" onclick="openHoraLivreModal('${h.id}')">Editar</button>
+          <button class="btn small danger" onclick="deleteHoraLivre('${h.id}')">Excluir</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody></table>
+  ` : `<div class="empty-state"><div class="big">◷</div>Nenhuma hora livre lançada ainda.</div>`;
 }
 
 /* ============================================================
