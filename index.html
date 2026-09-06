@@ -1125,11 +1125,22 @@
               <div class="panel-body">
                 <div class="step-note" style="margin-bottom:12px;">Para cada categoria: <strong>Orçado</strong> (previsão inicial), <strong>Tendência</strong> (repassada mensalmente pelo setor de Planejamento — preenchimento manual), <strong>Valor Projeto</strong> (o que custaria executando fielmente o projeto/engenharia), <strong>Engenharia de Valores</strong> (novo valor após revisão/otimização) e <strong>Peso Líquido/Bruto considerado</strong> (base de peso usada para essa estimativa — o bruto inclui perdas de corte/processo). O <strong>Atual</strong> é calculado automaticamente a partir dos lançamentos.</div>
                 <table>
-                  <thead><tr><th>Categoria</th><th>Orçado (R$)</th><th>Tendência (R$)</th><th>Valor Projeto (R$)</th><th>Engenharia de Valores (R$)</th><th>Peso Líquido considerado (Kg)</th><th>Peso Bruto considerado (Kg)</th></tr></thead>
+                  <thead><tr><th>Categoria</th><th>Orçado (R$)</th><th>Tendência (R$)</th><th>Valor Projeto (R$)</th><th>Engenharia de Valores (R$)</th><th>Peso Líquido considerado (Kg)</th><th>Peso Bruto considerado (Kg)</th><th>Descrição do gasto</th></tr></thead>
                   <tbody id="finOrcamentoCategoriasBody"></tbody>
                 </table>
                 <div class="form-actions">
                   <button class="btn" onclick="salvarOrcamentoObra()">Salvar valores por categoria</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">Kg e R$/Kg considerados — por tipo de valor</div>
+              <div class="panel-body">
+                <div class="step-note" style="margin-bottom:12px;">Detalha, pra cada categoria, o Kg e o R$/Kg usados como base de cada estimativa (Orçado, Tendência, Valor Projeto, Engenharia de Valores) — importante pra rastrear se uma variação vem de mais/menos material ou de mudança no preço por Kg. Fundamental sobretudo pro Alumínio, cujo R$/Kg costuma variar mês a mês.</div>
+                <div id="finDetalheKgBody"></div>
+                <div class="form-actions">
+                  <button class="btn" onclick="salvarDetalheKgCategorias()">Salvar detalhamento de Kg</button>
                 </div>
               </div>
             </div>
@@ -1179,6 +1190,7 @@
                 <div id="finComparativo"></div>
                 <div class="form-actions" style="border-top:none;padding-top:0;margin-top:14px;">
                   <button class="btn small secondary" onclick="gerarRelatorioDespesasPorCategoria()">Relatório de Despesas por Categoria</button>
+                  <button class="btn small secondary" onclick="gerarHistoricoPrecoKgAluminio()">Histórico de R$/Kg — Alumínio</button>
                 </div>
               </div>
             </div>
@@ -1187,6 +1199,7 @@
               <div class="panel-head">Previsões de gastos futuros</div>
               <div class="panel-body">
                 <div class="step-note" style="margin-bottom:12px;">Gastos que você já sabe que vêm por aí, mas que ainda não viraram lançamento — ajuda a enxergar se o que falta comprometer cabe no orçado antes de acontecer.</div>
+                <div class="result-box" id="finPrevisaoResumo" style="margin-bottom:16px;"></div>
                 <input type="hidden" id="finPrevisaoId">
                 <div class="form-grid cols-3">
                   <div class="field">
@@ -1198,6 +1211,7 @@
                       <option value="vidro">Vidro</option>
                       <option value="equipamento">Equipamentos</option>
                       <option value="administrativo">Administrativo</option>
+                      <option value="custoOperacionalFabrica">Custo Operacional da Fábrica</option>
                       <option value="outros">Outros</option>
                     </select>
                   </div>
@@ -1254,6 +1268,7 @@
                       <option value="vendaObra">Venda / Transferência entre Obras</option>
                       <option value="equipamento">Equipamentos</option>
                       <option value="administrativo">Administrativo</option>
+                      <option value="custoOperacionalFabrica">Custo Operacional da Fábrica</option>
                       <option value="outros">Outros</option>
                     </select>
                   </div>
@@ -1271,10 +1286,19 @@
                     <input type="text" id="finDescricao" placeholder="Ex.: Compra de perfis - NF 12345">
                   </div>
                   <div class="field">
+                    <label>Quantidade (Kg) <small class="hint">opcional</small></label>
+                    <input type="number" id="finQtdKg" step="0.01" placeholder="Ex.: 1200" oninput="atualizarValorPorKgLancamento()">
+                  </div>
+                  <div class="field">
+                    <label>R$/Kg pago <small class="hint">opcional</small></label>
+                    <input type="number" id="finPrecoKg" step="0.01" placeholder="Ex.: 32.50" oninput="atualizarValorPorKgLancamento()">
+                  </div>
+                  <div class="field">
                     <label>Valor (R$)</label>
                     <input type="number" id="finValor" step="0.01" placeholder="Ex.: 4500.00">
                   </div>
                 </div>
+                <div class="step-note" style="margin-top:-8px;margin-bottom:12px;">Preenchendo Kg e R$/Kg (principalmente em compras de Alumínio), o Valor é calculado automaticamente — mas continua editável se precisar ajustar. Isso permite rastrear depois se um estouro veio de mais material comprado ou de aumento no preço por Kg.</div>
                 <div class="form-actions">
                   <button class="btn secondary" id="finCancelEditBtn" style="display:none;" onclick="cancelarEdicaoLancamento()">Cancelar edição</button>
                   <button class="btn" id="finSubmitBtn" onclick="salvarLancamentoFinanceiro()">+ Adicionar lançamento</button>
@@ -1297,6 +1321,7 @@
                       <option value="vendaObra">Venda / Transferência entre Obras</option>
                       <option value="equipamento">Equipamentos</option>
                       <option value="administrativo">Administrativo</option>
+                      <option value="custoOperacionalFabrica">Custo Operacional da Fábrica</option>
                       <option value="outros">Outros</option>
                     </select>
                     <input type="text" id="finFiltroDescricao" placeholder="Buscar por descrição..." oninput="renderFinanceiro()" style="min-width:200px;">
@@ -1462,14 +1487,14 @@
           <div class="panel">
             <div class="panel-head">Rateio da Fábrica pelas obras (por Kg produzido)</div>
             <div class="panel-body">
-              <div class="step-note" style="margin-bottom:12px;">Cadastre a Fábrica como uma obra comum (em Obras) e lance lá o rateio dos funcionários de fábrica normalmente. Aqui, o custo de mão de obra acumulado na Fábrica naquele mês é redistribuído entre as obras reais, proporcional ao Kg que você informar que cada uma produziu no mês.</div>
+              <div class="step-note" style="margin-bottom:12px;">Cadastre a Fábrica como uma obra comum (em Obras) e lance lá o rateio dos funcionários de fábrica (categoria "Mão de obra") e as despesas operacionais da Fábrica — aluguel, energia, manutenção de máquinas etc. — na categoria "Custo Operacional da Fábrica". Aqui, os dois somados naquele mês são redistribuídos entre as obras reais, proporcional ao Kg que você informar que cada uma produziu.</div>
               <div class="form-grid cols-3">
                 <div class="field">
                   <label>Obra que representa a Fábrica</label>
                   <select id="fabricaObraId" onchange="renderFabricaRateio()"></select>
                 </div>
                 <div class="field">
-                  <label>Custo de mão de obra da Fábrica no mês</label>
+                  <label>Mão de obra + Custo Operacional da Fábrica no mês</label>
                   <input type="text" id="fabricaCustoTotal" readonly style="background:#f6f5f3;">
                 </div>
               </div>
@@ -3065,6 +3090,9 @@ function renderOrcamentoCategoriasForm(obra){
   document.getElementById('finOrcamentoCategoriasBody').innerHTML = FIN_CATEGORIAS_ORCAMENTO.map(c=>{
     let v = dados[c.key] || {};
     if(c.key==='material' && !dados.material && (materialAntigo.orcado||materialAntigo.tendencia||materialAntigo.projeto||materialAntigo.engenhariaValores||materialAntigo.pesoLiquido||materialAntigo.pesoBruto)) v = materialAntigo;
+    const descricaoCell = c.key==='outros'
+      ? `<input type="text" id="finDescricao_${c.key}" value="${esc(v.descricao||'')}" placeholder="Ex.: taxas de projeto, seguros, imprevistos..." style="min-width:220px;">`
+      : '—';
     return `<tr>
       <td><strong>${c.nome}</strong></td>
       <td><input type="number" step="0.01" id="finOrc_${c.key}" value="${v.orcado||''}"></td>
@@ -3073,8 +3101,74 @@ function renderOrcamentoCategoriasForm(obra){
       <td><input type="number" step="0.01" id="finEV_${c.key}" value="${v.engenhariaValores||''}"></td>
       <td><input type="number" step="0.01" id="finPesoLiq_${c.key}" value="${v.pesoLiquido||''}"></td>
       <td><input type="number" step="0.01" id="finPesoBruto_${c.key}" value="${v.pesoBruto||''}"></td>
+      <td>${descricaoCell}</td>
     </tr>`;
   }).join('');
+
+  renderDetalheKgCategorias(dados);
+}
+
+// Detalhamento de Kg + R$/Kg considerados em cada um dos 4 tipos de valor
+// (Orçado, Tendência, Valor Projeto, Engenharia de Valores), por categoria.
+// Mostra também o valor calculado (Kg × R$/Kg) como referência, pra comparar
+// com o R$ que foi digitado em "Valores por categoria".
+const FIN_TIPOS_VALOR = [
+  { key:'orcado', label:'Orçado' },
+  { key:'tendencia', label:'Tendência' },
+  { key:'projeto', label:'Valor Projeto' },
+  { key:'engenhariaValores', label:'Engenharia de Valores' }
+];
+
+function renderDetalheKgCategorias(dados){
+  document.getElementById('finDetalheKgBody').innerHTML = FIN_CATEGORIAS_ORCAMENTO.map(c=>{
+    const v = dados[c.key] || {};
+    const detalhe = v.detalheKg || {};
+    const linhas = FIN_TIPOS_VALOR.map(t=>{
+      const d = detalhe[t.key] || {};
+      const idKg = `finDetKg_${c.key}_${t.key}`;
+      const idPreco = `finDetPreco_${c.key}_${t.key}`;
+      return `<tr>
+        <td>${t.label}</td>
+        <td><input type="number" step="0.01" id="${idKg}" value="${d.kg||''}" oninput="atualizarValorCalculadoKg('${c.key}','${t.key}')" style="max-width:130px;"></td>
+        <td><input type="number" step="0.01" id="${idPreco}" value="${d.precoKg||''}" oninput="atualizarValorCalculadoKg('${c.key}','${t.key}')" style="max-width:130px;"></td>
+        <td class="step-note" id="finDetCalc_${c.key}_${t.key}">${(d.kg && d.precoKg) ? fmtMoeda(d.kg*d.precoKg) : '—'}</td>
+      </tr>`;
+    }).join('');
+    return `<details class="item-group">
+      <summary>${c.nome}</summary>
+      <table>
+        <thead><tr><th>Tipo de valor</th><th>Kg considerado</th><th>R$/Kg considerado</th><th>Valor calculado (Kg × R$/Kg)</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </details>`;
+  }).join('');
+}
+
+function atualizarValorCalculadoKg(catKey, tipoKey){
+  const kg = parseFloat(document.getElementById(`finDetKg_${catKey}_${tipoKey}`).value) || 0;
+  const preco = parseFloat(document.getElementById(`finDetPreco_${catKey}_${tipoKey}`).value) || 0;
+  document.getElementById(`finDetCalc_${catKey}_${tipoKey}`).textContent = (kg && preco) ? fmtMoeda(kg*preco) : '—';
+}
+
+function salvarDetalheKgCategorias(){
+  let obras = load('obras');
+  const idx = obras.findIndex(o=>o.id===currentObraId);
+  if(idx<0) return;
+  const dados = obras[idx].financeiroCategorias || {};
+  FIN_CATEGORIAS_ORCAMENTO.forEach(c=>{
+    if(!dados[c.key]) dados[c.key] = {};
+    const detalheKg = {};
+    FIN_TIPOS_VALOR.forEach(t=>{
+      detalheKg[t.key] = {
+        kg: parseFloat(document.getElementById(`finDetKg_${c.key}_${t.key}`).value) || 0,
+        precoKg: parseFloat(document.getElementById(`finDetPreco_${c.key}_${t.key}`).value) || 0
+      };
+    });
+    dados[c.key].detalheKg = detalheKg;
+  });
+  obras[idx].financeiroCategorias = dados;
+  save('obras', obras);
+  toast('Detalhamento de Kg e R$/Kg salvo.');
 }
 
 function salvarOrcamentoObra(){
@@ -3083,14 +3177,19 @@ function salvarOrcamentoObra(){
   if(idx<0) return;
   const dados = {};
   FIN_CATEGORIAS_ORCAMENTO.forEach(c=>{
+    const existenteDetalheKg = (obras[idx].financeiroCategorias||{})[c.key]?.detalheKg;
     dados[c.key] = {
       orcado: parseFloat(document.getElementById('finOrc_'+c.key).value) || 0,
       tendencia: parseFloat(document.getElementById('finTend_'+c.key).value) || 0,
       projeto: parseFloat(document.getElementById('finProj_'+c.key).value) || 0,
       engenhariaValores: parseFloat(document.getElementById('finEV_'+c.key).value) || 0,
       pesoLiquido: parseFloat(document.getElementById('finPesoLiq_'+c.key).value) || 0,
-      pesoBruto: parseFloat(document.getElementById('finPesoBruto_'+c.key).value) || 0
+      pesoBruto: parseFloat(document.getElementById('finPesoBruto_'+c.key).value) || 0,
+      detalheKg: existenteDetalheKg
     };
+    if(c.key==='outros'){
+      dados[c.key].descricao = document.getElementById('finDescricao_'+c.key).value.trim();
+    }
   });
   obras[idx].financeiroCategorias = dados;
   save('obras', obras);
@@ -3126,6 +3225,28 @@ function renderPrevisoesGastos(){
         <button class="btn small danger" onclick="deletePrevisaoGasto('${p.id}')">Excluir</button>
       </td>
     </tr>`).join('');
+
+  // Resumo ao vivo: Orçado da obra, Atual, Previsão a gastar e Saldo — o
+  // Saldo cai a cada previsão nova cadastrada, pra dar noção imediata de
+  // quanto ainda cabe no orçamento antes de comprometer o próximo gasto.
+  const box = document.getElementById('finPrevisaoResumo');
+  if(box){
+    const obra = load('obras').find(o=>o.id===currentObraId) || {};
+    const financeiroCategorias = obra.financeiroCategorias || {};
+    const orcTotal = FIN_CATEGORIAS_ORCAMENTO.reduce((s,c)=> s + ((financeiroCategorias[c.key]||{}).orcado||0), 0);
+    const gastoTotal = load('lancamentosFinanceiros')
+      .filter(l=>l.obraId===currentObraId && l.tipo==='despesa')
+      .reduce((s,l)=> s + l.valor, 0);
+    const previsaoTotal = previsoes.reduce((s,p)=> s + p.valor, 0);
+    const saldo = orcTotal - gastoTotal - previsaoTotal;
+    box.innerHTML = `
+      <div class="result-grid">
+        <div class="result-item"><div class="k">Orçado da obra</div><div class="v small">${fmtMoeda(orcTotal)}</div></div>
+        <div class="result-item"><div class="k">Já gasto (atual)</div><div class="v small">${fmtMoeda(gastoTotal)}</div></div>
+        <div class="result-item"><div class="k">Previsão a gastar</div><div class="v small">${fmtMoeda(previsaoTotal)}</div></div>
+        <div class="result-item"><div class="k">Saldo (orçado − atual − previsão)</div><div class="v" style="font-size:18px;${saldo<0?'color:var(--danger);':''}">${fmtMoeda(saldo)}</div></div>
+      </div>`;
+  }
 }
 
 function salvarPrevisaoGasto(){
@@ -3274,6 +3395,58 @@ function gerarRelatorioDespesasPorCategoria(){
   window.print();
 }
 
+// Histórico de R$/Kg pago em compras de Alumínio, em ordem cronológica — pra
+// enxergar a variação do preço por Kg mês a mês e cruzar com a quantidade
+// comprada, ajudando a identificar se um estouro veio de preço ou de volume.
+function gerarHistoricoPrecoKgAluminio(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const lancs = load('lancamentosFinanceiros')
+    .filter(l=>l.obraId===currentObraId && l.categoria==='aluminio' && l.qtdKg>0 && l.precoKg>0)
+    .sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+
+  if(!lancs.length){
+    toast('Nenhuma compra de Alumínio com Kg e R$/Kg registrados nesta obra ainda.');
+    return;
+  }
+
+  const totalKg = lancs.reduce((s,l)=>s+l.qtdKg,0);
+  const totalValor = lancs.reduce((s,l)=>s+l.valor,0);
+  const precoMedioPonderado = totalKg>0 ? totalValor/totalKg : 0;
+  const precoMin = Math.min(...lancs.map(l=>l.precoKg));
+  const precoMax = Math.max(...lancs.map(l=>l.precoKg));
+
+  const linhas = lancs.map(l=>`
+    <tr>
+      <td>${fmtDate(l.data)}</td>
+      <td>${esc(l.descricao)}</td>
+      <td>${l.qtdKg}</td>
+      <td>${fmtMoeda(l.precoKg)}</td>
+      <td>${fmtMoeda(l.valor)}</td>
+    </tr>`).join('');
+
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Histórico de R$/Kg — Alumínio</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Total comprado: <strong>${totalKg.toFixed(0)} Kg</strong> por <strong>${fmtMoeda(totalValor)}</strong><br>
+      Preço médio ponderado: <strong>${fmtMoeda(precoMedioPonderado)}/Kg</strong> — variação de ${fmtMoeda(precoMin)} a ${fmtMoeda(precoMax)} por Kg no período<br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Kg comprado</th><th>R$/Kg pago</th><th>Valor</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>`;
+  window.print();
+}
+
+function atualizarValorPorKgLancamento(){
+  const kg = parseFloat(document.getElementById('finQtdKg').value) || 0;
+  const preco = parseFloat(document.getElementById('finPrecoKg').value) || 0;
+  if(kg>0 && preco>0){
+    document.getElementById('finValor').value = (kg*preco).toFixed(2);
+  }
+}
+
 function salvarLancamentoFinanceiro(){
   const valor = parseFloat(document.getElementById('finValor').value);
   if(!valor || valor<=0){ toast('Informe um valor válido.'); return; }
@@ -3283,13 +3456,15 @@ function salvarLancamentoFinanceiro(){
   const categoria = document.getElementById('finCategoria').value;
   const tipo = document.getElementById('finTipo').value;
   const idEdicao = document.getElementById('finLancamentoId').value;
+  const qtdKg = parseFloat(document.getElementById('finQtdKg').value) || 0;
+  const precoKg = parseFloat(document.getElementById('finPrecoKg').value) || 0;
 
   let lancamentos = load('lancamentosFinanceiros');
 
   if(idEdicao){
     const idx = lancamentos.findIndex(l=>l.id===idEdicao);
     if(idx<0){ toast('Lançamento não encontrado.'); return; }
-    lancamentos[idx] = { ...lancamentos[idx], tipo, categoria, descricao, valor, data };
+    lancamentos[idx] = { ...lancamentos[idx], tipo, categoria, descricao, valor, data, qtdKg, precoKg };
     save('lancamentosFinanceiros', lancamentos);
     cancelarEdicaoLancamento();
     renderFinanceiro();
@@ -3310,22 +3485,24 @@ function salvarLancamentoFinanceiro(){
     lancamentos.push({
       id: idPrincipal, obraId: currentObraId, tipo, categoria,
       descricao: `${descricao} (contrapartida: ${obraRelacionada?obraRelacionada.nome:'—'})`,
-      valor, data, obraRelacionadaId, lancamentoParId: idContrapartida
+      valor, data, qtdKg, precoKg, obraRelacionadaId, lancamentoParId: idContrapartida
     });
     lancamentos.push({
       id: idContrapartida, obraId: obraRelacionadaId, tipo: tipoOposto, categoria,
       descricao: `${descricao} (contrapartida: ${obraAtual?obraAtual.nome:'—'})`,
-      valor, data, obraRelacionadaId: currentObraId, lancamentoParId: idPrincipal
+      valor, data, qtdKg, precoKg, obraRelacionadaId: currentObraId, lancamentoParId: idPrincipal
     });
     toast(`Lançamento adicionado — contrapartida de ${tipoOposto==='receita'?'receita':'despesa'} criada automaticamente em "${obraRelacionada?obraRelacionada.nome:'—'}".`);
   } else {
-    lancamentos.push({ id: idPrincipal, obraId: currentObraId, tipo, categoria, descricao, valor, data });
+    lancamentos.push({ id: idPrincipal, obraId: currentObraId, tipo, categoria, descricao, valor, data, qtdKg, precoKg });
     toast('Lançamento adicionado.');
   }
 
   save('lancamentosFinanceiros', lancamentos);
   document.getElementById('finDescricao').value = '';
   document.getElementById('finValor').value = '';
+  document.getElementById('finQtdKg').value = '';
+  document.getElementById('finPrecoKg').value = '';
   renderFinanceiro();
 }
 
@@ -3339,6 +3516,8 @@ function editarLancamentoFinanceiro(id){
   document.getElementById('finData').value = l.data;
   document.getElementById('finDescricao').value = l.descricao;
   document.getElementById('finValor').value = l.valor;
+  document.getElementById('finQtdKg').value = l.qtdKg || '';
+  document.getElementById('finPrecoKg').value = l.precoKg || '';
   document.getElementById('finSubmitBtn').textContent = 'Salvar alterações';
   document.getElementById('finCancelEditBtn').style.display = 'inline-flex';
   if(l.lancamentoParId){
@@ -3351,6 +3530,8 @@ function cancelarEdicaoLancamento(){
   document.getElementById('finLancamentoId').value = '';
   document.getElementById('finDescricao').value = '';
   document.getElementById('finValor').value = '';
+  document.getElementById('finQtdKg').value = '';
+  document.getElementById('finPrecoKg').value = '';
   document.getElementById('finSubmitBtn').textContent = '+ Adicionar lançamento';
   document.getElementById('finCancelEditBtn').style.display = 'none';
 }
@@ -3370,7 +3551,7 @@ function deleteLancamentoFinanceiro(id){
   renderFinanceiro();
 }
 
-const FIN_CATEGORIA_LABEL = { material:'Material', aluminio:'Material — Alumínio', acessorios:'Material — Acessórios', maoDeObra:'Mão de obra', vidro:'Vidro', sucata:'Sucata', vendaObra:'Venda/Transferência entre Obras', equipamento:'Equipamentos', administrativo:'Administrativo', outros:'Outros' };
+const FIN_CATEGORIA_LABEL = { material:'Material', aluminio:'Material — Alumínio', acessorios:'Material — Acessórios', maoDeObra:'Mão de obra', vidro:'Vidro', sucata:'Sucata', vendaObra:'Venda/Transferência entre Obras', equipamento:'Equipamentos', administrativo:'Administrativo', custoOperacionalFabrica:'Custo Operacional da Fábrica', outros:'Outros' };
 
 // % físico médio da obra (Projeto + Produção + Instalação, mesma base do
 // Dashboard) — usado como referência para projetar a Tendência de custo.
@@ -3469,7 +3650,7 @@ function renderFinanceiro(){
 
   const lancamentos = load('lancamentosFinanceiros').filter(l=>l.obraId===currentObraId);
 
-  const gastoPorCategoria = { material:0, aluminio:0, acessorios:0, maoDeObra:0, vidro:0, sucata:0, vendaObra:0, equipamento:0, administrativo:0, outros:0 };
+  const gastoPorCategoria = { material:0, aluminio:0, acessorios:0, maoDeObra:0, vidro:0, sucata:0, vendaObra:0, equipamento:0, administrativo:0, custoOperacionalFabrica:0, outros:0 };
   let gastoTotal = 0, receitaTotal = 0;
   lancamentos.forEach(l=>{
     if(l.tipo==='despesa'){
@@ -3482,7 +3663,7 @@ function renderFinanceiro(){
   // Lançamentos antigos em "Alumínio"/"Acessórios" somam em "Material"; Sucata e
   // Venda/Transferência entre Obras não têm linha de orçamento própria — entram em "Outros".
   gastoPorCategoria.material += gastoPorCategoria.aluminio + gastoPorCategoria.acessorios;
-  gastoPorCategoria.outros += gastoPorCategoria.sucata + gastoPorCategoria.vendaObra + gastoPorCategoria.equipamento + gastoPorCategoria.administrativo;
+  gastoPorCategoria.outros += gastoPorCategoria.sucata + gastoPorCategoria.vendaObra + gastoPorCategoria.equipamento + gastoPorCategoria.administrativo + gastoPorCategoria.custoOperacionalFabrica;
 
   const percFisico = calcularPercFisicoObra(); // 0-100 ou null — mantido só como referência contextual
   const orcTotal = FIN_CATEGORIAS_ORCAMENTO.reduce((s,c)=> s + ((financeiroCategorias[c.key]||{}).orcado||0), 0);
@@ -3492,14 +3673,14 @@ function renderFinanceiro(){
   // gastoPorCategoria acima (Alumínio/Acessórios/Equipamentos/Administrativo
   // caem dentro de Material/Outros no comparativo por categoria).
   const previsoes = load('previsoesGastos').filter(p=>p.obraId===currentObraId);
-  const previsaoPorCategoria = { material:0, aluminio:0, acessorios:0, maoDeObra:0, vidro:0, equipamento:0, administrativo:0, outros:0 };
+  const previsaoPorCategoria = { material:0, aluminio:0, acessorios:0, maoDeObra:0, vidro:0, equipamento:0, administrativo:0, custoOperacionalFabrica:0, outros:0 };
   let previsaoTotal = 0;
   previsoes.forEach(p=>{
     previsaoPorCategoria[p.categoria] = (previsaoPorCategoria[p.categoria]||0) + p.valor;
     previsaoTotal += p.valor;
   });
   previsaoPorCategoria.material += previsaoPorCategoria.aluminio + previsaoPorCategoria.acessorios;
-  previsaoPorCategoria.outros += previsaoPorCategoria.equipamento + previsaoPorCategoria.administrativo;
+  previsaoPorCategoria.outros += previsaoPorCategoria.equipamento + previsaoPorCategoria.administrativo + previsaoPorCategoria.custoOperacionalFabrica;
 
   const saldoOrcado = orcTotal - gastoTotal;
   const saldoTendencia = tendenciaTotal>0 ? (tendenciaTotal - gastoTotal) : null;
@@ -3611,11 +3792,12 @@ function renderFinanceiro(){
   const todasObras = load('obras');
   document.getElementById('finLancamentosBody').innerHTML = lancamentosFiltrados.slice().reverse().map(l=>{
     const obraRel = l.obraRelacionadaId ? todasObras.find(o=>o.id===l.obraRelacionadaId) : null;
+    const detalheKg = (l.qtdKg && l.precoKg) ? `<div class="step-note">${l.qtdKg} Kg × ${fmtMoeda(l.precoKg)}/Kg</div>` : '';
     return `<tr>
       <td>${fmtDate(l.data)}</td>
       <td>${l.tipo==='receita'?'Receita':'Despesa'}</td>
       <td>${FIN_CATEGORIA_LABEL[l.categoria]||l.categoria}${obraRel?`<div class="step-note">↔ ${esc(obraRel.nome)}</div>`:''}</td>
-      <td>${esc(l.descricao)}</td>
+      <td>${esc(l.descricao)}${detalheKg}</td>
       <td>${fmtMoeda(l.valor)}</td>
       <td style="text-align:right;white-space:nowrap;">
         <button class="btn small secondary" onclick="editarLancamentoFinanceiro('${l.id}')">Editar</button>
@@ -4131,17 +4313,20 @@ function renderFabricaObraSelect(){
   renderFabricaRateio();
 }
 
-function custoMaoDeObraObraNoMes(obraId, mes){
+// Soma o custo de mão de obra E o custo operacional da Fábrica no mês —
+// os dois juntos formam a base que é rateada pelas obras conforme o Kg
+// produzido por cada uma.
+function custoFabricaTotalNoMes(obraId, mes){
   if(!obraId || !mes) return 0;
   return load('lancamentosFinanceiros')
-    .filter(l=>l.obraId===obraId && l.categoria==='maoDeObra' && l.tipo==='despesa' && (l.data||'').slice(0,7)===mes)
+    .filter(l=>l.obraId===obraId && (l.categoria==='maoDeObra' || l.categoria==='custoOperacionalFabrica') && l.tipo==='despesa' && (l.data||'').slice(0,7)===mes)
     .reduce((s,l)=>s+l.valor,0);
 }
 
 function renderFabricaRateio(){
   const mes = document.getElementById('rateioMesFiltro').value;
   const fabricaObraId = document.getElementById('fabricaObraId').value;
-  const custoTotal = custoMaoDeObraObraNoMes(fabricaObraId, mes);
+  const custoTotal = custoFabricaTotalNoMes(fabricaObraId, mes);
   document.getElementById('fabricaCustoTotal').value = fmtMoeda(custoTotal);
 
   const wrap = document.getElementById('fabricaKgWrap');
@@ -4177,8 +4362,8 @@ function ratearFabrica(){
   const fabricaObraId = document.getElementById('fabricaObraId').value;
   if(!mes){ toast('Selecione o mês de referência.'); return; }
   if(!fabricaObraId){ toast('Selecione a obra que representa a Fábrica.'); return; }
-  const custoTotal = custoMaoDeObraObraNoMes(fabricaObraId, mes);
-  if(!custoTotal){ toast('Não há custo de mão de obra lançado na Fábrica para esse mês.'); return; }
+  const custoTotal = custoFabricaTotalNoMes(fabricaObraId, mes);
+  if(!custoTotal){ toast('Não há custo de mão de obra nem custo operacional lançado na Fábrica para esse mês.'); return; }
 
   const outrasObras = load('obras').filter(o=>o.id!==fabricaObraId);
   const kgPorObra = {};
@@ -4199,7 +4384,7 @@ function ratearFabrica(){
   }
 
   const lancamentoIdPorObra = {};
-  const descricaoBase = `Rateio Fábrica (${mesLabelCurto(mes)})`;
+  const descricaoBase = `Rateio Fábrica — mão de obra + operacional (${mesLabelCurto(mes)})`;
   outrasObras.forEach(o=>{
     const kg = kgPorObra[o.id];
     if(kg<=0) return;
