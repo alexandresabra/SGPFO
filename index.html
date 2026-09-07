@@ -1459,28 +1459,32 @@
             Segue a mesma metodologia da planilha de rateio da divisão: GPS (45%), FGTS (12%), SECONCI (1,5%), provisão de 13º, férias, aviso prévio, GPS sobre provisões e FGTS rescisório, calculados automaticamente sobre o salário bruto. Um mesmo funcionário pode ser dividido entre mais de uma obra no mês (por dias trabalhados ou horas de tarefas lançadas) — cada fatia gera automaticamente uma despesa de "Mão de obra" proporcional no Controle Financeiro da obra correspondente.
           </div>
           <div class="toolbar" style="margin-top:16px;">
-            <div style="display:flex;gap:10px;align-items:center;">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
               <label style="font-size:12px;font-weight:600;color:var(--ink-soft);">Mês de referência</label>
               <input type="month" id="rateioMesFiltro" onchange="renderRateioMaoDeObra()">
+              <label style="font-size:12px;font-weight:600;color:var(--ink-soft);margin-left:10px;">Relatório da obra</label>
+              <select id="rateioFiltroObraRelatorio"><option value="">Todas as obras</option></select>
             </div>
             <div style="display:flex;gap:8px;">
               <button class="btn small secondary" onclick="gerarRelatorioRateioResumo()">Relatório — Resumo</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioCompleto()">Relatório — Completo</button>
+              <button class="btn small secondary" onclick="gerarRelatorioAnaliticoFrequencia()">Relatório Analítico — Frequência e Passagens</button>
             </div>
           </div>
           <div class="kpi-row" style="margin-top:0;margin-bottom:16px;">
             <div class="kpi"><div class="num" id="rateioKpiTotalFolha">R$ 0</div><div class="lbl">Total da folha no mês (todas as obras)</div></div>
           </div>
           <div class="panel">
-            <div class="panel-head">Funcionários (CLT)</div>
+            <div class="panel-head">Funcionários (CLT e PJ)</div>
             <div class="panel-body" style="padding:0;">
+              <div class="step-note" style="padding:12px 16px 0;">PJ (Pessoa Jurídica) não tem encargos de CLT — o total é só o salário/pró-labore combinado, mais vale transporte e alimentação se houver. No futuro, a ideia é que os indiretos lancem as próprias horas por obra pelo Dashboard (Minhas tarefas / Horas livres); por enquanto, dá pra lançar manualmente aqui.</div>
               <table>
                 <thead><tr>
-                  <th>Funcionário</th><th>Função</th><th>Obra(s) no mês</th><th>Total c/ encargos</th><th></th>
+                  <th>Nome</th><th>Função</th><th>Tipo</th><th>Obra(s) no mês</th><th>Total c/ encargos</th><th></th>
                 </tr></thead>
                 <tbody id="rateioTableBody"></tbody>
               </table>
-              <div class="empty-state" id="rateioEmpty" style="display:none;">Nenhum funcionário CLT ativo cadastrado ainda.</div>
+              <div class="empty-state" id="rateioEmpty" style="display:none;">Nenhum funcionário ativo cadastrado ainda.</div>
             </div>
           </div>
 
@@ -1862,12 +1866,14 @@
         <h4 style="font-family:var(--serif);margin:0 0 6px;" id="funcRHTitulo">Encargos fixos e referências (Rateio de Mão de Obra)</h4>
 
         <div id="funcCLTBloco">
-          <div class="step-note" style="margin-bottom:12px;">Seguro, PCMSO, Vale Alimentação, Plano de Saúde e Refeição são valores fixos do funcionário. Salário Base e Vale Transporte "de referência" só servem para pré-preencher o lançamento mensal — em cada mês, na tela de Rateio de Mão de Obra, eles continuam editáveis.</div>
+          <div class="step-note" style="margin-bottom:12px;">Seguro, PCMSO, Exames (ASO), Treinamentos NR, Vale Alimentação, Plano de Saúde e Refeição são valores fixos do funcionário. Salário Base e Vale Transporte "de referência" só servem para pré-preencher o lançamento mensal — em cada mês, na tela de Rateio de Mão de Obra, eles continuam editáveis.</div>
           <div class="form-grid cols-3">
             <div class="field"><label>Salário base — referência (R$)</label><input type="number" id="funcSalarioBaseRef" step="0.01"></div>
             <div class="field"><label>Vale transporte — referência (R$)</label><input type="number" id="funcValeTransporteRef" step="0.01"></div>
             <div class="field"><label>Seguro de vida (R$)</label><input type="number" id="funcSeguroVida" step="0.01" placeholder="Ex.: 6.72"></div>
             <div class="field"><label>PCMSO (R$)</label><input type="number" id="funcPcmso" step="0.01" placeholder="Ex.: 40"></div>
+            <div class="field"><label>Exames (ASO) (R$)</label><input type="number" id="funcExameAso" step="0.01" placeholder="Ex.: 25"></div>
+            <div class="field"><label>Treinamentos NR (R$)</label><input type="number" id="funcTreinamentoNr" step="0.01" placeholder="Ex.: 15"></div>
             <div class="field"><label>Vale alimentação (R$)</label><input type="number" id="funcValeAlimentacao" step="0.01"></div>
             <div class="field"><label>Plano de saúde (R$)</label><input type="number" id="funcPlanoSaude" step="0.01"></div>
             <div class="field"><label>Café, almoço, lanche (R$)</label><input type="number" id="funcCafeAlmocoLanche" step="0.01"></div>
@@ -1904,7 +1910,24 @@
         <div class="field"><label>Hora extra (R$)</label><input type="number" id="rateioHoraExtra" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Hora prêmio (R$)</label><input type="number" id="rateioHoraPremio" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Vale transporte (R$)</label><input type="number" id="rateioValeTransporte" step="0.01" oninput="atualizarPreviewRateio()"></div>
-        <div class="field"><label>Alimentação (R$)</label><input type="number" id="rateioAlimentacao" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field"><label>Passagem de hora extra — sáb/dom/feriado (R$)</label><input type="number" id="rateioPassagemHoraExtra" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field"><label>Café da manhã (R$)</label><input type="number" id="rateioCafeManha" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field"><label>Almoço (R$)</label><input type="number" id="rateioAlmoco" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field"><label>Lanche (R$)</label><input type="number" id="rateioLanche" step="0.01" oninput="atualizarPreviewRateio()"></div>
+      </div>
+
+      <hr class="divider">
+      <h4 style="font-family:var(--serif);margin:0 0 6px;">Frequência no mês</h4>
+      <div class="step-note" style="margin-bottom:10px;">Não entra no cálculo dos encargos — fica registrado para acompanhamento e para o Relatório Analítico de Frequência.</div>
+      <div class="form-grid">
+        <div class="field"><label>Horas descontadas por atraso</label><input type="number" id="rateioHorasAtraso" step="0.5" placeholder="Ex.: 2"></div>
+        <div class="field"><label>Faltas justificadas (nº)</label><input type="number" id="rateioFaltasJustificadas" step="1" placeholder="Ex.: 1"></div>
+        <div class="field"><label>Faltas não justificadas (nº)</label><input type="number" id="rateioFaltasNaoJustificadas" step="1" placeholder="Ex.: 0"></div>
+        <div class="field full">
+          <label>Atestado (faltas justificadas)</label>
+          <input type="file" id="rateioAtestadoInput" accept="image/*,application/pdf" onchange="uploadAtestadoRateio(this)">
+          <div id="rateioAtestadoPreview" style="margin-top:8px;"></div>
+        </div>
       </div>
 
       <hr class="divider">
@@ -3819,32 +3842,50 @@ function calcularEncargosMaoDeObra(funcionario, dados){
   const horaExtra = parseFloat(dados.horaExtra) || 0;
   const horaPremio = parseFloat(dados.horaPremio) || 0;
   const salarioBruto = salarioBase + horaExtra + horaPremio;
+  const valeTransporte = parseFloat(dados.valeTransporte) || 0;
+  const passagemHoraExtra = parseFloat(dados.passagemHoraExtra) || 0;
+  // Café da manhã / Almoço / Lanche substituem o antigo campo único
+  // "Alimentação" — mantém compatibilidade com rateios salvos antes dessa
+  // separação (que só tinham o valor único em dados.alimentacao).
+  const temCamposSeparados = dados.cafeManha !== undefined || dados.almoco !== undefined || dados.lanche !== undefined;
+  const cafeManha = temCamposSeparados ? (parseFloat(dados.cafeManha) || 0) : 0;
+  const almoco = temCamposSeparados ? (parseFloat(dados.almoco) || 0) : 0;
+  const lanche = temCamposSeparados ? (parseFloat(dados.lanche) || 0) : 0;
+  const alimentacao = temCamposSeparados
+    ? (cafeManha + almoco + lanche)
+    : (dados.alimentacao !== undefined ? (parseFloat(dados.alimentacao) || 0) : (parseFloat(funcionario && funcionario.valeAlimentacao) || 0));
+
+  // PJ (Pessoa Jurídica) não tem encargos de CLT — nada de GPS, FGTS, SECONCI,
+  // provisões de 13º/férias/aviso prévio. O custo é só o que foi combinado:
+  // salário/pró-labore + vale transporte/alimentação, se houver.
+  if(funcionario && funcionario.tipoVinculo === 'pj'){
+    const totalComEncargos = salarioBruto + valeTransporte + passagemHoraExtra + alimentacao;
+    return { salarioBruto, gps:0, fgts:0, seconci:0, seguroVida:0, pcmso:0, exameAso:0, treinamentoNr:0, provisao13:0, ferias:0,
+      avisoPrevio:0, gpsSobreProvisoes:0, fgtsRescisorio:0, valeTransporte, passagemHoraExtra, alimentacao, cafeManha, almoco, lanche,
+      planoSaude:0, cafeAlmocoLanche:0, totalComEncargos };
+  }
 
   const gps = salarioBruto * 0.45;
   const fgts = salarioBruto * 0.12;
   const seconci = salarioBruto * 0.015;
   const seguroVida = parseFloat(funcionario && funcionario.seguroVida) || 0;
   const pcmso = parseFloat(funcionario && funcionario.pcmso) || 0;
+  const exameAso = parseFloat(funcionario && funcionario.exameAso) || 0;
+  const treinamentoNr = parseFloat(funcionario && funcionario.treinamentoNr) || 0;
   const provisao13 = salarioBruto / 12;
   const ferias = provisao13 / 3;
   const avisoPrevio = salarioBruto / 12;
   const gpsSobreProvisoes = avisoPrevio * 0.45;
   const fgtsRescisorio = fgts * 0.4;
-  const valeTransporte = parseFloat(dados.valeTransporte) || 0;
-  // Alimentação agora é preenchida mês a mês (igual Vale Transporte) — se não
-  // vier em `dados`, cai no valor de referência do cadastro do funcionário.
-  const alimentacao = dados.alimentacao !== undefined
-    ? (parseFloat(dados.alimentacao) || 0)
-    : (parseFloat(funcionario && funcionario.valeAlimentacao) || 0);
   const planoSaude = parseFloat(funcionario && funcionario.planoSaude) || 0;
   const cafeAlmocoLanche = parseFloat(funcionario && funcionario.cafeAlmocoLanche) || 0;
 
-  const totalComEncargos = salarioBruto + gps + fgts + seconci + seguroVida + pcmso +
+  const totalComEncargos = salarioBruto + gps + fgts + seconci + seguroVida + pcmso + exameAso + treinamentoNr +
     provisao13 + ferias + avisoPrevio + gpsSobreProvisoes + fgtsRescisorio +
-    valeTransporte + alimentacao + planoSaude + cafeAlmocoLanche;
+    valeTransporte + passagemHoraExtra + alimentacao + planoSaude + cafeAlmocoLanche;
 
-  return { salarioBruto, gps, fgts, seconci, seguroVida, pcmso, provisao13, ferias,
-    avisoPrevio, gpsSobreProvisoes, fgtsRescisorio, valeTransporte, alimentacao,
+  return { salarioBruto, gps, fgts, seconci, seguroVida, pcmso, exameAso, treinamentoNr, provisao13, ferias,
+    avisoPrevio, gpsSobreProvisoes, fgtsRescisorio, valeTransporte, passagemHoraExtra, alimentacao, cafeManha, almoco, lanche,
     planoSaude, cafeAlmocoLanche, totalComEncargos };
 }
 
@@ -3882,6 +3923,46 @@ function calcularHorasTarefasPorObra(funcionarioId, mes){
 }
 
 let tempAlocacoesRateio = [];
+let tempAtestadoRateio = null; // { dataUrl, nome } do atestado anexado no rateio em edição
+
+// Reaproveita o mesmo padrão de compressão de imagem usado nas fotos do RDO.
+// PDF não dá pra comprimir (não é imagem), então vai puro em base64.
+async function uploadAtestadoRateio(inputEl){
+  const file = inputEl.files[0];
+  if(!file) return;
+  try{
+    let dataUrl;
+    if(file.type === 'application/pdf'){
+      dataUrl = await new Promise((resolve, reject)=>{
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } else {
+      dataUrl = await resizeImageFile(file, 1200, 0.75);
+    }
+    tempAtestadoRateio = { dataUrl, nome: file.name };
+    renderAtestadoPreviewRateio();
+    toast('Atestado anexado — não esqueça de salvar o rateio.');
+  }catch(e){
+    toast('Não foi possível anexar esse arquivo.');
+  }
+}
+
+function removerAtestadoRateio(){
+  tempAtestadoRateio = null;
+  document.getElementById('rateioAtestadoInput').value = '';
+  renderAtestadoPreviewRateio();
+}
+
+function renderAtestadoPreviewRateio(){
+  const box = document.getElementById('rateioAtestadoPreview');
+  if(!box) return;
+  box.innerHTML = tempAtestadoRateio
+    ? `<span class="tag">📎 ${esc(tempAtestadoRateio.nome)}</span> <button type="button" class="btn small danger" onclick="removerAtestadoRateio()">Remover</button>`
+    : '<span class="step-note">Nenhum atestado anexado.</span>';
+}
 
 function renderLinhasAlocacaoRateio(){
   const obras = load('obras');
@@ -3947,7 +4028,10 @@ function atualizarPreviewRateio(){
     horaExtra: document.getElementById('rateioHoraExtra').value,
     horaPremio: document.getElementById('rateioHoraPremio').value,
     valeTransporte: document.getElementById('rateioValeTransporte').value,
-    alimentacao: document.getElementById('rateioAlimentacao').value
+    passagemHoraExtra: document.getElementById('rateioPassagemHoraExtra').value,
+    cafeManha: document.getElementById('rateioCafeManha').value,
+    almoco: document.getElementById('rateioAlmoco').value,
+    lanche: document.getElementById('rateioLanche').value
   };
   const e = calcularEncargosMaoDeObra(funcionario, dados);
   const obras = load('obras');
@@ -3967,26 +4051,34 @@ function atualizarPreviewRateio(){
       <div class="result-item"><div class="k">SECONCI (1,5%)</div><div class="v small">${fmtMoeda(e.seconci)}</div></div>
       <div class="result-item"><div class="k">Provisão 13º + Férias + Aviso Prévio</div><div class="v small">${fmtMoeda(e.provisao13+e.ferias+e.avisoPrevio)}</div></div>
       <div class="result-item"><div class="k">GPS s/ Provisões + FGTS Rescisório</div><div class="v small">${fmtMoeda(e.gpsSobreProvisoes+e.fgtsRescisorio)}</div></div>
-      <div class="result-item"><div class="k">Benefícios fixos (seguro, PCMSO, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.pcmso+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
+      <div class="result-item"><div class="k">Benefícios fixos (seguro, PCMSO, ASO, treinamentos NR, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.pcmso+e.exameAso+e.treinamentoNr+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
       <div class="result-item"><div class="k">Vale transporte</div><div class="v small">${fmtMoeda(e.valeTransporte)}</div></div>
-      <div class="result-item"><div class="k">Alimentação</div><div class="v small">${fmtMoeda(e.alimentacao)}</div></div>
+      <div class="result-item"><div class="k">Passagem de hora extra</div><div class="v small">${fmtMoeda(e.passagemHoraExtra)}</div></div>
+      <div class="result-item"><div class="k">Café, almoço e lanche</div><div class="v small">${fmtMoeda(e.alimentacao)}</div></div>
       <div class="result-item"><div class="k">Total com encargos</div><div class="v" style="font-size:18px;">${fmtMoeda(e.totalComEncargos)}</div></div>
     </div>
     ${linhasObras ? `<h4 style="margin-top:14px;">Divisão por obra</h4><div class="result-grid">${linhasObras}</div>` : ''}`;
 }
 
+// Rateio agora aceita duas origens de pessoa: Funcionários CLT (cadastro
+// próprio da Divisão Alumínio) e Responsáveis (Gerente/Engenheiro/Adm/RH-DP
+// — os indiretos). Cada rateio guarda qual das duas listas usar.
 function openRateioModal(funcionarioId){
   const mes = document.getElementById('rateioMesFiltro').value;
   if(!mes){ toast('Selecione o mês de referência antes de lançar o rateio.'); return; }
   const funcionario = load('funcionarios').find(f=>f.id===funcionarioId);
   if(!funcionario){ toast('Funcionário não encontrado.'); return; }
 
+  const ehPJ = funcionario.tipoVinculo === 'pj';
   document.getElementById('modalRateioTitle').textContent = `Rateio — ${funcionario.nome} (${mesLabelCurto(mes)})`;
   document.getElementById('rateioFuncionarioId').value = funcionarioId;
-  document.getElementById('rateioFuncionarioNome').value = funcionario.nome + (funcionario.cargo ? ' — '+funcionario.cargo : '');
+  document.getElementById('rateioFuncionarioNome').value = funcionario.nome + (funcionario.cargo ? ' — '+funcionario.cargo : '') + (ehPJ ? ' (PJ)' : '');
   document.getElementById('rateioMes').value = mes;
   document.getElementById('rateioId').value = '';
   tempAlocacoesRateio = [];
+  tempAtestadoRateio = null;
+
+  const campos = ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte','rateioPassagemHoraExtra','rateioCafeManha','rateioAlmoco','rateioLanche','rateioHorasAtraso','rateioFaltasJustificadas','rateioFaltasNaoJustificadas'];
 
   const existente = load('rateiosMaoDeObra').find(r=>r.funcionarioId===funcionarioId && r.mes===mes);
   if(existente){
@@ -3995,14 +4087,30 @@ function openRateioModal(funcionarioId){
     document.getElementById('rateioHoraExtra').value = existente.horaExtra || '';
     document.getElementById('rateioHoraPremio').value = existente.horaPremio || '';
     document.getElementById('rateioValeTransporte').value = existente.valeTransporte || '';
-    document.getElementById('rateioAlimentacao').value = existente.alimentacao || '';
+    document.getElementById('rateioPassagemHoraExtra').value = existente.passagemHoraExtra || '';
+    document.getElementById('rateioCafeManha').value = existente.cafeManha || '';
+    document.getElementById('rateioAlmoco').value = existente.almoco || '';
+    document.getElementById('rateioLanche').value = existente.lanche || '';
+    document.getElementById('rateioHorasAtraso').value = existente.horasAtraso || '';
+    document.getElementById('rateioFaltasJustificadas').value = existente.faltasJustificadas || '';
+    document.getElementById('rateioFaltasNaoJustificadas').value = existente.faltasNaoJustificadas || '';
+    tempAtestadoRateio = existente.atestadoAnexo || null;
     tempAlocacoesRateio = (existente.alocacoes||[]).map(a=>({...a}));
   } else {
-    ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte','rateioAlimentacao'].forEach(f=>document.getElementById(f).value='');
-    if(funcionario.salarioBaseReferencia) document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
-    if(funcionario.valeTransporteReferencia) document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
-    if(funcionario.valeAlimentacao) document.getElementById('rateioAlimentacao').value = funcionario.valeAlimentacao;
+    campos.forEach(f=>document.getElementById(f).value='');
+    if(ehPJ){
+      // PJ: "Salário base" = pró-labore combinado; "Almoço" reaproveita o
+      // campo pra pré-preencher o valor de benefícios do PJ, se houver.
+      if(funcionario.pjSalario) document.getElementById('rateioSalarioBase').value = funcionario.pjSalario;
+      if(funcionario.pjBeneficios) document.getElementById('rateioAlmoco').value = funcionario.pjBeneficios;
+    } else {
+      if(funcionario.salarioBaseReferencia) document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
+      if(funcionario.valeTransporteReferencia) document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
+      if(funcionario.valeAlimentacao) document.getElementById('rateioAlmoco').value = funcionario.valeAlimentacao;
+    }
   }
+  document.getElementById('rateioAtestadoInput').value = '';
+  renderAtestadoPreviewRateio();
   if(!tempAlocacoesRateio.length) tempAlocacoesRateio.push({obraId:'', peso:'', lancamentoId:null});
 
   renderLinhasAlocacaoRateio();
@@ -4027,7 +4135,10 @@ function saveRateio(){
     horaExtra: document.getElementById('rateioHoraExtra').value,
     horaPremio: document.getElementById('rateioHoraPremio').value,
     valeTransporte: document.getElementById('rateioValeTransporte').value,
-    alimentacao: document.getElementById('rateioAlimentacao').value
+    passagemHoraExtra: document.getElementById('rateioPassagemHoraExtra').value,
+    cafeManha: document.getElementById('rateioCafeManha').value,
+    almoco: document.getElementById('rateioAlmoco').value,
+    lanche: document.getElementById('rateioLanche').value
   };
   const encargos = calcularEncargosMaoDeObra(funcionario, dados);
   const totalPeso = calcularTotalPeso(alocacoesValidas);
@@ -4070,7 +4181,14 @@ function saveRateio(){
     id, mes, funcionarioId,
     salarioBase, horaExtra: parseFloat(dados.horaExtra)||0, horaPremio: parseFloat(dados.horaPremio)||0,
     valeTransporte: parseFloat(dados.valeTransporte)||0,
-    alimentacao: parseFloat(dados.alimentacao)||0,
+    passagemHoraExtra: parseFloat(dados.passagemHoraExtra)||0,
+    cafeManha: parseFloat(dados.cafeManha)||0,
+    almoco: parseFloat(dados.almoco)||0,
+    lanche: parseFloat(dados.lanche)||0,
+    horasAtraso: parseFloat(document.getElementById('rateioHorasAtraso').value)||0,
+    faltasJustificadas: parseInt(document.getElementById('rateioFaltasJustificadas').value)||0,
+    faltasNaoJustificadas: parseInt(document.getElementById('rateioFaltasNaoJustificadas').value)||0,
+    atestadoAnexo: tempAtestadoRateio,
     totalComEncargos: encargos.totalComEncargos,
     alocacoes: alocacoesFinal
   };
@@ -4109,14 +4227,15 @@ function renderRateioMaoDeObra(){
 
   const filtroMes = document.getElementById('rateioMesFiltro').value;
   const obras = load('obras');
-  const funcsClt = load('funcionarios').filter(f=>f.status==='ativo' && (f.tipoVinculo||'clt')!=='pj');
+  const funcionariosLista = load('funcionarios').filter(f=>f.status==='ativo');
   const rateios = load('rateiosMaoDeObra').filter(r=> !filtroMes || r.mes===filtroMes);
 
   const totalFolha = filtroMes ? rateios.reduce((s,r)=> s + (r.totalComEncargos||0), 0) : 0;
   document.getElementById('rateioKpiTotalFolha').textContent = filtroMes ? fmtMoeda(totalFolha) : '— selecione o mês —';
 
-  document.getElementById('rateioEmpty').style.display = funcsClt.length ? 'none' : 'block';
-  document.getElementById('rateioTableBody').innerHTML = funcsClt.map(f=>{
+  document.getElementById('rateioEmpty').style.display = funcionariosLista.length ? 'none' : 'block';
+  document.getElementById('rateioTableBody').innerHTML = funcionariosLista.map(f=>{
+    const ehPJ = f.tipoVinculo === 'pj';
     const rateio = filtroMes ? rateios.find(r=>r.funcionarioId===f.id) : null;
     const obrasTexto = rateio ? (rateio.alocacoes||[]).map(a=>{
       const o = obras.find(x=>x.id===a.obraId);
@@ -4131,6 +4250,7 @@ function renderRateioMaoDeObra(){
     return `<tr>
       <td><strong>${esc(f.nome)}</strong></td>
       <td>${esc(f.cargo||'—')}</td>
+      <td><span class="tag">${ehPJ ? 'PJ' : 'CLT'}</span></td>
       <td>${obrasTexto}</td>
       <td><strong>${rateio ? fmtMoeda(rateio.totalComEncargos) : '—'}</strong></td>
       <td style="text-align:right;white-space:nowrap;">${acoes}</td>
@@ -4138,6 +4258,16 @@ function renderRateioMaoDeObra(){
   }).join('');
 
   renderFabricaObraSelect();
+  refreshRateioFiltroObraRelatorio();
+}
+
+function refreshRateioFiltroObraRelatorio(){
+  const sel = document.getElementById('rateioFiltroObraRelatorio');
+  if(!sel) return;
+  const valorAtual = sel.value;
+  const obras = load('obras');
+  sel.innerHTML = '<option value="">Todas as obras</option>' + obras.map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  if(valorAtual && obras.some(o=>o.id===valorAtual)) sel.value = valorAtual;
 }
 
 /* ---------------- Relatórios de rateio por obra (impressão) ----------------
@@ -4155,7 +4285,8 @@ function calcularRelatorioRateioPorObra(mes){
     if(!funcionario) return;
     const encargos = calcularEncargosMaoDeObra(funcionario, {
       salarioBase: r.salarioBase, horaExtra: r.horaExtra, horaPremio: r.horaPremio,
-      valeTransporte: r.valeTransporte, alimentacao: r.alimentacao
+      valeTransporte: r.valeTransporte, passagemHoraExtra: r.passagemHoraExtra,
+      cafeManha: r.cafeManha, almoco: r.almoco, lanche: r.lanche, alimentacao: r.alimentacao
     });
     const alocacoes = r.alocacoes || [];
     const totalPeso = alocacoes.reduce((s,a)=> s + (parseFloat(a.peso)||0), 0);
@@ -4163,7 +4294,7 @@ function calcularRelatorioRateioPorObra(mes){
       const prop = totalPeso>0 ? (parseFloat(a.peso)||0)/totalPeso : 0;
       if(!porObra[a.obraId]) porObra[a.obraId] = { obra: obras.find(o=>o.id===a.obraId), linhas: [], totalObra: 0 };
       porObra[a.obraId].linhas.push({
-        funcionario: funcionario.nome,
+        funcionario: funcionario.nome + (funcionario.tipoVinculo==='pj' ? ' (PJ)' : ''),
         cargo: funcionario.cargo,
         proporcao: prop,
         salarioBruto: encargos.salarioBruto*prop,
@@ -4171,9 +4302,15 @@ function calcularRelatorioRateioPorObra(mes){
         fgts: encargos.fgts*prop,
         seconci: encargos.seconci*prop,
         provisoes: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
-        beneficios: (encargos.seguroVida+encargos.pcmso+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
+        beneficios: (encargos.seguroVida+encargos.pcmso+encargos.exameAso+encargos.treinamentoNr+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
         valeTransporte: encargos.valeTransporte*prop,
         alimentacao: encargos.alimentacao*prop,
+        // Agrupamento em 5 categorias, usado no Relatório — Resumo por obra:
+        salariosBaseExtra: encargos.salarioBruto*prop,
+        encargosPct: (encargos.gps+encargos.fgts+encargos.seconci+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
+        alimentacaoTransporte: (encargos.alimentacao+encargos.valeTransporte+encargos.passagemHoraExtra+encargos.seguroVida+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
+        treinamentosExames: (encargos.pcmso+encargos.exameAso+encargos.treinamentoNr)*prop,
+        provisionamentos: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio)*prop,
         total: a.valor || 0
       });
       porObra[a.obraId].totalObra += (a.valor || 0);
@@ -4202,6 +4339,7 @@ function calcularRelatorioRateioPorObra(mes){
         cargo: `${kgNum.toFixed(0)} Kg produzidos (${(prop*100).toFixed(1)}% do total)`,
         proporcao: prop,
         salarioBruto: 0, gps: 0, fgts: 0, seconci: 0, provisoes: 0, beneficios: 0, valeTransporte: 0, alimentacao: 0,
+        salariosBaseExtra: 0, encargosPct: 0, alimentacaoTransporte: 0, treinamentosExames: 0, provisionamentos: valor,
         total: valor
       });
       porObra[obraId].totalObra += valor;
@@ -4226,28 +4364,62 @@ function ordenarChavesPorNomeObra(porObra){
 function gerarRelatorioRateioResumo(){
   const mes = document.getElementById('rateioMesFiltro').value;
   if(!mes){ toast('Selecione o mês de referência antes de gerar o relatório.'); return; }
+  const filtroObraId = document.getElementById('rateioFiltroObraRelatorio').value;
   const porObra = calcularRelatorioRateioPorObra(mes);
-  const chaves = ordenarChavesPorNomeObra(porObra);
-  let totalGeral = 0;
+  let chaves = ordenarChavesPorNomeObra(porObra);
+  if(filtroObraId) chaves = chaves.filter(id=>id===filtroObraId);
+
+  if(filtroObraId && !chaves.length){
+    toast('Nenhum rateio lançado nesta obra, neste mês.');
+    return;
+  }
+
+  let totalGeral = 0, totSalarios=0, totEncargos=0, totAlimentacao=0, totTreinamentos=0, totProvisionamentos=0;
   const linhas = chaves.map(id=>{
     const g = porObra[id];
     totalGeral += g.totalObra;
+    const salarios = g.linhas.reduce((s,l)=>s+(l.salariosBaseExtra||0),0);
+    const encargosPct = g.linhas.reduce((s,l)=>s+(l.encargosPct||0),0);
+    const alimentacao = g.linhas.reduce((s,l)=>s+(l.alimentacaoTransporte||0),0);
+    const treinamentos = g.linhas.reduce((s,l)=>s+(l.treinamentosExames||0),0);
+    const provisionamentos = g.linhas.reduce((s,l)=>s+(l.provisionamentos||0),0);
+    totSalarios+=salarios; totEncargos+=encargosPct; totAlimentacao+=alimentacao; totTreinamentos+=treinamentos; totProvisionamentos+=provisionamentos;
     const funcionarios = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica').length;
     const temFabrica = g.linhas.some(l=>l.funcionario==='Rateio da Fábrica');
-    return `<tr><td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td><td>${funcionarios}${temFabrica?' + Fábrica':''}</td><td>${fmtMoeda(g.totalObra)}</td></tr>`;
+    return `<tr>
+      <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}${temFabrica?' <span class="step-note">(inclui Fábrica)</span>':''}</td>
+      <td>${funcionarios}</td>
+      <td>${fmtMoeda(salarios)}</td>
+      <td>${fmtMoeda(encargosPct)}</td>
+      <td>${fmtMoeda(alimentacao)}</td>
+      <td>${fmtMoeda(treinamentos)}</td>
+      <td>${fmtMoeda(provisionamentos)}</td>
+      <td><strong>${fmtMoeda(g.totalObra)}</strong></td>
+    </tr>`;
   }).join('');
+
+  const obraSelecionada = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
 
   document.getElementById('rdoPrintArea').innerHTML = `
     <h1>Relatório de Rateio de Mão de Obra — Resumo</h1>
     <div class="meta">
+      ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
-      Inclui o custo da Fábrica já rateado entre as obras conforme o % de Kg produzido.
+      Inclui o custo da Fábrica já rateado entre as obras conforme o % de Kg produzido. Alimentação inclui vale transporte, passagem de hora extra, seguro de vida e plano de saúde; Treinamentos e Exames inclui PCMSO, ASO e treinamentos NR; Provisionamentos inclui 13º, férias e aviso prévio.
     </div>
     <table>
-      <thead><tr><th>Obra</th><th>Funcionários alocados</th><th>Total de mão de obra</th></tr></thead>
-      <tbody>${linhas || '<tr><td colspan="3">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
-      <tfoot><tr><td>TOTAL GERAL DA FOLHA NO MÊS</td><td></td><td>${fmtMoeda(totalGeral)}</td></tr></tfoot>
+      <thead><tr>
+        <th>Obra</th><th>Funcionários</th><th>Salários (base+extra)</th><th>Encargos</th>
+        <th>Alimentação</th><th>Treinamentos e exames</th><th>Provisionamentos</th><th>Total</th>
+      </tr></thead>
+      <tbody>${linhas || '<tr><td colspan="8">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
+      <tfoot><tr>
+        <td>TOTAL GERAL DA FOLHA NO MÊS</td><td></td>
+        <td>${fmtMoeda(totSalarios)}</td><td>${fmtMoeda(totEncargos)}</td>
+        <td>${fmtMoeda(totAlimentacao)}</td><td>${fmtMoeda(totTreinamentos)}</td><td>${fmtMoeda(totProvisionamentos)}</td>
+        <td>${fmtMoeda(totalGeral)}</td>
+      </tr></tfoot>
     </table>`;
   window.print();
 }
@@ -4255,9 +4427,16 @@ function gerarRelatorioRateioResumo(){
 function gerarRelatorioRateioCompleto(){
   const mes = document.getElementById('rateioMesFiltro').value;
   if(!mes){ toast('Selecione o mês de referência antes de gerar o relatório.'); return; }
+  const filtroObraId = document.getElementById('rateioFiltroObraRelatorio').value;
   const porObra = calcularRelatorioRateioPorObra(mes);
-  const chaves = ordenarChavesPorNomeObra(porObra);
+  let chaves = ordenarChavesPorNomeObra(porObra);
+  if(filtroObraId) chaves = chaves.filter(id=>id===filtroObraId);
   let totalGeral = 0;
+
+  if(filtroObraId && !chaves.length){
+    toast('Nenhum rateio lançado nesta obra, neste mês.');
+    return;
+  }
 
   const secoes = chaves.map(id=>{
     const g = porObra[id];
@@ -4286,15 +4465,88 @@ function gerarRelatorioRateioCompleto(){
       </table>`;
   }).join('');
 
+  const obraSelecionada = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
+
   document.getElementById('rdoPrintArea').innerHTML = `
     <h1>Relatório de Rateio de Mão de Obra — Completo</h1>
     <div class="meta">
+      ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
       Total geral da folha no mês: <strong>${fmtMoeda(totalGeral)}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
       A linha "Rateio da Fábrica" mostra a fatia do custo de mão de obra da Fábrica alocada àquela obra, proporcional ao Kg produzido — o detalhamento de encargos dela pertence ao relatório da própria Fábrica, não é repetido aqui.
     </div>
     ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}`;
+  window.print();
+}
+
+// Relatório analítico de frequência: passagem de hora extra (fim de semana/
+// feriado), faltas justificadas/não justificadas e horas de atraso — geral
+// (somatório de todos) e por funcionário, ordenado pela passagem de hora
+// extra do maior pro menor pra ajudar a enxergar valores discrepantes.
+function gerarRelatorioAnaliticoFrequencia(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência antes de gerar o relatório.'); return; }
+  const filtroObraId = document.getElementById('rateioFiltroObraRelatorio').value;
+  let rateios = load('rateiosMaoDeObra').filter(r=>r.mes===mes);
+  if(filtroObraId) rateios = rateios.filter(r=>(r.alocacoes||[]).some(a=>a.obraId===filtroObraId));
+  const funcionarios = load('funcionarios');
+
+  if(!rateios.length){
+    toast(filtroObraId ? 'Nenhum rateio lançado nesta obra, neste mês.' : 'Nenhum rateio lançado neste mês ainda.');
+    return;
+  }
+
+  const linhas = rateios.map(r=>{
+    const f = funcionarios.find(x=>x.id===r.funcionarioId);
+    return {
+      nome: f ? f.nome : 'Funcionário removido',
+      passagemHoraExtra: r.passagemHoraExtra || 0,
+      horasAtraso: r.horasAtraso || 0,
+      faltasJustificadas: r.faltasJustificadas || 0,
+      faltasNaoJustificadas: r.faltasNaoJustificadas || 0,
+      temAtestado: !!r.atestadoAnexo
+    };
+  }).sort((a,b)=> b.passagemHoraExtra - a.passagemHoraExtra);
+
+  const totalPassagem = linhas.reduce((s,l)=>s+l.passagemHoraExtra,0);
+  const totalAtraso = linhas.reduce((s,l)=>s+l.horasAtraso,0);
+  const totalFaltasJust = linhas.reduce((s,l)=>s+l.faltasJustificadas,0);
+  const totalFaltasNaoJust = linhas.reduce((s,l)=>s+l.faltasNaoJustificadas,0);
+
+  const linhasHtml = linhas.map(l=>`
+    <tr>
+      <td>${esc(l.nome)}</td>
+      <td>${fmtMoeda(l.passagemHoraExtra)}</td>
+      <td>${l.horasAtraso}</td>
+      <td>${l.faltasJustificadas}${l.temAtestado?' 📎':''}</td>
+      <td>${l.faltasNaoJustificadas}</td>
+    </tr>`).join('');
+
+  const obraSelecionadaFreq = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Relatório Analítico — Frequência e Passagens</h1>
+    <div class="meta">
+      ${obraSelecionadaFreq ? `Obra: <strong>${esc(obraSelecionadaFreq.nome)}</strong><br>` : ''}
+      Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    <h2>Geral (todos os funcionários)</h2>
+    <table>
+      <thead><tr><th>Total passagem de hora extra</th><th>Total horas de atraso</th><th>Total faltas justificadas</th><th>Total faltas não justificadas</th></tr></thead>
+      <tbody><tr>
+        <td>${fmtMoeda(totalPassagem)}</td>
+        <td>${totalAtraso}</td>
+        <td>${totalFaltasJust}</td>
+        <td>${totalFaltasNaoJust}</td>
+      </tr></tbody>
+    </table>
+    <h2>Por funcionário — ordenado pela passagem de hora extra (maior primeiro, pra facilitar identificar valores discrepantes)</h2>
+    <table>
+      <thead><tr><th>Funcionário</th><th>Passagem hora extra</th><th>Horas de atraso</th><th>Faltas justificadas</th><th>Faltas não justificadas</th></tr></thead>
+      <tbody>${linhasHtml}</tbody>
+    </table>
+    <div class="step-note">📎 = tem atestado anexado ao rateio daquele funcionário.</div>`;
   window.print();
 }
 
@@ -4869,7 +5121,7 @@ function toggleTipoVinculoFuncionario(){
 function openFuncionarioModal(id){
   refreshFuncionarioSetorSelect();
   document.getElementById('modalFuncionarioTitle').textContent = id ? 'Editar funcionário' : 'Novo funcionário';
-  ['funcId','funcNome','funcMatricula','funcCargo','funcAdmissao','funcTelefone','funcEmail','funcSalarioBaseRef','funcValeTransporteRef','funcSeguroVida','funcPcmso','funcValeAlimentacao','funcPlanoSaude','funcCafeAlmocoLanche','funcPjSalario','funcPjBeneficios'].forEach(f=>document.getElementById(f).value='');
+  ['funcId','funcNome','funcMatricula','funcCargo','funcAdmissao','funcTelefone','funcEmail','funcSalarioBaseRef','funcValeTransporteRef','funcSeguroVida','funcPcmso','funcExameAso','funcTreinamentoNr','funcValeAlimentacao','funcPlanoSaude','funcCafeAlmocoLanche','funcPjSalario','funcPjBeneficios'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('funcStatus').value = 'ativo';
   document.getElementById('funcGerente').value = 'nao';
   document.getElementById('funcSetor').value = '';
@@ -4878,6 +5130,13 @@ function openFuncionarioModal(id){
   const podeVerRH = temAcessoRH();
   document.getElementById('funcRHSemAcesso').style.display = podeVerRH ? 'none' : 'block';
   document.getElementById('funcRHConteudo').style.display = podeVerRH ? 'block' : 'none';
+
+  // Funcionário CLT novo já vem com os valores padrão da divisão pra Seguro
+  // de Vida e PCMSO — evita ter que lembrar/redigitar em todo cadastro.
+  if(!id && podeVerRH){
+    document.getElementById('funcSeguroVida').value = 6.72;
+    document.getElementById('funcPcmso').value = 40.00;
+  }
 
   if(id){
     const f = load('funcionarios').find(x=>x.id===id);
@@ -4898,6 +5157,8 @@ function openFuncionarioModal(id){
         document.getElementById('funcValeTransporteRef').value = f.valeTransporteReferencia||'';
         document.getElementById('funcSeguroVida').value = f.seguroVida||'';
         document.getElementById('funcPcmso').value = f.pcmso||'';
+        document.getElementById('funcExameAso').value = f.exameAso||'';
+        document.getElementById('funcTreinamentoNr').value = f.treinamentoNr||'';
         document.getElementById('funcValeAlimentacao').value = f.valeAlimentacao||'';
         document.getElementById('funcPlanoSaude').value = f.planoSaude||'';
         document.getElementById('funcCafeAlmocoLanche').value = f.cafeAlmocoLanche||'';
@@ -4936,6 +5197,8 @@ function saveFuncionario(){
     valeTransporteReferencia: podeVerRH ? (parseFloat(document.getElementById('funcValeTransporteRef').value) || 0) : (existente?.valeTransporteReferencia || 0),
     seguroVida: podeVerRH ? (parseFloat(document.getElementById('funcSeguroVida').value) || 0) : (existente?.seguroVida || 0),
     pcmso: podeVerRH ? (parseFloat(document.getElementById('funcPcmso').value) || 0) : (existente?.pcmso || 0),
+    exameAso: podeVerRH ? (parseFloat(document.getElementById('funcExameAso').value) || 0) : (existente?.exameAso || 0),
+    treinamentoNr: podeVerRH ? (parseFloat(document.getElementById('funcTreinamentoNr').value) || 0) : (existente?.treinamentoNr || 0),
     valeAlimentacao: podeVerRH ? (parseFloat(document.getElementById('funcValeAlimentacao').value) || 0) : (existente?.valeAlimentacao || 0),
     planoSaude: podeVerRH ? (parseFloat(document.getElementById('funcPlanoSaude').value) || 0) : (existente?.planoSaude || 0),
     cafeAlmocoLanche: podeVerRH ? (parseFloat(document.getElementById('funcCafeAlmocoLanche').value) || 0) : (existente?.cafeAlmocoLanche || 0),
