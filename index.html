@@ -1480,7 +1480,7 @@
               <div class="step-note" style="padding:12px 16px 0;">PJ (Pessoa Jurídica) não tem encargos de CLT — o total é só o salário/pró-labore combinado, mais vale transporte e alimentação se houver. No futuro, a ideia é que os indiretos lancem as próprias horas por obra pelo Dashboard (Minhas tarefas / Horas livres); por enquanto, dá pra lançar manualmente aqui.</div>
               <table>
                 <thead><tr>
-                  <th>Nome</th><th>Função</th><th>Tipo</th><th>Obra(s) no mês</th><th>Total c/ encargos</th><th></th>
+                  <th>Nome</th><th>Função</th><th>Tipo</th><th>Mão de obra</th><th>Obra(s) no mês</th><th>Total c/ encargos</th><th></th>
                 </tr></thead>
                 <tbody id="rateioTableBody"></tbody>
               </table>
@@ -1507,6 +1507,28 @@
                 <button class="btn" onclick="ratearFabrica()">Ratear Fábrica pelas obras</button>
               </div>
               <div id="fabricaRateioResultado" style="margin-top:14px;"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">Rateio do Administrativo pelas obras (por % de Mão de Obra CLT)</div>
+            <div class="panel-body">
+              <div class="step-note" style="margin-bottom:12px;">Lance o rateio do funcionário Administrativo normalmente (salário, encargos etc.), alocando provisoriamente numa obra qualquer só pra poder salvar. Aqui, o total com encargos dele naquele mês é redistribuído entre as obras — não por dias/horas, mas proporcional ao quanto de mão de obra CLT (dos demais funcionários) cada obra já teve alocado no mês. Sobrescreve a alocação anterior desse funcionário.</div>
+              <div class="form-grid cols-3">
+                <div class="field">
+                  <label>Funcionário Administrativo</label>
+                  <select id="admFuncionarioId" onchange="renderAdmRateio()"></select>
+                </div>
+                <div class="field">
+                  <label>Total com encargos no mês</label>
+                  <input type="text" id="admCustoTotal" readonly style="background:#f6f5f3;">
+                </div>
+              </div>
+              <div id="admDistribuicaoWrap" style="margin-top:12px;"></div>
+              <div class="form-actions">
+                <button class="btn" onclick="ratearAdm()">Ratear Administrativo pelas obras</button>
+              </div>
+              <div id="admRateioResultado" style="margin-top:14px;"></div>
             </div>
           </div>
         </div>
@@ -1828,7 +1850,7 @@
       <div class="form-grid">
         <div class="field full"><label>Nome completo</label><input type="text" id="funcNome"></div>
         <div class="field"><label>Matrícula</label><input type="text" id="funcMatricula"></div>
-        <div class="field"><label>Função / cargo</label><input type="text" id="funcCargo"></div>
+        <div class="field"><label>Função / cargo</label><input type="text" id="funcCargo" oninput="atualizarAcessoRHConformeCargo()"></div>
         <div class="field">
           <label>Setor</label>
           <select id="funcSetor"></select>
@@ -1851,8 +1873,16 @@
           <label>Tipo de vínculo</label>
           <select id="funcTipoVinculo" onchange="toggleTipoVinculoFuncionario()">
             <option value="clt">CLT</option>
-            <option value="pj">PJ (Indireto)</option>
+            <option value="pj">PJ</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Classificação da mão de obra</label>
+          <select id="funcTipoMaoDeObra">
+            <option value="direta">Direta (execução na obra)</option>
+            <option value="indireta">Indireta (administrativa/apoio)</option>
+          </select>
+          <small class="hint">Usada pra separar mão de obra direta e indireta nos relatórios de Rateio.</small>
         </div>
       </div>
       <hr class="divider">
@@ -1914,6 +1944,7 @@
         <div class="field"><label>Café da manhã (R$)</label><input type="number" id="rateioCafeManha" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Almoço (R$)</label><input type="number" id="rateioAlmoco" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Lanche (R$)</label><input type="number" id="rateioLanche" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field"><label>Treinamentos e Exames (R$)</label><input type="number" id="rateioTreinamentosExames" step="0.01" oninput="atualizarPreviewRateio()" placeholder="Ex.: PCMSO, ASO, treinamento NR"></div>
       </div>
 
       <hr class="divider">
@@ -2062,10 +2093,12 @@
 
       <hr class="divider">
       <h4 style="font-family:var(--serif);margin:0 0 6px;">Itens do pedido</h4>
-      <div class="step-note" style="margin-bottom:10px;">Um mesmo pedido pode ter vários itens/materiais — cada um com sua própria quantidade e acompanhamento de entregas.</div>
+      <div class="step-note" style="margin-bottom:10px;">Um mesmo pedido pode ter vários itens/materiais — cada um com sua própria quantidade e acompanhamento de entregas. Você pode preencher manualmente ou importar de uma planilha (Excel ou CSV) com as colunas Item, Quantidade e Unidade.</div>
       <div id="itensPedidoBody"></div>
       <div class="form-actions" style="margin-top:8px;justify-content:flex-start;">
         <button type="button" class="btn small secondary" onclick="adicionarLinhaItemPedido()">+ Adicionar item</button>
+        <button type="button" class="btn small secondary" onclick="document.getElementById('itensPedidoImportInput').click()">📥 Importar planilha</button>
+        <input type="file" id="itensPedidoImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importarPlanilhaItensPedido(this)">
       </div>
 
       <div class="form-actions">
@@ -2246,6 +2279,7 @@
 <div id="rdoPrintArea"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 /* ============================================================
    SGPT — Sistema de Gestão de Projetos e Técnica (Calper)
@@ -3855,12 +3889,21 @@ function calcularEncargosMaoDeObra(funcionario, dados){
     ? (cafeManha + almoco + lanche)
     : (dados.alimentacao !== undefined ? (parseFloat(dados.alimentacao) || 0) : (parseFloat(funcionario && funcionario.valeAlimentacao) || 0));
 
+  // Treinamentos e Exames (PCMSO, ASO, treinamento NR): agora é um valor
+  // único informado manualmente mês a mês — nem todo mês tem exame ou
+  // treinamento, então não faz sentido puxar sempre o valor fixo do
+  // cadastro. Se não vier em `dados`, cai no somatório fixo do funcionário
+  // (compatibilidade com rateios salvos antes dessa mudança).
+  const treinamentosExames = dados.treinamentosExames !== undefined
+    ? (parseFloat(dados.treinamentosExames) || 0)
+    : ((parseFloat(funcionario && funcionario.pcmso) || 0) + (parseFloat(funcionario && funcionario.exameAso) || 0) + (parseFloat(funcionario && funcionario.treinamentoNr) || 0));
+
   // PJ (Pessoa Jurídica) não tem encargos de CLT — nada de GPS, FGTS, SECONCI,
   // provisões de 13º/férias/aviso prévio. O custo é só o que foi combinado:
   // salário/pró-labore + vale transporte/alimentação, se houver.
   if(funcionario && funcionario.tipoVinculo === 'pj'){
-    const totalComEncargos = salarioBruto + valeTransporte + passagemHoraExtra + alimentacao;
-    return { salarioBruto, gps:0, fgts:0, seconci:0, seguroVida:0, pcmso:0, exameAso:0, treinamentoNr:0, provisao13:0, ferias:0,
+    const totalComEncargos = salarioBruto + valeTransporte + passagemHoraExtra + alimentacao + treinamentosExames;
+    return { salarioBruto, gps:0, fgts:0, seconci:0, seguroVida:0, pcmso:0, exameAso:0, treinamentoNr:0, treinamentosExames, provisao13:0, ferias:0,
       avisoPrevio:0, gpsSobreProvisoes:0, fgtsRescisorio:0, valeTransporte, passagemHoraExtra, alimentacao, cafeManha, almoco, lanche,
       planoSaude:0, cafeAlmocoLanche:0, totalComEncargos };
   }
@@ -3869,9 +3912,6 @@ function calcularEncargosMaoDeObra(funcionario, dados){
   const fgts = salarioBruto * 0.12;
   const seconci = salarioBruto * 0.015;
   const seguroVida = parseFloat(funcionario && funcionario.seguroVida) || 0;
-  const pcmso = parseFloat(funcionario && funcionario.pcmso) || 0;
-  const exameAso = parseFloat(funcionario && funcionario.exameAso) || 0;
-  const treinamentoNr = parseFloat(funcionario && funcionario.treinamentoNr) || 0;
   const provisao13 = salarioBruto / 12;
   const ferias = provisao13 / 3;
   const avisoPrevio = salarioBruto / 12;
@@ -3880,11 +3920,11 @@ function calcularEncargosMaoDeObra(funcionario, dados){
   const planoSaude = parseFloat(funcionario && funcionario.planoSaude) || 0;
   const cafeAlmocoLanche = parseFloat(funcionario && funcionario.cafeAlmocoLanche) || 0;
 
-  const totalComEncargos = salarioBruto + gps + fgts + seconci + seguroVida + pcmso + exameAso + treinamentoNr +
+  const totalComEncargos = salarioBruto + gps + fgts + seconci + seguroVida + treinamentosExames +
     provisao13 + ferias + avisoPrevio + gpsSobreProvisoes + fgtsRescisorio +
     valeTransporte + passagemHoraExtra + alimentacao + planoSaude + cafeAlmocoLanche;
 
-  return { salarioBruto, gps, fgts, seconci, seguroVida, pcmso, exameAso, treinamentoNr, provisao13, ferias,
+  return { salarioBruto, gps, fgts, seconci, seguroVida, treinamentosExames, provisao13, ferias,
     avisoPrevio, gpsSobreProvisoes, fgtsRescisorio, valeTransporte, passagemHoraExtra, alimentacao, cafeManha, almoco, lanche,
     planoSaude, cafeAlmocoLanche, totalComEncargos };
 }
@@ -4031,7 +4071,8 @@ function atualizarPreviewRateio(){
     passagemHoraExtra: document.getElementById('rateioPassagemHoraExtra').value,
     cafeManha: document.getElementById('rateioCafeManha').value,
     almoco: document.getElementById('rateioAlmoco').value,
-    lanche: document.getElementById('rateioLanche').value
+    lanche: document.getElementById('rateioLanche').value,
+    treinamentosExames: document.getElementById('rateioTreinamentosExames').value
   };
   const e = calcularEncargosMaoDeObra(funcionario, dados);
   const obras = load('obras');
@@ -4051,7 +4092,8 @@ function atualizarPreviewRateio(){
       <div class="result-item"><div class="k">SECONCI (1,5%)</div><div class="v small">${fmtMoeda(e.seconci)}</div></div>
       <div class="result-item"><div class="k">Provisão 13º + Férias + Aviso Prévio</div><div class="v small">${fmtMoeda(e.provisao13+e.ferias+e.avisoPrevio)}</div></div>
       <div class="result-item"><div class="k">GPS s/ Provisões + FGTS Rescisório</div><div class="v small">${fmtMoeda(e.gpsSobreProvisoes+e.fgtsRescisorio)}</div></div>
-      <div class="result-item"><div class="k">Benefícios fixos (seguro, PCMSO, ASO, treinamentos NR, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.pcmso+e.exameAso+e.treinamentoNr+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
+      <div class="result-item"><div class="k">Benefícios fixos (seguro, plano, refeição)</div><div class="v small">${fmtMoeda(e.seguroVida+e.planoSaude+e.cafeAlmocoLanche)}</div></div>
+      <div class="result-item"><div class="k">Treinamentos e Exames (PCMSO, ASO, NR)</div><div class="v small">${fmtMoeda(e.treinamentosExames)}</div></div>
       <div class="result-item"><div class="k">Vale transporte</div><div class="v small">${fmtMoeda(e.valeTransporte)}</div></div>
       <div class="result-item"><div class="k">Passagem de hora extra</div><div class="v small">${fmtMoeda(e.passagemHoraExtra)}</div></div>
       <div class="result-item"><div class="k">Café, almoço e lanche</div><div class="v small">${fmtMoeda(e.alimentacao)}</div></div>
@@ -4068,6 +4110,7 @@ function openRateioModal(funcionarioId){
   if(!mes){ toast('Selecione o mês de referência antes de lançar o rateio.'); return; }
   const funcionario = load('funcionarios').find(f=>f.id===funcionarioId);
   if(!funcionario){ toast('Funcionário não encontrado.'); return; }
+  if(!temAcessoSalarioFuncionario(funcionario)){ toast('Salário de Coordenador e Gerente é visível apenas ao Gerente.'); return; }
 
   const ehPJ = funcionario.tipoVinculo === 'pj';
   document.getElementById('modalRateioTitle').textContent = `Rateio — ${funcionario.nome} (${mesLabelCurto(mes)})`;
@@ -4078,7 +4121,7 @@ function openRateioModal(funcionarioId){
   tempAlocacoesRateio = [];
   tempAtestadoRateio = null;
 
-  const campos = ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte','rateioPassagemHoraExtra','rateioCafeManha','rateioAlmoco','rateioLanche','rateioHorasAtraso','rateioFaltasJustificadas','rateioFaltasNaoJustificadas'];
+  const campos = ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte','rateioPassagemHoraExtra','rateioCafeManha','rateioAlmoco','rateioLanche','rateioTreinamentosExames','rateioHorasAtraso','rateioFaltasJustificadas','rateioFaltasNaoJustificadas'];
 
   const existente = load('rateiosMaoDeObra').find(r=>r.funcionarioId===funcionarioId && r.mes===mes);
   if(existente){
@@ -4091,6 +4134,7 @@ function openRateioModal(funcionarioId){
     document.getElementById('rateioCafeManha').value = existente.cafeManha || '';
     document.getElementById('rateioAlmoco').value = existente.almoco || '';
     document.getElementById('rateioLanche').value = existente.lanche || '';
+    document.getElementById('rateioTreinamentosExames').value = existente.treinamentosExames || '';
     document.getElementById('rateioHorasAtraso').value = existente.horasAtraso || '';
     document.getElementById('rateioFaltasJustificadas').value = existente.faltasJustificadas || '';
     document.getElementById('rateioFaltasNaoJustificadas').value = existente.faltasNaoJustificadas || '';
@@ -4107,6 +4151,11 @@ function openRateioModal(funcionarioId){
       if(funcionario.salarioBaseReferencia) document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
       if(funcionario.valeTransporteReferencia) document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
       if(funcionario.valeAlimentacao) document.getElementById('rateioAlmoco').value = funcionario.valeAlimentacao;
+      // Treinamentos e Exames vem sugerido a partir do que está fixo no
+      // cadastro (PCMSO+ASO+NR), mas o Gerente/RH ajusta mês a mês — nem
+      // todo mês tem exame ou treinamento de verdade.
+      const sugestaoTreinamentos = (parseFloat(funcionario.pcmso)||0) + (parseFloat(funcionario.exameAso)||0) + (parseFloat(funcionario.treinamentoNr)||0);
+      if(sugestaoTreinamentos) document.getElementById('rateioTreinamentosExames').value = sugestaoTreinamentos;
     }
   }
   document.getElementById('rateioAtestadoInput').value = '';
@@ -4138,7 +4187,8 @@ function saveRateio(){
     passagemHoraExtra: document.getElementById('rateioPassagemHoraExtra').value,
     cafeManha: document.getElementById('rateioCafeManha').value,
     almoco: document.getElementById('rateioAlmoco').value,
-    lanche: document.getElementById('rateioLanche').value
+    lanche: document.getElementById('rateioLanche').value,
+    treinamentosExames: document.getElementById('rateioTreinamentosExames').value
   };
   const encargos = calcularEncargosMaoDeObra(funcionario, dados);
   const totalPeso = calcularTotalPeso(alocacoesValidas);
@@ -4185,6 +4235,7 @@ function saveRateio(){
     cafeManha: parseFloat(dados.cafeManha)||0,
     almoco: parseFloat(dados.almoco)||0,
     lanche: parseFloat(dados.lanche)||0,
+    treinamentosExames: parseFloat(dados.treinamentosExames)||0,
     horasAtraso: parseFloat(document.getElementById('rateioHorasAtraso').value)||0,
     faltasJustificadas: parseInt(document.getElementById('rateioFaltasJustificadas').value)||0,
     faltasNaoJustificadas: parseInt(document.getElementById('rateioFaltasNaoJustificadas').value)||0,
@@ -4203,6 +4254,8 @@ function saveRateio(){
 }
 
 function deleteRateio(funcionarioId, mes){
+  const funcionario = load('funcionarios').find(f=>f.id===funcionarioId);
+  if(!temAcessoSalarioFuncionario(funcionario)){ toast('Salário de Coordenador e Gerente é visível apenas ao Gerente.'); return; }
   if(!confirm('Excluir este rateio? As despesas correspondentes em todas as obras alocadas também serão removidas.')) return;
   const rateio = load('rateiosMaoDeObra').find(r=>r.funcionarioId===funcionarioId && r.mes===mes);
   if(rateio){
@@ -4236,7 +4289,25 @@ function renderRateioMaoDeObra(){
   document.getElementById('rateioEmpty').style.display = funcionariosLista.length ? 'none' : 'block';
   document.getElementById('rateioTableBody').innerHTML = funcionariosLista.map(f=>{
     const ehPJ = f.tipoVinculo === 'pj';
+    const ehIndireta = f.tipoMaoDeObra === 'indireta';
+    const podeVerSalario = temAcessoSalarioFuncionario(f);
     const rateio = filtroMes ? rateios.find(r=>r.funcionarioId===f.id) : null;
+
+    if(!podeVerSalario){
+      // Coordenador/Gerente: nem Administrativo nem RH/DP enxergam valores
+      // nem conseguem abrir o rateio — só o Gerente.
+      const temRateio = !!rateio;
+      return `<tr>
+        <td><strong>${esc(f.nome)}</strong></td>
+        <td>${esc(f.cargo||'—')}</td>
+        <td><span class="tag">${ehPJ ? 'PJ' : 'CLT'}</span></td>
+        <td><span class="tag">${ehIndireta ? 'Indireta' : 'Direta'}</span></td>
+        <td><span class="step-note">🔒 Acesso restrito ao Gerente</span></td>
+        <td>🔒</td>
+        <td style="text-align:right;white-space:nowrap;"><span class="step-note">${!filtroMes ? 'Selecione o mês' : (temRateio ? 'Rateio já lançado' : 'Sem rateio lançado')}</span></td>
+      </tr>`;
+    }
+
     const obrasTexto = rateio ? (rateio.alocacoes||[]).map(a=>{
       const o = obras.find(x=>x.id===a.obraId);
       return `${esc(o?o.nome:'—')} (${fmtMoeda(a.valor)})`;
@@ -4251,6 +4322,7 @@ function renderRateioMaoDeObra(){
       <td><strong>${esc(f.nome)}</strong></td>
       <td>${esc(f.cargo||'—')}</td>
       <td><span class="tag">${ehPJ ? 'PJ' : 'CLT'}</span></td>
+      <td><span class="tag">${ehIndireta ? 'Indireta' : 'Direta'}</span></td>
       <td>${obrasTexto}</td>
       <td><strong>${rateio ? fmtMoeda(rateio.totalComEncargos) : '—'}</strong></td>
       <td style="text-align:right;white-space:nowrap;">${acoes}</td>
@@ -4259,6 +4331,7 @@ function renderRateioMaoDeObra(){
 
   renderFabricaObraSelect();
   refreshRateioFiltroObraRelatorio();
+  refreshAdmFuncionarioSelect();
 }
 
 function refreshRateioFiltroObraRelatorio(){
@@ -4286,7 +4359,8 @@ function calcularRelatorioRateioPorObra(mes){
     const encargos = calcularEncargosMaoDeObra(funcionario, {
       salarioBase: r.salarioBase, horaExtra: r.horaExtra, horaPremio: r.horaPremio,
       valeTransporte: r.valeTransporte, passagemHoraExtra: r.passagemHoraExtra,
-      cafeManha: r.cafeManha, almoco: r.almoco, lanche: r.lanche, alimentacao: r.alimentacao
+      cafeManha: r.cafeManha, almoco: r.almoco, lanche: r.lanche, alimentacao: r.alimentacao,
+      treinamentosExames: r.treinamentosExames
     });
     const alocacoes = r.alocacoes || [];
     const totalPeso = alocacoes.reduce((s,a)=> s + (parseFloat(a.peso)||0), 0);
@@ -4296,21 +4370,25 @@ function calcularRelatorioRateioPorObra(mes){
       porObra[a.obraId].linhas.push({
         funcionario: funcionario.nome + (funcionario.tipoVinculo==='pj' ? ' (PJ)' : ''),
         cargo: funcionario.cargo,
+        tipoMaoDeObra: funcionario.tipoMaoDeObra || 'direta',
         proporcao: prop,
         salarioBruto: encargos.salarioBruto*prop,
         gps: encargos.gps*prop,
         fgts: encargos.fgts*prop,
         seconci: encargos.seconci*prop,
         provisoes: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
-        beneficios: (encargos.seguroVida+encargos.pcmso+encargos.exameAso+encargos.treinamentoNr+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
+        beneficios: (encargos.seguroVida+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
         valeTransporte: encargos.valeTransporte*prop,
         alimentacao: encargos.alimentacao*prop,
         // Agrupamento em 5 categorias, usado no Relatório — Resumo por obra:
         salariosBaseExtra: encargos.salarioBruto*prop,
-        encargosPct: (encargos.gps+encargos.fgts+encargos.seconci+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
+        encargosPct: (encargos.gps+encargos.fgts+encargos.seconci)*prop,
         alimentacaoTransporte: (encargos.alimentacao+encargos.valeTransporte+encargos.passagemHoraExtra+encargos.seguroVida+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
-        treinamentosExames: (encargos.pcmso+encargos.exameAso+encargos.treinamentoNr)*prop,
-        provisionamentos: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio)*prop,
+        treinamentosExames: encargos.treinamentosExames*prop,
+        // Provisionamentos = Provisão 13º + Férias + Aviso Prévio Indenizado
+        // + GPS sobre Provisões + FGTS Rescisório (mesmo agrupamento da
+        // planilha de rateio da divisão).
+        provisionamentos: (encargos.provisao13+encargos.ferias+encargos.avisoPrevio+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
         total: a.valor || 0
       });
       porObra[a.obraId].totalObra += (a.valor || 0);
@@ -4337,6 +4415,7 @@ function calcularRelatorioRateioPorObra(mes){
       porObra[obraId].linhas.push({
         funcionario: 'Rateio da Fábrica',
         cargo: `${kgNum.toFixed(0)} Kg produzidos (${(prop*100).toFixed(1)}% do total)`,
+        tipoMaoDeObra: 'indireta',
         proporcao: prop,
         salarioBruto: 0, gps: 0, fgts: 0, seconci: 0, provisoes: 0, beneficios: 0, valeTransporte: 0, alimentacao: 0,
         salariosBaseExtra: 0, encargosPct: 0, alimentacaoTransporte: 0, treinamentosExames: 0, provisionamentos: valor,
@@ -4375,6 +4454,20 @@ function gerarRelatorioRateioResumo(){
   }
 
   let totalGeral = 0, totSalarios=0, totEncargos=0, totAlimentacao=0, totTreinamentos=0, totProvisionamentos=0;
+  let totDireta=0, totIndireta=0;
+  const linhasDiretaIndireta = chaves.map(id=>{
+    const g = porObra[id];
+    const direta = g.linhas.filter(l=>(l.tipoMaoDeObra||'direta')==='direta').reduce((s,l)=>s+(l.total||0),0);
+    const indireta = g.linhas.filter(l=>(l.tipoMaoDeObra||'direta')==='indireta').reduce((s,l)=>s+(l.total||0),0);
+    totDireta+=direta; totIndireta+=indireta;
+    return `<tr>
+      <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td>
+      <td>${fmtMoeda(direta)}</td>
+      <td>${fmtMoeda(indireta)}</td>
+      <td><strong>${fmtMoeda(direta+indireta)}</strong></td>
+    </tr>`;
+  }).join('');
+
   const linhas = chaves.map(id=>{
     const g = porObra[id];
     totalGeral += g.totalObra;
@@ -4408,6 +4501,14 @@ function gerarRelatorioRateioResumo(){
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
       Inclui o custo da Fábrica já rateado entre as obras conforme o % de Kg produzido. Alimentação inclui vale transporte, passagem de hora extra, seguro de vida e plano de saúde; Treinamentos e Exames inclui PCMSO, ASO e treinamentos NR; Provisionamentos inclui 13º, férias e aviso prévio.
     </div>
+    <h2>Mão de obra Direta x Indireta</h2>
+    <div class="step-note" style="margin-bottom:8px;">Direta = execução na obra (classificação do cadastro do funcionário). Indireta = administrativo/apoio, inclusive o custo da Fábrica já rateado.</div>
+    <table>
+      <thead><tr><th>Obra</th><th>Direta</th><th>Indireta</th><th>Total</th></tr></thead>
+      <tbody>${linhasDiretaIndireta || '<tr><td colspan="4">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
+      <tfoot><tr><td>TOTAL GERAL</td><td>${fmtMoeda(totDireta)}</td><td>${fmtMoeda(totIndireta)}</td><td>${fmtMoeda(totDireta+totIndireta)}</td></tr></tfoot>
+    </table>
+    <h2>Detalhamento por categoria de custo</h2>
     <table>
       <thead><tr>
         <th>Obra</th><th>Funcionários</th><th>Salários (base+extra)</th><th>Encargos</th>
@@ -4438,28 +4539,38 @@ function gerarRelatorioRateioCompleto(){
     return;
   }
 
+  const podeVerRestritos = souGerente();
   const secoes = chaves.map(id=>{
     const g = porObra[id];
     totalGeral += g.totalObra;
-    const linhasHtml = g.linhas.map(l=>`
+    const linhasHtml = g.linhas.map(l=>{
+      const restrito = ehCargoSalarioRestrito(l.cargo) && !podeVerRestritos;
+      if(restrito){
+        return `<tr>
+          <td colspan="12" class="step-note">🔒 Salário de Coordenador/Gerente — visível apenas ao Gerente (valor incluído no total da obra acima)</td>
+        </tr>`;
+      }
+      return `
       <tr>
-        <td>${esc(l.funcionario)}${l.cargo?' — '+esc(l.cargo):''}</td>
+        <td>${esc(l.funcionario)}${l.cargo?' — '+esc(l.cargo):''} <span class="tag">${(l.tipoMaoDeObra||'direta')==='indireta'?'Indireta':'Direta'}</span></td>
         <td>${(l.proporcao*100).toFixed(1)}%</td>
         <td>${fmtMoeda(l.salarioBruto)}</td>
         <td>${fmtMoeda(l.gps)}</td>
         <td>${fmtMoeda(l.fgts)}</td>
         <td>${fmtMoeda(l.seconci)}</td>
         <td>${fmtMoeda(l.provisoes)}</td>
+        <td>${fmtMoeda(l.treinamentosExames)}</td>
         <td>${fmtMoeda(l.beneficios)}</td>
         <td>${fmtMoeda(l.valeTransporte)}</td>
         <td>${fmtMoeda(l.alimentacao)}</td>
         <td><strong>${fmtMoeda(l.total)}</strong></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     return `<h2>${esc(g.obra ? g.obra.nome : 'Obra removida')} — Total: ${fmtMoeda(g.totalObra)}</h2>
       <table>
         <thead><tr>
           <th>Funcionário</th><th>% Alocado</th><th>Sal. Bruto</th><th>GPS (45%)</th><th>FGTS (12%)</th>
-          <th>SECONCI (1,5%)</th><th>Provisões</th><th>Benefícios</th><th>V. Transp.</th><th>Alimentação</th><th>Total</th>
+          <th>SECONCI (1,5%)</th><th>Provisões</th><th>Treinamentos/Exames</th><th>Benefícios</th><th>V. Transp.</th><th>Alimentação</th><th>Total</th>
         </tr></thead>
         <tbody>${linhasHtml}</tbody>
       </table>`;
@@ -4654,6 +4765,129 @@ function ratearFabrica(){
 
   renderFabricaRateio();
   toast('Custo da Fábrica rateado entre as obras.');
+}
+
+/* ---------------- Rateio do Administrativo pelas obras (por % de mão de
+   obra CLT) ----------------
+   Diferente da Fábrica (que tem uma tabela própria de rateios), aqui a
+   alocação do funcionário Administrativo é sobrescrita diretamente no
+   registro dele em rateiosMaoDeObra — assim ele continua aparecendo e
+   podendo ser editado/excluído normalmente na lista principal do Rateio. */
+function refreshAdmFuncionarioSelect(){
+  const sel = document.getElementById('admFuncionarioId');
+  if(!sel) return;
+  const valorAtual = sel.value;
+  const funcionarios = load('funcionarios').filter(f=>f.status==='ativo' && (f.tipoVinculo||'clt')!=='pj');
+  sel.innerHTML = '<option value="">Selecione</option>' + funcionarios.map(f=>`<option value="${f.id}">${esc(f.nome)}${f.cargo?' — '+esc(f.cargo):''}</option>`).join('');
+  if(valorAtual && funcionarios.some(f=>f.id===valorAtual)) sel.value = valorAtual;
+  renderAdmRateio();
+}
+
+// Soma quanto de mão de obra CLT (dos demais funcionários, excluindo o
+// próprio Administrativo) foi alocado em cada obra naquele mês — essa
+// distribuição vira a base proporcional do rateio do Administrativo.
+function calcularCltLaborPorObra(mes, excluirFuncionarioId){
+  const funcionarios = load('funcionarios');
+  const porObra = {};
+  load('rateiosMaoDeObra').filter(r=>r.mes===mes && r.funcionarioId!==excluirFuncionarioId).forEach(r=>{
+    const f = funcionarios.find(x=>x.id===r.funcionarioId);
+    if(!f || f.tipoVinculo==='pj') return;
+    (r.alocacoes||[]).forEach(a=>{
+      porObra[a.obraId] = (porObra[a.obraId]||0) + (a.valor||0);
+    });
+  });
+  return porObra;
+}
+
+function renderAdmRateio(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  const admFuncionarioId = document.getElementById('admFuncionarioId').value;
+  const wrap = document.getElementById('admDistribuicaoWrap');
+  const resultado = document.getElementById('admRateioResultado');
+  if(!wrap) return;
+
+  if(!mes || !admFuncionarioId){
+    document.getElementById('admCustoTotal').value = '';
+    wrap.innerHTML = '<div class="step-note">Selecione o mês (acima) e o funcionário Administrativo.</div>';
+    resultado.innerHTML = '';
+    return;
+  }
+
+  const rateioAdm = load('rateiosMaoDeObra').find(r=>r.mes===mes && r.funcionarioId===admFuncionarioId);
+  if(!rateioAdm){
+    document.getElementById('admCustoTotal').value = '—';
+    wrap.innerHTML = '<div class="step-note">Esse funcionário ainda não tem rateio lançado neste mês. Lance o rateio dele primeiro (na lista acima, com uma alocação provisória em qualquer obra) e depois volte aqui.</div>';
+    resultado.innerHTML = '';
+    return;
+  }
+
+  document.getElementById('admCustoTotal').value = fmtMoeda(rateioAdm.totalComEncargos);
+
+  const cltPorObra = calcularCltLaborPorObra(mes, admFuncionarioId);
+  const obras = load('obras');
+  const chaves = Object.keys(cltPorObra).filter(id=>cltPorObra[id]>0);
+  const totalClt = chaves.reduce((s,id)=>s+cltPorObra[id],0);
+
+  if(!chaves.length){
+    wrap.innerHTML = '<div class="step-note">Nenhuma outra obra tem mão de obra CLT alocada neste mês ainda — lance o rateio dos demais funcionários primeiro.</div>';
+    resultado.innerHTML = '';
+    return;
+  }
+
+  wrap.innerHTML = `<table>
+    <thead><tr><th>Obra</th><th>Mão de obra CLT no mês</th><th>% do total</th><th>Valor do ADM alocado</th></tr></thead>
+    <tbody>
+      ${chaves.map(id=>{
+        const o = obras.find(x=>x.id===id);
+        const pct = totalClt>0 ? (cltPorObra[id]/totalClt*100) : 0;
+        const valorAdm = rateioAdm.totalComEncargos * (cltPorObra[id]/totalClt);
+        return `<tr><td>${esc(o?o.nome:'—')}</td><td>${fmtMoeda(cltPorObra[id])}</td><td>${pct.toFixed(1)}%</td><td>${fmtMoeda(valorAdm)}</td></tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+  resultado.innerHTML = '';
+}
+
+function ratearAdm(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  const admFuncionarioId = document.getElementById('admFuncionarioId').value;
+  if(!mes){ toast('Selecione o mês de referência.'); return; }
+  if(!admFuncionarioId){ toast('Selecione o funcionário Administrativo.'); return; }
+
+  let rateios = load('rateiosMaoDeObra');
+  const idx = rateios.findIndex(r=>r.mes===mes && r.funcionarioId===admFuncionarioId);
+  if(idx<0){ toast('Lance o rateio desse funcionário primeiro (com uma alocação provisória).'); return; }
+  const rateioAdm = rateios[idx];
+
+  const cltPorObra = calcularCltLaborPorObra(mes, admFuncionarioId);
+  const chaves = Object.keys(cltPorObra).filter(id=>cltPorObra[id]>0);
+  const totalClt = chaves.reduce((s,id)=>s+cltPorObra[id],0);
+  if(!chaves.length || totalClt<=0){ toast('Nenhuma outra obra tem mão de obra CLT alocada neste mês ainda.'); return; }
+
+  let lancamentos = load('lancamentosFinanceiros');
+  // Remove os lançamentos da alocação anterior desse rateio (a provisória
+  // ou de um rateio anterior), antes de criar os novos redistribuídos.
+  const idsAntigos = (rateioAdm.alocacoes||[]).map(a=>a.lancamentoId).filter(Boolean);
+  lancamentos = lancamentos.filter(l=>!idsAntigos.includes(l.id));
+
+  const funcionario = load('funcionarios').find(f=>f.id===admFuncionarioId);
+  const descricaoBase = `Rateio mão de obra — ${funcionario ? funcionario.nome : ''} (${mesLabelCurto(mes)})`;
+  const obras = load('obras');
+  const novasAlocacoes = chaves.map(obraId=>{
+    const valor = rateioAdm.totalComEncargos * (cltPorObra[obraId]/totalClt);
+    const obra = obras.find(o=>o.id===obraId);
+    const novoId = uid();
+    lancamentos.push({ id: novoId, obraId, tipo:'despesa', categoria:'maoDeObra', descricao: `${descricaoBase} — ${obra?obra.nome:''}`, valor, data: mes+'-01' });
+    return { obraId, peso: cltPorObra[obraId], valor, lancamentoId: novoId };
+  });
+  save('lancamentosFinanceiros', lancamentos);
+
+  rateios[idx] = { ...rateioAdm, alocacoes: novasAlocacoes };
+  save('rateiosMaoDeObra', rateios);
+
+  renderRateioMaoDeObra();
+  renderAdmRateio();
+  toast('Rateio do Administrativo redistribuído proporcionalmente à mão de obra CLT.');
 }
 
 
@@ -5126,10 +5360,15 @@ function openFuncionarioModal(id){
   document.getElementById('funcGerente').value = 'nao';
   document.getElementById('funcSetor').value = '';
   document.getElementById('funcTipoVinculo').value = 'clt';
+  document.getElementById('funcTipoMaoDeObra').value = 'direta';
 
-  const podeVerRH = temAcessoRH();
+  const f = id ? load('funcionarios').find(x=>x.id===id) : null;
+  const podeVerRH = temAcessoSalarioFuncionario(f);
   document.getElementById('funcRHSemAcesso').style.display = podeVerRH ? 'none' : 'block';
   document.getElementById('funcRHConteudo').style.display = podeVerRH ? 'block' : 'none';
+  document.getElementById('funcRHSemAcesso').innerHTML = (f && ehCargoSalarioRestrito(f.cargo))
+    ? '<div class="big">🔒</div>Acesso restrito.<br><div class="step-note" style="margin-top:6px;">Salário e benefícios de Coordenador e Gerente são visíveis apenas ao Gerente.</div>'
+    : '<div class="big">🔒</div>Acesso restrito.<br><div class="step-note" style="margin-top:6px;">Salário, benefícios e encargos são visíveis apenas para os perfis Gerente, RH, DP e Administrativo.</div>';
 
   // Funcionário CLT novo já vem com os valores padrão da divisão pra Seguro
   // de Vida e PCMSO — evita ter que lembrar/redigitar em todo cadastro.
@@ -5138,37 +5377,47 @@ function openFuncionarioModal(id){
     document.getElementById('funcPcmso').value = 40.00;
   }
 
-  if(id){
-    const f = load('funcionarios').find(x=>x.id===id);
-    if(f){
-      document.getElementById('funcId').value = f.id;
-      document.getElementById('funcNome').value = f.nome||'';
-      document.getElementById('funcMatricula').value = f.matricula||'';
-      document.getElementById('funcCargo').value = f.cargo||'';
-      document.getElementById('funcSetor').value = f.setor||'';
-      document.getElementById('funcAdmissao').value = f.dataAdmissao||'';
-      document.getElementById('funcTelefone').value = f.telefone||'';
-      document.getElementById('funcEmail').value = f.email||'';
-      document.getElementById('funcStatus').value = f.status||'ativo';
-      document.getElementById('funcGerente').value = f.gerente ? 'sim' : 'nao';
-      document.getElementById('funcTipoVinculo').value = f.tipoVinculo || 'clt';
-      if(podeVerRH){
-        document.getElementById('funcSalarioBaseRef').value = f.salarioBaseReferencia||'';
-        document.getElementById('funcValeTransporteRef').value = f.valeTransporteReferencia||'';
-        document.getElementById('funcSeguroVida').value = f.seguroVida||'';
-        document.getElementById('funcPcmso').value = f.pcmso||'';
-        document.getElementById('funcExameAso').value = f.exameAso||'';
-        document.getElementById('funcTreinamentoNr').value = f.treinamentoNr||'';
-        document.getElementById('funcValeAlimentacao').value = f.valeAlimentacao||'';
-        document.getElementById('funcPlanoSaude').value = f.planoSaude||'';
-        document.getElementById('funcCafeAlmocoLanche').value = f.cafeAlmocoLanche||'';
-        document.getElementById('funcPjSalario').value = f.pjSalario||'';
-        document.getElementById('funcPjBeneficios').value = f.pjBeneficios||'';
-      }
+  if(f){
+    document.getElementById('funcId').value = f.id;
+    document.getElementById('funcNome').value = f.nome||'';
+    document.getElementById('funcMatricula').value = f.matricula||'';
+    document.getElementById('funcCargo').value = f.cargo||'';
+    document.getElementById('funcSetor').value = f.setor||'';
+    document.getElementById('funcAdmissao').value = f.dataAdmissao||'';
+    document.getElementById('funcTelefone').value = f.telefone||'';
+    document.getElementById('funcEmail').value = f.email||'';
+    document.getElementById('funcStatus').value = f.status||'ativo';
+    document.getElementById('funcGerente').value = f.gerente ? 'sim' : 'nao';
+    document.getElementById('funcTipoMaoDeObra').value = f.tipoMaoDeObra || 'direta';
+    document.getElementById('funcTipoVinculo').value = f.tipoVinculo || 'clt';
+    if(podeVerRH){
+      document.getElementById('funcSalarioBaseRef').value = f.salarioBaseReferencia||'';
+      document.getElementById('funcValeTransporteRef').value = f.valeTransporteReferencia||'';
+      document.getElementById('funcSeguroVida').value = f.seguroVida||'';
+      document.getElementById('funcPcmso').value = f.pcmso||'';
+      document.getElementById('funcExameAso').value = f.exameAso||'';
+      document.getElementById('funcTreinamentoNr').value = f.treinamentoNr||'';
+      document.getElementById('funcValeAlimentacao').value = f.valeAlimentacao||'';
+      document.getElementById('funcPlanoSaude').value = f.planoSaude||'';
+      document.getElementById('funcCafeAlmocoLanche').value = f.cafeAlmocoLanche||'';
+      document.getElementById('funcPjSalario').value = f.pjSalario||'';
+      document.getElementById('funcPjBeneficios').value = f.pjBeneficios||'';
     }
   }
   toggleTipoVinculoFuncionario();
   openModal('modalFuncionario');
+}
+
+// Reavalia a visibilidade da seção de salário/RH enquanto a pessoa digita o
+// Cargo — importante pro caso de um cadastro NOVO virar "Coordenador" ou
+// "Gerente" ainda dentro do mesmo formulário, antes de salvar.
+function atualizarAcessoRHConformeCargo(){
+  const idAtual = document.getElementById('funcId').value;
+  const fExistente = idAtual ? load('funcionarios').find(x=>x.id===idAtual) : null;
+  const cargoDigitado = document.getElementById('funcCargo').value;
+  const podeVerRH = temAcessoSalarioFuncionario({ ...(fExistente||{}), cargo: cargoDigitado });
+  document.getElementById('funcRHSemAcesso').style.display = podeVerRH ? 'none' : 'block';
+  document.getElementById('funcRHConteudo').style.display = podeVerRH ? 'block' : 'none';
 }
 
 function saveFuncionario(){
@@ -5177,7 +5426,8 @@ function saveFuncionario(){
   const id = document.getElementById('funcId').value || uid();
   let funcs = load('funcionarios');
   const existente = funcs.find(f=>f.id===id);
-  const podeVerRH = temAcessoRH();
+  const cargoDigitado = document.getElementById('funcCargo').value.trim();
+  const podeVerRH = temAcessoSalarioFuncionario({ ...(existente||{}), cargo: cargoDigitado });
 
   const record = {
     id, nome,
@@ -5189,6 +5439,7 @@ function saveFuncionario(){
     email: document.getElementById('funcEmail').value.trim(),
     status: document.getElementById('funcStatus').value,
     gerente: document.getElementById('funcGerente').value === 'sim',
+    tipoMaoDeObra: document.getElementById('funcTipoMaoDeObra').value,
     // Campos de salário/benefício: só lidos do formulário se o usuário tem
     // acesso RH; sem acesso, preserva o que já estava salvo (o campo fica
     // oculto na tela, então nunca deve ser lido/zerado por quem não pode vê-lo).
@@ -6156,6 +6407,67 @@ function adicionarLinhaItemPedido(){
 function removerLinhaItemPedido(i){
   tempItensPedido.splice(i,1);
   renderTempItensPedido();
+}
+
+// Importa itens de uma planilha (Excel .xlsx/.xls ou CSV) — reconhece
+// colunas com nomes parecidos com Item/Material, Quantidade/Qtd e
+// Unidade/Un, sem exigir que a planilha siga um formato rígido.
+function importarPlanilhaItensPedido(inputEl){
+  const file = inputEl.files[0];
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    toast('Não foi possível carregar o leitor de planilhas. Verifique sua conexão e tente novamente.');
+    inputEl.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const primeiraAba = workbook.SheetNames[0];
+      const planilha = workbook.Sheets[primeiraAba];
+      const linhas = XLSX.utils.sheet_to_json(planilha, { defval: '' });
+
+      if(!linhas.length){
+        toast('A planilha está vazia ou não foi possível ler as linhas.');
+        inputEl.value = '';
+        return;
+      }
+
+      const normalizar = s => (s||'').toString().trim().toLowerCase();
+      let importados = 0;
+      linhas.forEach(linha=>{
+        const chaves = Object.keys(linha);
+        const chaveItem = chaves.find(k => ['item','material','descrição','descricao','produto'].includes(normalizar(k)));
+        const chaveQtd = chaves.find(k => ['quantidade','qtd','qtd pedida','quantidade pedida'].includes(normalizar(k)));
+        const chaveUnidade = chaves.find(k => ['unidade','un','und','unid'].includes(normalizar(k)));
+
+        const item = chaveItem ? String(linha[chaveItem]).trim() : '';
+        const qtdPedida = chaveQtd ? parseFloat(linha[chaveQtd]) : NaN;
+        const unidade = chaveUnidade ? String(linha[chaveUnidade]).trim() : '';
+
+        if(item && qtdPedida > 0){
+          tempItensPedido.push({ id: uid(), item, qtdPedida, unidade, entregas: [] });
+          importados++;
+        }
+      });
+
+      if(importados === 0){
+        toast('Não encontrei colunas reconhecíveis (Item, Quantidade, Unidade) na planilha — confira os títulos das colunas.');
+      } else {
+        // Remove linhas em branco deixadas antes da importação, pra não
+        // ficar uma linha vazia solta no meio da lista importada.
+        tempItensPedido = tempItensPedido.filter(it => (it.item||'').trim() || parseFloat(it.qtdPedida)>0);
+        renderTempItensPedido();
+        toast(`${importados} item(ns) importado(s) da planilha.`);
+      }
+    }catch(err){
+      toast('Não foi possível ler essa planilha — confira se o arquivo não está corrompido.');
+    }
+    inputEl.value = '';
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function renderMateriais(){
@@ -7559,6 +7871,31 @@ function temAcessoRH(){
     return PAPEIS_ACESSO_RH.includes(sel.registro.papel);
   }
   return false;
+}
+
+// Confirma que quem está logado é especificamente o Gerente (Responsável
+// com papel Gerente) — usado pra restringir salários de Coordenador e
+// Gerente, que nem Administrativo nem RH/DP devem enxergar.
+function souGerente(){
+  if(contaSemCadastroVinculado) return false;
+  const sel = getCurrentUserSelection();
+  if(!sel) return true; // sem login/Supabase configurado: mantém o acesso total de sempre
+  return sel.tipo === 'responsavel' && sel.registro.papel === 'Gerente';
+}
+
+// Cargos cujo salário só o Gerente pode ver — nem RH/DP, nem Administrativo.
+function ehCargoSalarioRestrito(cargo){
+  const c = (cargo||'').trim().toLowerCase();
+  return c === 'coordenador' || c === 'gerente';
+}
+
+// Junta as duas checagens: acesso geral a dados de RH, e a restrição extra
+// de cargo. Usar esta função (em vez de temAcessoRH() sozinha) sempre que
+// o salário específico de UM funcionário for exibido/editado.
+function temAcessoSalarioFuncionario(funcionario){
+  if(!temAcessoRH()) return false;
+  if(funcionario && ehCargoSalarioRestrito(funcionario.cargo)) return souGerente();
+  return true;
 }
 
 function renderDashboard(){
