@@ -1511,12 +1511,12 @@
           </div>
 
           <div class="panel">
-            <div class="panel-head">Rateio do Administrativo pelas obras (por % de Mão de Obra CLT)</div>
+            <div class="panel-head">Rateio de custos indiretos pelas obras (Administrativo, RH/DP etc. — por % de Mão de Obra CLT)</div>
             <div class="panel-body">
-              <div class="step-note" style="margin-bottom:12px;">Lance o rateio do funcionário Administrativo normalmente (salário, encargos etc.), alocando provisoriamente numa obra qualquer só pra poder salvar. Aqui, o total com encargos dele naquele mês é redistribuído entre as obras — não por dias/horas, mas proporcional ao quanto de mão de obra CLT (dos demais funcionários) cada obra já teve alocado no mês. Sobrescreve a alocação anterior desse funcionário.</div>
+              <div class="step-note" style="margin-bottom:12px;">Serve pra qualquer funcionário CLT indireto — Administrativo, RH/DP, Coordenador etc. Lance o rateio dele normalmente (salário, encargos etc.), alocando provisoriamente numa obra qualquer só pra poder salvar. Aqui, o total com encargos dele naquele mês é redistribuído entre as obras — não por dias/horas, mas proporcional ao quanto de mão de obra CLT (dos demais funcionários) cada obra já teve alocado no mês. Ex.: se a Obra A tem 40% da mão de obra CLT e a Obra B tem 60%, o salário desse funcionário é rateado 40%/60% do mesmo jeito. Sobrescreve a alocação anterior desse funcionário.</div>
               <div class="form-grid cols-3">
                 <div class="field">
-                  <label>Funcionário Administrativo</label>
+                  <label>Funcionário (Administrativo, RH/DP etc.)</label>
                   <select id="admFuncionarioId" onchange="renderAdmRateio()"></select>
                 </div>
                 <div class="field">
@@ -1526,7 +1526,7 @@
               </div>
               <div id="admDistribuicaoWrap" style="margin-top:12px;"></div>
               <div class="form-actions">
-                <button class="btn" onclick="ratearAdm()">Ratear Administrativo pelas obras</button>
+                <button class="btn" onclick="ratearAdm()">Ratear pelas obras (por % de Mão de Obra CLT)</button>
               </div>
               <div id="admRateioResultado" style="margin-top:14px;"></div>
             </div>
@@ -4459,66 +4459,20 @@ function gerarRelatorioRateioResumo(){
     return;
   }
 
-  let totDireta=0, totIndireta=0;
-  const linhasDiretaIndireta = chaves.map(id=>{
+  let totClt=0, totPj=0, totFabrica=0;
+  const linhas = chaves.map(id=>{
     const g = porObra[id];
-    const direta = g.linhas.filter(l=>(l.tipoMaoDeObra||'direta')==='direta').reduce((s,l)=>s+(l.total||0),0);
-    const indireta = g.linhas.filter(l=>(l.tipoMaoDeObra||'direta')==='indireta').reduce((s,l)=>s+(l.total||0),0);
-    totDireta+=direta; totIndireta+=indireta;
+    const clt = g.linhas.filter(l=>l.tipoMaoDeObra==='direta').reduce((s,l)=>s+(l.total||0),0);
+    const pj = g.linhas.filter(l=>l.tipoMaoDeObra==='indireta' && l.funcionario!=='Rateio da Fábrica').reduce((s,l)=>s+(l.total||0),0);
+    const fabrica = g.linhas.filter(l=>l.funcionario==='Rateio da Fábrica').reduce((s,l)=>s+(l.total||0),0);
+    totClt+=clt; totPj+=pj; totFabrica+=fabrica;
     return `<tr>
       <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td>
-      <td>${fmtMoeda(direta)}</td>
-      <td>${fmtMoeda(indireta)}</td>
-      <td><strong>${fmtMoeda(direta+indireta)}</strong></td>
+      <td>${fmtMoeda(clt)}</td>
+      <td>${fmtMoeda(pj)}</td>
+      <td>${fabrica ? fmtMoeda(fabrica) : '—'}</td>
+      <td><strong>${fmtMoeda(g.totalObra)}</strong></td>
     </tr>`;
-  }).join('');
-
-  let totCltSalario=0, totCltBeneficios=0, totCltEncargos=0, totCltProvisionamento=0, totCltGeral=0;
-  let totPjSalario=0, totPjBeneficios=0, totPjGeral=0;
-  let totFabrica=0;
-
-  const secoesPorObra = chaves.map(id=>{
-    const g = porObra[id];
-    const linhasClt = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica' && l.tipoMaoDeObra==='direta');
-    const linhasPj = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica' && l.tipoMaoDeObra==='indireta');
-    const linhasFabrica = g.linhas.filter(l=>l.funcionario==='Rateio da Fábrica');
-
-    let tabelaClt = '';
-    if(linhasClt.length){
-      const s = linhasClt.reduce((a,l)=>a+l.resumoSalario,0);
-      const b = linhasClt.reduce((a,l)=>a+l.resumoBeneficios,0);
-      const e = linhasClt.reduce((a,l)=>a+l.resumoEncargos,0);
-      const p = linhasClt.reduce((a,l)=>a+l.resumoProvisionamento,0);
-      const t = linhasClt.reduce((a,l)=>a+l.total,0);
-      totCltSalario+=s; totCltBeneficios+=b; totCltEncargos+=e; totCltProvisionamento+=p; totCltGeral+=t;
-      tabelaClt = `<table>
-        <thead><tr><th>CLT (${linhasClt.length} funcionário${linhasClt.length===1?'':'s'})</th><th>Salário</th><th>Benefícios</th><th>Encargos</th><th>Provisionamento</th><th>Total</th></tr></thead>
-        <tbody><tr><td>Subtotal</td><td>${fmtMoeda(s)}</td><td>${fmtMoeda(b)}</td><td>${fmtMoeda(e)}</td><td>${fmtMoeda(p)}</td><td><strong>${fmtMoeda(t)}</strong></td></tr></tbody>
-      </table>`;
-    }
-
-    let tabelaPj = '';
-    if(linhasPj.length){
-      const s = linhasPj.reduce((a,l)=>a+l.resumoSalario,0);
-      const b = linhasPj.reduce((a,l)=>a+l.resumoBeneficios,0);
-      const t = linhasPj.reduce((a,l)=>a+l.total,0);
-      totPjSalario+=s; totPjBeneficios+=b; totPjGeral+=t;
-      tabelaPj = `<table>
-        <thead><tr><th>PJ (${linhasPj.length} prestador${linhasPj.length===1?'':'es'})</th><th>Salário</th><th>Benefícios</th><th>Total</th></tr></thead>
-        <tbody><tr><td>Subtotal</td><td>${fmtMoeda(s)}</td><td>${fmtMoeda(b)}</td><td><strong>${fmtMoeda(t)}</strong></td></tr></tbody>
-      </table>`;
-    }
-
-    let notaFabrica = '';
-    if(linhasFabrica.length){
-      const t = linhasFabrica.reduce((a,l)=>a+l.total,0);
-      totFabrica += t;
-      notaFabrica = `<div class="step-note">Custo da Fábrica rateado nesta obra (por Kg produzido): <strong>${fmtMoeda(t)}</strong></div>`;
-    }
-
-    return `<h2>${esc(g.obra ? g.obra.nome : 'Obra removida')} — Total: ${fmtMoeda(g.totalObra)}</h2>
-      ${tabelaClt}${tabelaPj}${notaFabrica}
-      ${!linhasClt.length && !linhasPj.length && !linhasFabrica.length ? '<div class="step-note">Nenhum rateio lançado nesta obra.</div>' : ''}`;
   }).join('');
 
   const obraSelecionada = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
@@ -4528,26 +4482,16 @@ function gerarRelatorioRateioResumo(){
     <div class="meta">
       ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
-      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
-      Salário = salário base + hora extra + hora prêmio. Benefícios = plano de saúde, alimentação (café da manhã, almoço, lanche), vale transporte e passagem de hora extra. Encargos = GPS + FGTS + SECONCI + seguro de vida + PCMSO (só CLT). Provisionamento = 13º, férias remuneradas, aviso prévio indenizado, GPS sobre provisões e FGTS rescisório (só CLT). Para PJ, sem Encargos nem Provisionamento — o valor de PCMSO entra dentro de Benefícios.
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
     </div>
-    <h2>Mão de obra Direta (CLT) x Indireta (PJ)</h2>
     <table>
-      <thead><tr><th>Obra</th><th>Direta (CLT)</th><th>Indireta (PJ)</th><th>Total</th></tr></thead>
-      <tbody>${linhasDiretaIndireta || '<tr><td colspan="4">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
-      <tfoot><tr><td>TOTAL GERAL</td><td>${fmtMoeda(totDireta)}</td><td>${fmtMoeda(totIndireta)}</td><td>${fmtMoeda(totDireta+totIndireta)}</td></tr></tfoot>
-    </table>
-    <h2>Detalhamento por obra — CLT e PJ</h2>
-    ${secoesPorObra || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}
-    <h2>Totais gerais do mês</h2>
-    <table>
-      <thead><tr><th></th><th>Salário</th><th>Benefícios</th><th>Encargos</th><th>Provisionamento</th><th>Total</th></tr></thead>
-      <tbody>
-        <tr><td>CLT</td><td>${fmtMoeda(totCltSalario)}</td><td>${fmtMoeda(totCltBeneficios)}</td><td>${fmtMoeda(totCltEncargos)}</td><td>${fmtMoeda(totCltProvisionamento)}</td><td><strong>${fmtMoeda(totCltGeral)}</strong></td></tr>
-        <tr><td>PJ</td><td>${fmtMoeda(totPjSalario)}</td><td>${fmtMoeda(totPjBeneficios)}</td><td>—</td><td>—</td><td><strong>${fmtMoeda(totPjGeral)}</strong></td></tr>
-        ${totFabrica ? `<tr><td>Fábrica (rateada)</td><td colspan="4"></td><td><strong>${fmtMoeda(totFabrica)}</strong></td></tr>` : ''}
-      </tbody>
-      <tfoot><tr><td>TOTAL GERAL DA FOLHA NO MÊS</td><td colspan="4"></td><td>${fmtMoeda(totCltGeral+totPjGeral+totFabrica)}</td></tr></tfoot>
+      <thead><tr><th>Obra</th><th>CLT</th><th>PJ</th><th>Fábrica (rateada)</th><th>Total</th></tr></thead>
+      <tbody>${linhas || '<tr><td colspan="5">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
+      <tfoot><tr>
+        <td>TOTAL GERAL DA FOLHA NO MÊS</td>
+        <td>${fmtMoeda(totClt)}</td><td>${fmtMoeda(totPj)}</td><td>${totFabrica ? fmtMoeda(totFabrica) : '—'}</td>
+        <td>${fmtMoeda(totClt+totPj+totFabrica)}</td>
+      </tr></tfoot>
     </table>`;
   window.print();
 }
@@ -4835,7 +4779,7 @@ function renderAdmRateio(){
 
   if(!mes || !admFuncionarioId){
     document.getElementById('admCustoTotal').value = '';
-    wrap.innerHTML = '<div class="step-note">Selecione o mês (acima) e o funcionário Administrativo.</div>';
+    wrap.innerHTML = '<div class="step-note">Selecione o mês (acima) e o funcionário.</div>';
     resultado.innerHTML = '';
     return;
   }
@@ -4879,7 +4823,7 @@ function ratearAdm(){
   const mes = document.getElementById('rateioMesFiltro').value;
   const admFuncionarioId = document.getElementById('admFuncionarioId').value;
   if(!mes){ toast('Selecione o mês de referência.'); return; }
-  if(!admFuncionarioId){ toast('Selecione o funcionário Administrativo.'); return; }
+  if(!admFuncionarioId){ toast('Selecione o funcionário.'); return; }
 
   let rateios = load('rateiosMaoDeObra');
   const idx = rateios.findIndex(r=>r.mes===mes && r.funcionarioId===admFuncionarioId);
@@ -4914,7 +4858,7 @@ function ratearAdm(){
 
   renderRateioMaoDeObra();
   renderAdmRateio();
-  toast('Rateio do Administrativo redistribuído proporcionalmente à mão de obra CLT.');
+  toast('Rateio redistribuído proporcionalmente à mão de obra CLT.');
 }
 
 
