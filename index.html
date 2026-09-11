@@ -4459,18 +4459,26 @@ function gerarRelatorioRateioResumo(){
     return;
   }
 
-  let totClt=0, totPj=0, totFabrica=0;
+  let totalGeral = 0, totSalarios=0, totEncargos=0, totAlimentacao=0, totTreinamentos=0, totProvisionamentos=0;
   const linhas = chaves.map(id=>{
     const g = porObra[id];
-    const clt = g.linhas.filter(l=>l.tipoMaoDeObra==='direta').reduce((s,l)=>s+(l.total||0),0);
-    const pj = g.linhas.filter(l=>l.tipoMaoDeObra==='indireta' && l.funcionario!=='Rateio da Fábrica').reduce((s,l)=>s+(l.total||0),0);
-    const fabrica = g.linhas.filter(l=>l.funcionario==='Rateio da Fábrica').reduce((s,l)=>s+(l.total||0),0);
-    totClt+=clt; totPj+=pj; totFabrica+=fabrica;
+    totalGeral += g.totalObra;
+    const salarios = g.linhas.reduce((s,l)=>s+(l.salariosBaseExtra||0),0);
+    const encargosPct = g.linhas.reduce((s,l)=>s+(l.encargosPct||0),0);
+    const alimentacao = g.linhas.reduce((s,l)=>s+(l.alimentacaoTransporte||0),0);
+    const treinamentos = g.linhas.reduce((s,l)=>s+(l.treinamentosExames||0),0);
+    const provisionamentos = g.linhas.reduce((s,l)=>s+(l.provisionamentos||0),0);
+    totSalarios+=salarios; totEncargos+=encargosPct; totAlimentacao+=alimentacao; totTreinamentos+=treinamentos; totProvisionamentos+=provisionamentos;
+    const funcionarios = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica').length;
+    const temFabrica = g.linhas.some(l=>l.funcionario==='Rateio da Fábrica');
     return `<tr>
-      <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}</td>
-      <td>${fmtMoeda(clt)}</td>
-      <td>${fmtMoeda(pj)}</td>
-      <td>${fabrica ? fmtMoeda(fabrica) : '—'}</td>
+      <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}${temFabrica?' <span class="step-note">(inclui Fábrica)</span>':''}</td>
+      <td>${funcionarios}</td>
+      <td>${fmtMoeda(salarios)}</td>
+      <td>${fmtMoeda(encargosPct)}</td>
+      <td>${fmtMoeda(alimentacao)}</td>
+      <td>${fmtMoeda(treinamentos)}</td>
+      <td>${fmtMoeda(provisionamentos)}</td>
       <td><strong>${fmtMoeda(g.totalObra)}</strong></td>
     </tr>`;
   }).join('');
@@ -4482,15 +4490,20 @@ function gerarRelatorioRateioResumo(){
     <div class="meta">
       ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
-      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
+      Inclui o custo da Fábrica já rateado entre as obras conforme o % de Kg produzido. Alimentação inclui vale transporte, passagem de hora extra, seguro de vida e plano de saúde; Treinamentos e Exames é informado manualmente (PCMSO, ASO, treinamentos NR); Provisionamentos inclui 13º, férias remuneradas, aviso prévio indenizado, GPS sobre provisões e FGTS rescisório.
     </div>
     <table>
-      <thead><tr><th>Obra</th><th>CLT</th><th>PJ</th><th>Fábrica (rateada)</th><th>Total</th></tr></thead>
-      <tbody>${linhas || '<tr><td colspan="5">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
+      <thead><tr>
+        <th>Obra</th><th>Funcionários</th><th>Salários (base+extra)</th><th>Encargos</th>
+        <th>Alimentação</th><th>Treinamentos e exames</th><th>Provisionamentos</th><th>Total</th>
+      </tr></thead>
+      <tbody>${linhas || '<tr><td colspan="8">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
       <tfoot><tr>
-        <td>TOTAL GERAL DA FOLHA NO MÊS</td>
-        <td>${fmtMoeda(totClt)}</td><td>${fmtMoeda(totPj)}</td><td>${totFabrica ? fmtMoeda(totFabrica) : '—'}</td>
-        <td>${fmtMoeda(totClt+totPj+totFabrica)}</td>
+        <td>TOTAL GERAL DA FOLHA NO MÊS</td><td></td>
+        <td>${fmtMoeda(totSalarios)}</td><td>${fmtMoeda(totEncargos)}</td>
+        <td>${fmtMoeda(totAlimentacao)}</td><td>${fmtMoeda(totTreinamentos)}</td><td>${fmtMoeda(totProvisionamentos)}</td>
+        <td>${fmtMoeda(totalGeral)}</td>
       </tr></tfoot>
     </table>`;
   window.print();
