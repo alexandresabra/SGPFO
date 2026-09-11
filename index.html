@@ -1872,17 +1872,9 @@
         <div class="field">
           <label>Tipo de vínculo</label>
           <select id="funcTipoVinculo" onchange="toggleTipoVinculoFuncionario()">
-            <option value="clt">CLT</option>
-            <option value="pj">PJ</option>
+            <option value="clt">CLT (mão de obra direta)</option>
+            <option value="pj">PJ (mão de obra indireta)</option>
           </select>
-        </div>
-        <div class="field">
-          <label>Classificação da mão de obra</label>
-          <select id="funcTipoMaoDeObra">
-            <option value="direta">Direta (execução na obra)</option>
-            <option value="indireta">Indireta (administrativa/apoio)</option>
-          </select>
-          <small class="hint">Usada pra separar mão de obra direta e indireta nos relatórios de Rateio.</small>
         </div>
       </div>
       <hr class="divider">
@@ -4289,7 +4281,7 @@ function renderRateioMaoDeObra(){
   document.getElementById('rateioEmpty').style.display = funcionariosLista.length ? 'none' : 'block';
   document.getElementById('rateioTableBody').innerHTML = funcionariosLista.map(f=>{
     const ehPJ = f.tipoVinculo === 'pj';
-    const ehIndireta = f.tipoMaoDeObra === 'indireta';
+    const ehIndireta = ehPJ;
     const podeVerSalario = temAcessoSalarioFuncionario(f);
     const rateio = filtroMes ? rateios.find(r=>r.funcionarioId===f.id) : null;
 
@@ -4364,13 +4356,14 @@ function calcularRelatorioRateioPorObra(mes){
     });
     const alocacoes = r.alocacoes || [];
     const totalPeso = alocacoes.reduce((s,a)=> s + (parseFloat(a.peso)||0), 0);
+    const ehPJ = funcionario.tipoVinculo === 'pj';
     alocacoes.forEach(a=>{
       const prop = totalPeso>0 ? (parseFloat(a.peso)||0)/totalPeso : 0;
       if(!porObra[a.obraId]) porObra[a.obraId] = { obra: obras.find(o=>o.id===a.obraId), linhas: [], totalObra: 0 };
       porObra[a.obraId].linhas.push({
-        funcionario: funcionario.nome + (funcionario.tipoVinculo==='pj' ? ' (PJ)' : ''),
+        funcionario: funcionario.nome + (ehPJ ? ' (PJ)' : ''),
         cargo: funcionario.cargo,
-        tipoMaoDeObra: funcionario.tipoMaoDeObra || 'direta',
+        tipoMaoDeObra: ehPJ ? 'indireta' : 'direta',
         proporcao: prop,
         salarioBruto: encargos.salarioBruto*prop,
         gps: encargos.gps*prop,
@@ -4380,7 +4373,19 @@ function calcularRelatorioRateioPorObra(mes){
         beneficios: (encargos.seguroVida+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
         valeTransporte: encargos.valeTransporte*prop,
         alimentacao: encargos.alimentacao*prop,
-        // Agrupamento em 5 categorias, usado no Relatório — Resumo por obra:
+        // Categorias do Relatório — Resumo, separadas por obra e por CLT/PJ:
+        // Salário = base+extra+prêmio. Benefícios = plano de saúde,
+        // alimentação (café/almoço/lanche), vale transporte e passagem de
+        // hora extra. Encargos = GPS+FGTS+SECONCI+seguro de vida+PCMSO — só
+        // existe pra CLT. Provisionamento = 13º+férias+aviso prévio+GPS
+        // sobre provisões+FGTS rescisório — também só CLT. Pra PJ, que não
+        // tem esses dois grupos, o valor de Treinamentos/Exames (usado aqui
+        // como PCMSO) entra dentro de Benefícios em vez de Encargos.
+        resumoSalario: encargos.salarioBruto*prop,
+        resumoBeneficios: (encargos.valeTransporte+encargos.passagemHoraExtra+encargos.alimentacao+encargos.planoSaude+encargos.cafeAlmocoLanche+(ehPJ?encargos.treinamentosExames:0))*prop,
+        resumoEncargos: ehPJ ? 0 : (encargos.gps+encargos.fgts+encargos.seconci+encargos.seguroVida+encargos.treinamentosExames)*prop,
+        resumoProvisionamento: ehPJ ? 0 : (encargos.provisao13+encargos.ferias+encargos.avisoPrevio+encargos.gpsSobreProvisoes+encargos.fgtsRescisorio)*prop,
+        // Agrupamento em 5 categorias (mantido pra compatibilidade de outros usos):
         salariosBaseExtra: encargos.salarioBruto*prop,
         encargosPct: (encargos.gps+encargos.fgts+encargos.seconci)*prop,
         alimentacaoTransporte: (encargos.alimentacao+encargos.valeTransporte+encargos.passagemHoraExtra+encargos.seguroVida+encargos.planoSaude+encargos.cafeAlmocoLanche)*prop,
@@ -4419,6 +4424,7 @@ function calcularRelatorioRateioPorObra(mes){
         proporcao: prop,
         salarioBruto: 0, gps: 0, fgts: 0, seconci: 0, provisoes: 0, beneficios: 0, valeTransporte: 0, alimentacao: 0,
         salariosBaseExtra: 0, encargosPct: 0, alimentacaoTransporte: 0, treinamentosExames: 0, provisionamentos: valor,
+        resumoSalario: 0, resumoBeneficios: 0, resumoEncargos: 0, resumoProvisionamento: 0,
         total: valor
       });
       porObra[obraId].totalObra += valor;
@@ -4453,7 +4459,6 @@ function gerarRelatorioRateioResumo(){
     return;
   }
 
-  let totalGeral = 0, totSalarios=0, totEncargos=0, totAlimentacao=0, totTreinamentos=0, totProvisionamentos=0;
   let totDireta=0, totIndireta=0;
   const linhasDiretaIndireta = chaves.map(id=>{
     const g = porObra[id];
@@ -4468,27 +4473,52 @@ function gerarRelatorioRateioResumo(){
     </tr>`;
   }).join('');
 
-  const linhas = chaves.map(id=>{
+  let totCltSalario=0, totCltBeneficios=0, totCltEncargos=0, totCltProvisionamento=0, totCltGeral=0;
+  let totPjSalario=0, totPjBeneficios=0, totPjGeral=0;
+  let totFabrica=0;
+
+  const secoesPorObra = chaves.map(id=>{
     const g = porObra[id];
-    totalGeral += g.totalObra;
-    const salarios = g.linhas.reduce((s,l)=>s+(l.salariosBaseExtra||0),0);
-    const encargosPct = g.linhas.reduce((s,l)=>s+(l.encargosPct||0),0);
-    const alimentacao = g.linhas.reduce((s,l)=>s+(l.alimentacaoTransporte||0),0);
-    const treinamentos = g.linhas.reduce((s,l)=>s+(l.treinamentosExames||0),0);
-    const provisionamentos = g.linhas.reduce((s,l)=>s+(l.provisionamentos||0),0);
-    totSalarios+=salarios; totEncargos+=encargosPct; totAlimentacao+=alimentacao; totTreinamentos+=treinamentos; totProvisionamentos+=provisionamentos;
-    const funcionarios = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica').length;
-    const temFabrica = g.linhas.some(l=>l.funcionario==='Rateio da Fábrica');
-    return `<tr>
-      <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}${temFabrica?' <span class="step-note">(inclui Fábrica)</span>':''}</td>
-      <td>${funcionarios}</td>
-      <td>${fmtMoeda(salarios)}</td>
-      <td>${fmtMoeda(encargosPct)}</td>
-      <td>${fmtMoeda(alimentacao)}</td>
-      <td>${fmtMoeda(treinamentos)}</td>
-      <td>${fmtMoeda(provisionamentos)}</td>
-      <td><strong>${fmtMoeda(g.totalObra)}</strong></td>
-    </tr>`;
+    const linhasClt = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica' && l.tipoMaoDeObra==='direta');
+    const linhasPj = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica' && l.tipoMaoDeObra==='indireta');
+    const linhasFabrica = g.linhas.filter(l=>l.funcionario==='Rateio da Fábrica');
+
+    let tabelaClt = '';
+    if(linhasClt.length){
+      const s = linhasClt.reduce((a,l)=>a+l.resumoSalario,0);
+      const b = linhasClt.reduce((a,l)=>a+l.resumoBeneficios,0);
+      const e = linhasClt.reduce((a,l)=>a+l.resumoEncargos,0);
+      const p = linhasClt.reduce((a,l)=>a+l.resumoProvisionamento,0);
+      const t = linhasClt.reduce((a,l)=>a+l.total,0);
+      totCltSalario+=s; totCltBeneficios+=b; totCltEncargos+=e; totCltProvisionamento+=p; totCltGeral+=t;
+      tabelaClt = `<table>
+        <thead><tr><th>CLT (${linhasClt.length} funcionário${linhasClt.length===1?'':'s'})</th><th>Salário</th><th>Benefícios</th><th>Encargos</th><th>Provisionamento</th><th>Total</th></tr></thead>
+        <tbody><tr><td>Subtotal</td><td>${fmtMoeda(s)}</td><td>${fmtMoeda(b)}</td><td>${fmtMoeda(e)}</td><td>${fmtMoeda(p)}</td><td><strong>${fmtMoeda(t)}</strong></td></tr></tbody>
+      </table>`;
+    }
+
+    let tabelaPj = '';
+    if(linhasPj.length){
+      const s = linhasPj.reduce((a,l)=>a+l.resumoSalario,0);
+      const b = linhasPj.reduce((a,l)=>a+l.resumoBeneficios,0);
+      const t = linhasPj.reduce((a,l)=>a+l.total,0);
+      totPjSalario+=s; totPjBeneficios+=b; totPjGeral+=t;
+      tabelaPj = `<table>
+        <thead><tr><th>PJ (${linhasPj.length} prestador${linhasPj.length===1?'':'es'})</th><th>Salário</th><th>Benefícios</th><th>Total</th></tr></thead>
+        <tbody><tr><td>Subtotal</td><td>${fmtMoeda(s)}</td><td>${fmtMoeda(b)}</td><td><strong>${fmtMoeda(t)}</strong></td></tr></tbody>
+      </table>`;
+    }
+
+    let notaFabrica = '';
+    if(linhasFabrica.length){
+      const t = linhasFabrica.reduce((a,l)=>a+l.total,0);
+      totFabrica += t;
+      notaFabrica = `<div class="step-note">Custo da Fábrica rateado nesta obra (por Kg produzido): <strong>${fmtMoeda(t)}</strong></div>`;
+    }
+
+    return `<h2>${esc(g.obra ? g.obra.nome : 'Obra removida')} — Total: ${fmtMoeda(g.totalObra)}</h2>
+      ${tabelaClt}${tabelaPj}${notaFabrica}
+      ${!linhasClt.length && !linhasPj.length && !linhasFabrica.length ? '<div class="step-note">Nenhum rateio lançado nesta obra.</div>' : ''}`;
   }).join('');
 
   const obraSelecionada = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
@@ -4499,28 +4529,25 @@ function gerarRelatorioRateioResumo(){
       ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
-      Inclui o custo da Fábrica já rateado entre as obras conforme o % de Kg produzido. Alimentação inclui vale transporte, passagem de hora extra, seguro de vida e plano de saúde; Treinamentos e Exames inclui PCMSO, ASO e treinamentos NR; Provisionamentos inclui 13º, férias e aviso prévio.
+      Salário = salário base + hora extra + hora prêmio. Benefícios = plano de saúde, alimentação (café da manhã, almoço, lanche), vale transporte e passagem de hora extra. Encargos = GPS + FGTS + SECONCI + seguro de vida + PCMSO (só CLT). Provisionamento = 13º, férias remuneradas, aviso prévio indenizado, GPS sobre provisões e FGTS rescisório (só CLT). Para PJ, sem Encargos nem Provisionamento — o valor de PCMSO entra dentro de Benefícios.
     </div>
-    <h2>Mão de obra Direta x Indireta</h2>
-    <div class="step-note" style="margin-bottom:8px;">Direta = execução na obra (classificação do cadastro do funcionário). Indireta = administrativo/apoio, inclusive o custo da Fábrica já rateado.</div>
+    <h2>Mão de obra Direta (CLT) x Indireta (PJ)</h2>
     <table>
-      <thead><tr><th>Obra</th><th>Direta</th><th>Indireta</th><th>Total</th></tr></thead>
+      <thead><tr><th>Obra</th><th>Direta (CLT)</th><th>Indireta (PJ)</th><th>Total</th></tr></thead>
       <tbody>${linhasDiretaIndireta || '<tr><td colspan="4">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
       <tfoot><tr><td>TOTAL GERAL</td><td>${fmtMoeda(totDireta)}</td><td>${fmtMoeda(totIndireta)}</td><td>${fmtMoeda(totDireta+totIndireta)}</td></tr></tfoot>
     </table>
-    <h2>Detalhamento por categoria de custo</h2>
+    <h2>Detalhamento por obra — CLT e PJ</h2>
+    ${secoesPorObra || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}
+    <h2>Totais gerais do mês</h2>
     <table>
-      <thead><tr>
-        <th>Obra</th><th>Funcionários</th><th>Salários (base+extra)</th><th>Encargos</th>
-        <th>Alimentação</th><th>Treinamentos e exames</th><th>Provisionamentos</th><th>Total</th>
-      </tr></thead>
-      <tbody>${linhas || '<tr><td colspan="8">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
-      <tfoot><tr>
-        <td>TOTAL GERAL DA FOLHA NO MÊS</td><td></td>
-        <td>${fmtMoeda(totSalarios)}</td><td>${fmtMoeda(totEncargos)}</td>
-        <td>${fmtMoeda(totAlimentacao)}</td><td>${fmtMoeda(totTreinamentos)}</td><td>${fmtMoeda(totProvisionamentos)}</td>
-        <td>${fmtMoeda(totalGeral)}</td>
-      </tr></tfoot>
+      <thead><tr><th></th><th>Salário</th><th>Benefícios</th><th>Encargos</th><th>Provisionamento</th><th>Total</th></tr></thead>
+      <tbody>
+        <tr><td>CLT</td><td>${fmtMoeda(totCltSalario)}</td><td>${fmtMoeda(totCltBeneficios)}</td><td>${fmtMoeda(totCltEncargos)}</td><td>${fmtMoeda(totCltProvisionamento)}</td><td><strong>${fmtMoeda(totCltGeral)}</strong></td></tr>
+        <tr><td>PJ</td><td>${fmtMoeda(totPjSalario)}</td><td>${fmtMoeda(totPjBeneficios)}</td><td>—</td><td>—</td><td><strong>${fmtMoeda(totPjGeral)}</strong></td></tr>
+        ${totFabrica ? `<tr><td>Fábrica (rateada)</td><td colspan="4"></td><td><strong>${fmtMoeda(totFabrica)}</strong></td></tr>` : ''}
+      </tbody>
+      <tfoot><tr><td>TOTAL GERAL DA FOLHA NO MÊS</td><td colspan="4"></td><td>${fmtMoeda(totCltGeral+totPjGeral+totFabrica)}</td></tr></tfoot>
     </table>`;
   window.print();
 }
@@ -5360,7 +5387,6 @@ function openFuncionarioModal(id){
   document.getElementById('funcGerente').value = 'nao';
   document.getElementById('funcSetor').value = '';
   document.getElementById('funcTipoVinculo').value = 'clt';
-  document.getElementById('funcTipoMaoDeObra').value = 'direta';
 
   const f = id ? load('funcionarios').find(x=>x.id===id) : null;
   const podeVerRH = temAcessoSalarioFuncionario(f);
@@ -5388,7 +5414,6 @@ function openFuncionarioModal(id){
     document.getElementById('funcEmail').value = f.email||'';
     document.getElementById('funcStatus').value = f.status||'ativo';
     document.getElementById('funcGerente').value = f.gerente ? 'sim' : 'nao';
-    document.getElementById('funcTipoMaoDeObra').value = f.tipoMaoDeObra || 'direta';
     document.getElementById('funcTipoVinculo').value = f.tipoVinculo || 'clt';
     if(podeVerRH){
       document.getElementById('funcSalarioBaseRef').value = f.salarioBaseReferencia||'';
@@ -5439,7 +5464,6 @@ function saveFuncionario(){
     email: document.getElementById('funcEmail').value.trim(),
     status: document.getElementById('funcStatus').value,
     gerente: document.getElementById('funcGerente').value === 'sim',
-    tipoMaoDeObra: document.getElementById('funcTipoMaoDeObra').value,
     // Campos de salário/benefício: só lidos do formulário se o usuário tem
     // acesso RH; sem acesso, preserva o que já estava salvo (o campo fica
     // oculto na tela, então nunca deve ser lido/zerado por quem não pode vê-lo).
