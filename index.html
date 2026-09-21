@@ -1404,12 +1404,14 @@
         <!-- ---- Aba: Cálculo de Vidro ---- -->
         <div class="ow-tab-content" id="owTab-vidro" style="display:none;">
           <div class="panel">
-            <div class="panel-head">Novo cálculo — Dimensionamento de vidro</div>
+            <div class="panel-head">Novo cálculo — Dimensionamento de vidro (ABNT NBR 7199:2025)</div>
             <div class="panel-body">
               <div class="disclaimer">
-                Estimativa baseada em teoria clássica de flexão de placas, referenciada à metodologia da NBR 7199.
-                Este resultado <strong>não substitui</strong> a carta de vidro oficial (tabelas normativas) nem a verificação final por
-                engenheiro responsável — use como triagem preliminar antes da especificação definitiva.
+                Cálculo conforme o método normativo da ABNT NBR 7199:2025 (4.7 — espessura <em>e</em>₁, fator de redução <em>c</em>,
+                verificação da resistência <em>e</em><sub>R</sub> e da flecha <em>f</em>). Este resultado é uma <strong>triagem de
+                engenharia</strong> apoiada diretamente na Norma; a especificação final e a memória de cálculo devem ser
+                assinadas por engenheiro responsável. As fórmulas desta Norma não se aplicam a projetos de vidro estrutural
+                (colagem estrutural / <em>structural glazing</em>).
               </div>
 
               <input type="hidden" id="vidObraId">
@@ -1421,7 +1423,59 @@
               </div>
 
               <hr class="divider">
-              <h4 style="font-family:var(--serif);margin:0 0 12px;">1. Pressão de vento de projeto</h4>
+              <h4 style="font-family:var(--serif);margin:0 0 12px;">1. Painel e condição de apoio</h4>
+              <div class="form-grid cols-3">
+                <div class="field">
+                  <label>Maior lado — L (mm)</label>
+                  <input type="number" id="vidL" placeholder="Ex.: 1500">
+                </div>
+                <div class="field">
+                  <label>Menor lado — l (mm)</label>
+                  <input type="number" id="vidLm" placeholder="Ex.: 1200">
+                </div>
+                <div class="field">
+                  <label>Condição de apoio</label>
+                  <select id="vidApoio">
+                    <option value="4lados">Apoiado em 4 lados</option>
+                    <option value="3lados-livre-menor">Apoiado em 3 lados — borda livre é a menor</option>
+                    <option value="3lados-livre-maior">Apoiado em 3 lados — borda livre é a do lado maior</option>
+                    <option value="2lados-livre-maior">Apoiado em 2 lados opostos — borda livre é a maior</option>
+                    <option value="2lados-livre-menor">Apoiado em 2 lados opostos — borda livre é a menor</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-grid cols-3">
+                <div class="field">
+                  <label>Aplicação quanto à inclinação</label>
+                  <select id="vidInclinacao" onchange="toggleInclinacaoVidro()">
+                    <option value="vertical">Vertical (≤ 15° em relação à vertical)</option>
+                    <option value="inclinado">Inclinado (&gt; 15° em relação à vertical — Figura 5)</option>
+                  </select>
+                </div>
+                <div class="field" id="vidAnguloField" style="display:none;">
+                  <label>Ângulo α em relação à vertical (°)</label>
+                  <input type="number" id="vidAngulo" placeholder="Ex.: 30">
+                </div>
+                <div class="field">
+                  <label>Área</label>
+                  <select id="vidArea" onchange="toggleAreaVidro()">
+                    <option value="externa">Externa</option>
+                    <option value="interna">Interna</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-grid cols-3" id="vidPosicaoFieldWrap">
+                <div class="field" id="vidPosicaoField">
+                  <label>Posição (fator de redução c — 4.7.4)</label>
+                  <select id="vidPosicao">
+                    <option value="terreo">Piso térreo ou até 6 m em relação ao solo (c = 0,9)</option>
+                    <option value="demais">Demais casos (c = 1,0)</option>
+                  </select>
+                </div>
+              </div>
+
+              <hr class="divider">
+              <h4 style="font-family:var(--serif);margin:0 0 12px;">2. Pressão de vento de projeto</h4>
               <div class="form-grid cols-3">
                 <div class="field full">
                   <label>Origem da pressão de cálculo</label>
@@ -1431,7 +1485,7 @@
                   </select>
                 </div>
                 <div class="field" id="vidPressaoManualField">
-                  <label>Pressão de projeto (kN/m²)</label>
+                  <label>Pressão de vento Pv (kN/m²)</label>
                   <input type="number" id="vidPressaoManual" step="0.01" placeholder="Ex.: 1.20">
                 </div>
                 <div class="field" id="vidPressaoVinculadaField" style="display:none;">
@@ -1441,26 +1495,28 @@
               </div>
 
               <hr class="divider">
-              <h4 style="font-family:var(--serif);margin:0 0 12px;">2. Dimensionamento do vidro</h4>
+              <h4 style="font-family:var(--serif);margin:0 0 12px;">3. Composição do vidro (hipótese a verificar)</h4>
               <div class="form-grid cols-3">
                 <div class="field">
-                  <label>Largura do painel (mm)</label>
-                  <input type="number" id="vidLargura" placeholder="Ex.: 1200">
-                </div>
-                <div class="field">
-                  <label>Altura do painel (mm)</label>
-                  <input type="number" id="vidAltura" placeholder="Ex.: 1500">
-                </div>
-                <div class="field">
-                  <label>Tipo de vidro</label>
-                  <select id="vidTipoVidro">
-                    <option value="1.0">Recozido (comum) — fator base</option>
-                    <option value="2.0">Temperado — fator ≈ 2,0x resistência</option>
-                    <option value="1.6">Laminado (2x recozido) — fator ≈ 1,6x resistência</option>
-                    <option value="3.2">Laminado temperado — fator ≈ 3,2x resistência</option>
+                  <label>Tipo de composição</label>
+                  <select id="vidTipoComposicao" onchange="mudarTipoComposicaoVidro()">
+                    <option value="monolitico">Monolítico</option>
+                    <option value="laminado">Laminado</option>
+                    <option value="insulado">Insulado</option>
                   </select>
                 </div>
               </div>
+              <div id="vidComposicaoBuilder" style="margin-top:10px;"></div>
+
+              <hr class="divider">
+              <h4 style="font-family:var(--serif);margin:0 0 12px;">4. Aplicação — condicionantes de uso (Tabela 8)</h4>
+              <div class="form-grid">
+                <div class="field full">
+                  <label>Aplicação prevista para este vidro</label>
+                  <select id="vidAplicacao" onchange="renderCondicionantesVidro()"></select>
+                </div>
+              </div>
+              <div id="vidCondicionantesBox"></div>
 
               <div class="form-actions">
                 <button class="btn secondary" onclick="limparFormVidro()">Limpar</button>
@@ -1475,7 +1531,7 @@
             <div class="panel-head">Histórico de cálculos de vidro desta obra</div>
             <div class="panel-body" style="padding:0;">
               <table>
-                <thead><tr><th>Identificação</th><th>Painel (mm)</th><th>Pressão (kN/m²)</th><th>Vidro sugerido</th><th>Data</th><th></th></tr></thead>
+                <thead><tr><th>Identificação</th><th>Painel (mm)</th><th>Composição</th><th>e<sub>R</sub> / e₁×c</th><th>Flecha</th><th>Resultado</th><th>Data</th><th></th></tr></thead>
                 <tbody id="vidHistBody"></tbody>
               </table>
               <div class="empty-state" id="vidHistEmpty" style="display:none;"><div class="big">▦</div>Nenhum cálculo realizado para esta obra ainda.</div>
@@ -4249,7 +4305,7 @@ function showObraTab(tab){
   if(tab==='materiais') renderMateriais();
   if(tab==='vento'){ renderVentoHist(); }
   if(tab==='perfis'){ refreshVentoCalcSelect(); renderPerfHist(); renderLinhasPerfil(); }
-  if(tab==='vidro'){ refreshVentoCalcSelect(); renderVidHist(); }
+  if(tab==='vidro'){ refreshVentoCalcSelect(); renderVidHist(); initFormVidro(); }
   if(tab==='financeiro') renderFinanceiro();
 }
 
@@ -7603,7 +7659,9 @@ function deleteCalculoPerfil(id){
 }
 
 /* ============================================================
-   CÁLCULO DE VIDRO — referência NBR 7199 / flexão de placas
+   CÁLCULO DE VIDRO — ABNT NBR 7199:2025 (Aplicações de vidros na
+   construção civil — Requisitos), item 4.7 (Método de cálculo) e
+   Tabela 8 (Usos e aplicações dos vidros).
    ============================================================ */
 function toggleOrigemPressaoVidro(){
   const origem = document.getElementById('vidOrigemPressao').value;
@@ -7611,61 +7669,595 @@ function toggleOrigemPressaoVidro(){
   document.getElementById('vidPressaoVinculadaField').style.display = origem==='vinculado' ? 'flex' : 'none';
 }
 
-// Espessuras nominais comerciais de vidro (mm) e resistência de referência aproximada (kN/m² para vão de referência),
-// baseada em ordem de grandeza usual de mercado — NÃO substitui a carta de vidro oficial NBR 7199.
-const ESPESSURAS_VIDRO = [4, 5, 6, 8, 10, 12];
+function toggleInclinacaoVidro(){
+  const v = document.getElementById('vidInclinacao').value;
+  document.getElementById('vidAnguloField').style.display = v==='inclinado' ? 'flex' : 'none';
+}
 
-function estimarEspessuraVidro(larguraMm, alturaMm, pressaoKn, fatorTipo){
-  // Modelo simplificado de placa retangular apoiada nas 4 bordas (teoria de flexão de placas finas):
-  // tensão admissível de referência para vidro recozido ≈ 20 MPa (uso corrente, com fator de segurança embutido)
-  const a = Math.max(larguraMm, alturaMm) / 1000; // m
-  const b = Math.min(larguraMm, alturaMm) / 1000; // m
-  const razao = a / b;
-  // coeficiente de momento aproximado (placa apoiada, varia com razão de aspecto — aproximação usual 0.04 a 0.075)
-  const beta = Math.min(0.075, 0.30 - 0.30/Math.pow(razao,1.6) + 0.04);
-  const betaFinal = Math.max(0.04, Math.min(0.075, beta));
-  const tensaoAdm = 20 * fatorTipo; // MPa, ajustado pelo tipo de vidro
+function toggleAreaVidro(){
+  const v = document.getElementById('vidArea').value;
+  document.getElementById('vidPosicaoFieldWrap').style.display = v==='externa' ? 'grid' : 'none';
+}
 
-  let escolhida = null;
-  for(const t of ESPESSURAS_VIDRO){
-    // sigma = beta * p * b^2 / t^2  → resolvendo para a espessura necessária dada sigma_adm
-    const sigmaMPa = (betaFinal * pressaoKn * Math.pow(b*1000,2)) / Math.pow(t,2) / 1000;
-    if(sigmaMPa <= tensaoAdm){ escolhida = t; break; }
+// ---- Tabela 5 — fator de equivalência de vidros monolíticos (ε3) ----
+const VIDRO_TIPOS_MONOLITICO = [
+  {key:'float', label:'Float', eps3:1.00},
+  {key:'float_acidado', label:'Float acidado', eps3:1.00},
+  {key:'float_jateado', label:'Float jateado com granalhas', eps3:1.40},
+  {key:'texturizado_aramado', label:'Texturizado aramado', eps3:1.30},
+  {key:'texturizado', label:'Texturizado', eps3:1.10},
+  {key:'temperado', label:'Temperado', eps3:0.61},
+  {key:'temperado_texturizado', label:'Temperado texturizado', eps3:0.71},
+  {key:'esmaltado_temperado', label:'Esmaltado temperado', eps3:0.77},
+  {key:'temperado_quimico', label:'Temperado quimicamente', eps3:0.55},
+  {key:'termoendurecido', label:'Termoendurecido', eps3:0.80},
+  {key:'borossilicato', label:'Borossilicato', eps3:1.00},
+  {key:'borossilicato_temperado', label:'Borossilicato temperado', eps3:0.61},
+  {key:'ceramico', label:'Cerâmico', eps3:1.00},
+];
+const TIPOS_TEMPERADOS = ['temperado','temperado_texturizado','esmaltado_temperado','temperado_quimico','borossilicato_temperado'];
+const TIPOS_FLOAT_TEXTURIZADO = ['float','float_acidado','texturizado','texturizado_aramado'];
+
+function eps3For(key){ const t = VIDRO_TIPOS_MONOLITICO.find(v=>v.key===key); return t ? t.eps3 : 1.00; }
+function eps2ForCount(n){ return n<=2 ? 1.30 : (n===3 ? 1.50 : 1.60); } // Tabela 4
+function eps1ForCount(n){ return n<=2 ? 1.60 : 2.00; } // Tabela 3
+
+// ---- Tabela 6 — coeficiente de deformação α, vidro apoiado em 4 lados (chave: l/L) ----
+const ALPHA_TABELA6 = [
+  {r:1.0,a:0.6571},{r:0.9,a:0.8000},{r:0.8,a:0.9714},{r:0.7,a:1.1857},
+  {r:0.6,a:1.4143},{r:0.5,a:1.6429},{r:0.4,a:1.8714},{r:0.3,a:2.1000},
+  {r:0.2,a:2.1000},{r:0.1,a:2.1143}
+];
+function alphaTabela6(lOverL){
+  const r = Math.max(0, Math.min(1, lOverL));
+  if(r <= 0.1) return 2.1143;
+  for(let i=0;i<ALPHA_TABELA6.length-1;i++){
+    const a1=ALPHA_TABELA6[i], a2=ALPHA_TABELA6[i+1];
+    if(r<=a1.r && r>=a2.r){
+      const t = (r-a2.r)/(a1.r-a2.r);
+      return a2.a + t*(a1.a-a2.a);
+    }
   }
-  return { espessura: escolhida, razaoAspecto: razao, betaFinal, tensaoAdm };
+  return ALPHA_TABELA6[0].a;
+}
+
+// ---- Tabela 7 — coeficiente de deformação α, vidro apoiado em 3 lados (chave: L/b, apoio/borda livre) ----
+const ALPHA_TABELA7 = [
+  {r:0.300,a:0.68571},{r:0.333,a:0.73143},{r:0.350,a:0.80000},{r:0.400,a:0.91429},
+  {r:0.500,a:1.14286},{r:0.667,a:1.51429},{r:0.700,a:1.56286},{r:0.800,a:1.71000},
+  {r:0.900,a:1.85714},{r:1.000,a:2.00000},{r:1.100,a:2.05714},{r:1.200,a:2.11429},
+  {r:1.300,a:2.17143},{r:1.400,a:2.22857},{r:1.500,a:2.28571},{r:1.750,a:2.31429},
+  {r:2.000,a:2.35714},{r:3.000,a:2.37143},{r:4.000,a:2.38571},{r:5.000,a:2.38571}
+];
+function alphaTabela7(LOverB){
+  if(LOverB<=ALPHA_TABELA7[0].r) return ALPHA_TABELA7[0].a;
+  if(LOverB>=ALPHA_TABELA7[ALPHA_TABELA7.length-1].r) return ALPHA_TABELA7[ALPHA_TABELA7.length-1].a;
+  for(let i=0;i<ALPHA_TABELA7.length-1;i++){
+    const a1=ALPHA_TABELA7[i], a2=ALPHA_TABELA7[i+1];
+    if(LOverB>=a1.r && LOverB<=a2.r){
+      const t = (LOverB-a1.r)/(a2.r-a1.r);
+      return a1.a + t*(a2.a-a1.a);
+    }
+  }
+  return ALPHA_TABELA7[ALPHA_TABELA7.length-1].a;
+}
+
+// ---- Tabela 8 — usos e aplicações dos vidros (condicionantes) ----
+const TABELA8_APLICACOES = [
+  {id:'portas', grupo:'Portas', nome:'Portas', regras:{comum:'NÃO', temperado:'SIM', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'porta-adj-maior', grupo:'Áreas adjacentes às portas', nome:'Área adjacente à porta — dividindo ambientes com desnível maior que 1,0 m', regras:{comum:'NÃO', temperado:'SIM', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'porta-adj-menor', grupo:'Áreas adjacentes às portas', nome:'Área adjacente à porta — dividindo ambientes com desnível menor ou igual a 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — lado interno: laminado de segurança classe 1; lado externo: termoendurecido, temperado ou laminado de segurança'}},
+  {id:'divisorias-maior', grupo:'Divisórias e vitrines', nome:'Dividindo ambientes com desnível maior que 1,0 m', regras:{comum:'NÃO', temperado:'SIM', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'divisorias-menor', grupo:'Divisórias e vitrines', nome:'Dividindo ambientes com desnível menor ou igual a 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — lado interno: laminado de segurança classe 1; lado externo: termoendurecido, temperado ou laminado de segurança'}},
+  {id:'janelas-abaixo-110', grupo:'Janelas', nome:'Vidros instalados abaixo da cota de 1,10 m em relação ao piso', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — lado interno: laminado de segurança classe 1; lado externo: termoendurecido, temperado ou laminado de segurança'}},
+  {id:'janelas-acima-110', grupo:'Janelas', nome:'Vidros instalados acima da cota de 1,10 m em relação ao piso', regras:{comum:'SIM', temperado:'SIM', laminado:'SIM', insulado:'SIM — pode ser composto por qualquer tipo de vidro'}},
+  {id:'janelas-projetantes', grupo:'Janelas', nome:'Janelas projetantes móveis (projetante, basculante, maxim-ar, projetante-deslizante, de giro, de eixo vertical, pivotante, sanfona/camarão, reversível), acima de 1,10 m', regras:{comum:'NÃO — exceto quando atendidos os requisitos complementares desta aplicação (ver Tabela 8)', temperado:'SIM', laminado:'SIM', insulado:'SIM — pode ser composto por qualquer tipo de vidro'}},
+  {id:'fachadas-abaixo-110-maior', grupo:'Fachadas verticais', nome:'Abaixo de 1,10 m — dividindo ambientes com desnível maior que 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1 — totalmente encaixilhado ou colado em todo o seu perímetro', insulado:'SIM — lado interno: laminado de segurança classe 1; lado externo: termoendurecido, temperado ou laminado de segurança'}},
+  {id:'fachadas-abaixo-110-menor', grupo:'Fachadas verticais', nome:'Abaixo de 1,10 m — dividindo ambientes com desnível menor ou igual a 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'fachadas-acima-110', grupo:'Fachadas verticais', nome:'Acima de 1,10 m em relação ao piso', regras:{comum:'SIM — em todos os casos, totalmente encaixilhado/colado no perímetro; projeção máx. 250 mm da face externa da fachada (Fig. 11); área ≤ 0,64 m² e lado maior ≤ 800 mm', temperado:'SIM — projeção máxima a partir da face externa de 250 mm (Fig. 11)', laminado:'SIM', insulado:'SIM — projeção ≤ 250 mm: qualquer tipo de vidro; projeção > 250 mm (até 6 m do solo): lado externo deve ser laminado de segurança, totalmente encaixilhado'}},
+  {id:'fachadas-inc-abaixo-110-maior', grupo:'Fachadas inclinadas', nome:'Abaixo de 1,10 m — dividindo ambientes com desnível maior que 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — lado interno: laminado de segurança classe 1; lado externo com inclinação positiva: termoendurecido, temperado ou laminado de segurança; com inclinação negativa: laminado de segurança'}},
+  {id:'fachadas-inc-abaixo-110-menor', grupo:'Fachadas inclinadas', nome:'Abaixo de 1,10 m — dividindo ambientes com desnível menor ou igual a 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'fachadas-inc-acima-110', grupo:'Fachadas inclinadas', nome:'Acima de 1,10 m em relação ao piso', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM', insulado:'SIM — aplicação com inclinação positiva: lado interno laminado de segurança, lado externo termoendurecido/temperado/laminado de segurança; inclinação negativa: lado interno e lado externo laminado de segurança'}},
+  {id:'guarda-corpos', grupo:'Guarda-corpos', nome:'Guarda-corpos (ver ABNT NBR 14718)', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — composto por vidro laminado de segurança, classe 1'}},
+  {id:'muros-maior', grupo:'Muros de vidro', nome:'Dividindo ambientes com desnível maior que 1,0 m', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — lado interno: laminado de segurança classe 1; lado externo: termoendurecido ou laminado de segurança'}},
+  {id:'muros-menor', grupo:'Muros de vidro', nome:'Dividindo ambientes com desnível menor ou igual a 1,0 m', regras:{comum:'NÃO', temperado:'SIM', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'uso-especial', grupo:'Uso especial / segurança adicional', nome:'Esquadrias em ambientes para crianças, idosos ou com necessidade de atendimento de saúde (creches, escolas, hospitais, postos de saúde, asilos etc.)', regras:{comum:'NÃO — exceto quando aplicado como revestimento, ou em esquadrias acima de 1,80 m em relação ao piso', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — devem ser utilizados apenas vidros de segurança, atendendo aos requisitos de cada aplicação desta Tabela'}},
+  {id:'grande-publico', grupo:'Uso especial / segurança adicional', nome:'Esquadrias em ambientes de grande concentração de público (terminais, shopping centers, praças de alimentação, museus, estádios, universidades etc.)', regras:{comum:'NÃO — exceto quando aplicado como revestimento, ou em esquadrias acima de 1,80 m em relação ao piso', temperado:'NÃO', laminado:'SIM, classe 1', insulado:'SIM — devem ser utilizados apenas vidros de segurança, atendendo aos requisitos de cada aplicação desta Tabela'}},
+  {id:'coberturas', grupo:'Coberturas', nome:'Coberturas, marquises, claraboias e outras aplicações não verticais', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM', insulado:'SIM — deve ser composto por vidro temperado ou laminado de segurança'}},
+  {id:'pisos-degraus', grupo:'Pisos e elementos estruturais', nome:'Pisos e degraus de vidro, visores de piscinas, aquários e elementos estruturais de vidro', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM', insulado:'SIM — deve ser composto apenas por vidro laminado de segurança'}},
+  {id:'retardar-intrusao', grupo:'Segurança contra intrusão', nome:'Vidros para retardar ações de intrusão (ex.: fechamentos envidraçados em geral, barreiras de separação em estádios/esportes, isolamento de jaulas em zoológicos — ver EN 1627, EN 356 e ASTM F1233)', regras:{comum:'NÃO', temperado:'NÃO', laminado:'SIM', insulado:'SIM — a peça de vidro sujeita a impacto deve ser vidro temperado ou laminado de segurança'}},
+  {id:'revestimento', grupo:'Revestimento', nome:'Revestimento (inclusive espelho — ver ABNT NBR 15198)', regras:{comum:'SIM', temperado:'SIM', laminado:'SIM', insulado:'SIM'}},
+  {id:'proximo-escadas', grupo:'Escadas, rampas e patamares', nome:'Vidros instalados a distância horizontal ≤ 1,50 m de escadas, rampas ou ao piso/patamar do andar, abaixo da cota de 1,50 m em relação ao degrau/patamar (exceto guarda-corpos — ver Figura 13)', regras:{comum:'NÃO', temperado:'SIM', laminado:'SIM, classe 1', insulado:'SIM — lado interno: laminado de segurança classe 1, termoendurecido ou temperado; lado externo: qualquer tipo de vidro'}},
+  {id:'resistencia-fogo', grupo:'Fechamentos especiais', nome:'Fechamentos envidraçados que exijam resistência ao fogo por tempo determinado', regras:{comum:'Verificar classificação e tempo de resistência exigidos no projeto, conforme ABNT NBR 14925', temperado:'Verificar classificação e tempo de resistência exigidos no projeto, conforme ABNT NBR 14925', laminado:'Verificar classificação e tempo de resistência exigidos no projeto, conforme ABNT NBR 14925', insulado:'Verificar classificação e tempo de resistência exigidos no projeto, conforme ABNT NBR 14925'}},
+  {id:'boxes-banheiro', grupo:'Fechamentos especiais', nome:'Boxes de banheiro', regras:{comum:'NÃO', temperado:'Ver ABNT NBR 14207', laminado:'Ver ABNT NBR 14207', insulado:'Ver ABNT NBR 14207'}},
+  {id:'sacadas', grupo:'Fechamentos especiais', nome:'Envidraçamento de sacadas', regras:{comum:'NÃO', temperado:'Ver ABNT NBR 16259', laminado:'Ver ABNT NBR 16259', insulado:'Ver ABNT NBR 16259'}},
+  {id:'blindagens', grupo:'Fechamentos especiais', nome:'Blindagens resistentes a impactos balísticos em geral', regras:{comum:'Ver ABNT NBR 15000 e legislação vigente', temperado:'Ver ABNT NBR 15000 e legislação vigente', laminado:'Ver ABNT NBR 15000 e legislação vigente', insulado:'Ver ABNT NBR 15000 e legislação vigente'}},
+  {id:'explosao', grupo:'Fechamentos especiais', nome:'Fechamentos envidraçados para prevenir as consequências de uma explosão', regras:{comum:'Ver ASTM F1642', temperado:'Ver ASTM F1642', laminado:'Ver ASTM F1642', insulado:'Ver ASTM F1642'}},
+];
+
+function popularAplicacoesVidro(){
+  const sel = document.getElementById('vidAplicacao');
+  if(!sel) return;
+  let lastGrupo = null, html = '';
+  TABELA8_APLICACOES.forEach(a=>{
+    if(a.grupo !== lastGrupo){
+      if(lastGrupo!==null) html += '</optgroup>';
+      html += `<optgroup label="${esc(a.grupo)}">`;
+      lastGrupo = a.grupo;
+    }
+    html += `<option value="${a.id}">${esc(a.nome)}</option>`;
+  });
+  html += '</optgroup>';
+  sel.innerHTML = html;
+}
+
+function regraBadgeVidro(regra){
+  const r = (regra||'').toUpperCase();
+  if(r.startsWith('SIM')) return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(39,174,96,.14);color:#1e8449;white-space:nowrap;">SIM</span>`;
+  if(r.startsWith('NÃO') || r.startsWith('NAO')) return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(200,16,46,.12);color:#a80e26;white-space:nowrap;">NÃO</span>`;
+  return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(230,126,34,.15);color:#b35900;white-space:nowrap;">VER NORMA</span>`;
+}
+
+function categoriaComposicaoAtualVidro(){
+  if(!vidComposicaoState) return null;
+  if(vidComposicaoState.tipo === 'monolitico'){
+    return temperadoPredominanteVidro(vidComposicaoState) ? 'temperado' : 'comum';
+  }
+  if(vidComposicaoState.tipo === 'laminado') return 'laminado';
+  return 'insulado';
+}
+
+function renderCondicionantesVidro(){
+  const selEl = document.getElementById('vidAplicacao');
+  const box = document.getElementById('vidCondicionantesBox');
+  if(!selEl || !box) return;
+  const ap = TABELA8_APLICACOES.find(a=>a.id===selEl.value);
+  if(!ap){ box.innerHTML=''; return; }
+  const catAtual = categoriaComposicaoAtualVidro();
+  const linhas = [
+    {key:'comum', label:'Float / Texturizado / Termoendurecido / Texturizado aramado'},
+    {key:'temperado', label:'Temperado'},
+    {key:'laminado', label:'Laminado de segurança'},
+    {key:'insulado', label:'Insulado'},
+  ];
+  box.innerHTML = `
+    <div class="panel" style="margin-top:10px;">
+      <div class="panel-body" style="padding:14px 16px;">
+        <table>
+          <thead><tr><th>Tipo de vidro</th><th>Permitido</th><th>Condição</th></tr></thead>
+          <tbody>
+          ${linhas.map(l=>{
+            const regra = ap.regras[l.key] || '—';
+            const destaque = l.key===catAtual ? 'background:#fff7e6;' : '';
+            return `<tr style="${destaque}"><td>${l.label}${l.key===catAtual?' <strong>(composição atual)</strong>':''}</td><td>${regraBadgeVidro(regra)}</td><td style="font-size:12.5px;">${esc(regra)}</td></tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+        <div class="step-note" style="margin-top:8px;">Conforme Tabela 8 da ABNT NBR 7199:2025. "Laminado de segurança" exige aprovação em ensaio de classificação de segurança conforme ABNT NBR 14697; verifique a classe exigida (classe 1, quando indicada).</div>
+      </div>
+    </div>`;
+}
+
+// ---- Composição do vidro — construtor dinâmico (monolítico / laminado / insulado) ----
+let vidComposicaoState = null;
+let ultimoResultadoVidro = null;
+
+function novaLaminaVidro(){ return {tipo:'float', espessura:6}; }
+function novaFolhaVidro(){ return {tipoFolha:'monolitico', laminas:[novaLaminaVidro()]}; }
+
+function mudarTipoComposicaoVidro(){
+  const tipo = document.getElementById('vidTipoComposicao').value;
+  if(tipo === 'monolitico') vidComposicaoState = {tipo:'monolitico', laminas:[novaLaminaVidro()]};
+  else if(tipo === 'laminado') vidComposicaoState = {tipo:'laminado', laminas:[novaLaminaVidro(), novaLaminaVidro()]};
+  else vidComposicaoState = {tipo:'insulado', folhas:[novaFolhaVidro(), novaFolhaVidro()]};
+  renderComposicaoBuilderVidro();
+  renderCondicionantesVidro();
+}
+
+function optsTiposMonoliticoVidro(selecionado){
+  return VIDRO_TIPOS_MONOLITICO.map(t=>`<option value="${t.key}" ${t.key===selecionado?'selected':''}>${t.label}</option>`).join('');
+}
+
+function renderLaminaRowVidro(lamina, label, onTipo, onEsp, onRemover){
+  return `<div class="form-grid cols-3" style="align-items:end;margin-bottom:8px;">
+    <div class="field"><label>Tipo de vidro${label?(' — '+label):''}</label>
+      <select onchange="${onTipo}">${optsTiposMonoliticoVidro(lamina.tipo)}</select>
+    </div>
+    <div class="field"><label>Espessura nominal (mm)</label>
+      <input type="number" step="0.1" value="${lamina.espessura}" onchange="${onEsp}">
+    </div>
+    ${onRemover ? `<div class="field" style="justify-content:flex-end;"><button class="btn secondary small" type="button" onclick="${onRemover}">Remover</button></div>` : '<div></div>'}
+  </div>`;
+}
+
+function renderComposicaoBuilderVidro(){
+  const wrap = document.getElementById('vidComposicaoBuilder');
+  if(!wrap) return;
+  if(!vidComposicaoState){ wrap.innerHTML=''; return; }
+
+  if(vidComposicaoState.tipo === 'monolitico'){
+    wrap.innerHTML = renderLaminaRowVidro(vidComposicaoState.laminas[0], null,
+      `atualizarLaminaVidro(null,0,'tipo',this.value)`,
+      `atualizarLaminaVidro(null,0,'espessura',this.value)`, null);
+    return;
+  }
+
+  if(vidComposicaoState.tipo === 'laminado'){
+    let html = vidComposicaoState.laminas.map((l,i)=>renderLaminaRowVidro(l, 'lâmina '+(i+1),
+      `atualizarLaminaVidro(null,${i},'tipo',this.value)`,
+      `atualizarLaminaVidro(null,${i},'espessura',this.value)`,
+      vidComposicaoState.laminas.length>2 ? `removerLaminaVidro(null,${i})` : null
+    )).join('');
+    html += `<div class="step-note" style="margin:4px 0 10px;">Composição atual: ${vidComposicaoState.laminas.length} vidros (ε₂ = ${eps2ForCount(vidComposicaoState.laminas.length)}).</div>`;
+    if(vidComposicaoState.laminas.length < 4) html += `<button class="btn secondary small" type="button" onclick="adicionarLaminaVidro(null)">+ Adicionar lâmina</button>`;
+    wrap.innerHTML = html;
+    return;
+  }
+
+  // insulado
+  let html = '';
+  vidComposicaoState.folhas.forEach((folha, fi)=>{
+    const tituloFolha = fi===0 ? 'Folha '+(fi+1)+' (lado externo)' : (fi===vidComposicaoState.folhas.length-1 ? 'Folha '+(fi+1)+' (lado interno)' : 'Folha '+(fi+1));
+    html += `<div class="panel" style="margin-bottom:10px;"><div class="panel-head" style="font-size:13px;">${tituloFolha}</div><div class="panel-body">`;
+    html += `<div class="form-grid cols-3">
+      <div class="field"><label>Tipo da folha</label>
+        <select onchange="atualizarTipoFolhaVidro(${fi},this.value)">
+          <option value="monolitico" ${folha.tipoFolha==='monolitico'?'selected':''}>Monolítico</option>
+          <option value="laminado" ${folha.tipoFolha==='laminado'?'selected':''}>Laminado</option>
+        </select>
+      </div>
+    </div>`;
+    if(folha.tipoFolha === 'monolitico'){
+      html += renderLaminaRowVidro(folha.laminas[0], null,
+        `atualizarLaminaVidro(${fi},0,'tipo',this.value)`,
+        `atualizarLaminaVidro(${fi},0,'espessura',this.value)`, null);
+    } else {
+      html += folha.laminas.map((l,li)=>renderLaminaRowVidro(l, 'lâmina '+(li+1),
+        `atualizarLaminaVidro(${fi},${li},'tipo',this.value)`,
+        `atualizarLaminaVidro(${fi},${li},'espessura',this.value)`,
+        folha.laminas.length>2 ? `removerLaminaVidro(${fi},${li})` : null
+      )).join('');
+      html += `<div class="step-note" style="margin:4px 0 10px;">${folha.laminas.length} vidros nesta folha (ε₂ = ${eps2ForCount(folha.laminas.length)}).</div>`;
+      if(folha.laminas.length < 4) html += `<button class="btn secondary small" type="button" onclick="adicionarLaminaVidro(${fi})">+ Adicionar lâmina</button>`;
+    }
+    html += `</div></div>`;
+  });
+  html += `<div class="step-note" style="margin:4px 0 10px;">Composição atual: ${vidComposicaoState.folhas.length} folhas (ε₁ = ${eps1ForCount(vidComposicaoState.folhas.length)}).</div>`;
+  if(vidComposicaoState.folhas.length < 3) html += `<button class="btn secondary small" type="button" onclick="adicionarFolhaVidro()">+ Adicionar folha (câmara)</button>`;
+  if(vidComposicaoState.folhas.length > 2) html += ` <button class="btn secondary small" type="button" onclick="removerFolhaVidro()">Remover última folha</button>`;
+  wrap.innerHTML = html;
+}
+
+function atualizarLaminaVidro(folhaIdx, laminaIdx, campo, valor){
+  const alvo = (folhaIdx===null) ? vidComposicaoState.laminas : vidComposicaoState.folhas[folhaIdx].laminas;
+  alvo[laminaIdx][campo] = campo==='espessura' ? (parseFloat(valor)||0) : valor;
+  renderCondicionantesVidro();
+}
+function adicionarLaminaVidro(folhaIdx){
+  const alvo = (folhaIdx===null) ? vidComposicaoState.laminas : vidComposicaoState.folhas[folhaIdx].laminas;
+  if(alvo.length>=4){ toast('Máximo de 4 lâminas por laminado.'); return; }
+  alvo.push(novaLaminaVidro());
+  renderComposicaoBuilderVidro();
+}
+function removerLaminaVidro(folhaIdx, laminaIdx){
+  const alvo = (folhaIdx===null) ? vidComposicaoState.laminas : vidComposicaoState.folhas[folhaIdx].laminas;
+  if(alvo.length<=2){ toast('Um laminado precisa de ao menos 2 lâminas.'); return; }
+  alvo.splice(laminaIdx,1);
+  renderComposicaoBuilderVidro();
+}
+function atualizarTipoFolhaVidro(folhaIdx, tipoFolha){
+  const folha = vidComposicaoState.folhas[folhaIdx];
+  folha.tipoFolha = tipoFolha;
+  folha.laminas = tipoFolha==='monolitico' ? [novaLaminaVidro()] : [novaLaminaVidro(), novaLaminaVidro()];
+  renderComposicaoBuilderVidro();
+}
+function adicionarFolhaVidro(){
+  if(vidComposicaoState.folhas.length>=3){ toast('Máximo de 3 folhas (vidro insulado).'); return; }
+  vidComposicaoState.folhas.push(novaFolhaVidro());
+  renderComposicaoBuilderVidro();
+}
+function removerFolhaVidro(){
+  if(vidComposicaoState.folhas.length<=2){ toast('Um vidro insulado precisa de ao menos 2 folhas.'); return; }
+  vidComposicaoState.folhas.pop();
+  renderComposicaoBuilderVidro();
+}
+
+function espessuraTotalComposicaoVidro(state){
+  if(state.tipo === 'monolitico') return state.laminas[0].espessura;
+  if(state.tipo === 'laminado') return state.laminas.reduce((s,l)=>s+Number(l.espessura||0),0);
+  return state.folhas.reduce((s,f)=>s+f.laminas.reduce((s2,l)=>s2+Number(l.espessura||0),0),0);
+}
+function temperadoPredominanteVidro(state){
+  const laminas = state.tipo==='insulado' ? state.folhas.flatMap(f=>f.laminas) : state.laminas;
+  return laminas.length>0 && laminas.every(l=>TIPOS_TEMPERADOS.includes(l.tipo));
+}
+function todasLaminasVidro(state){
+  return state.tipo==='insulado' ? state.folhas.flatMap(f=>f.laminas) : state.laminas;
+}
+function maxEps3EmLaminasVidro(laminas){
+  return Math.max(...laminas.map(l=>eps3For(l.tipo)));
+}
+function folhaEquivalenteResistenciaVidro(folha){
+  if(folha.tipoFolha === 'monolitico') return folha.laminas[0].espessura;
+  const soma = folha.laminas.reduce((s,l)=>s+Number(l.espessura||0),0);
+  return soma/(0.9*eps2ForCount(folha.laminas.length));
+}
+function folhaEquivalenteFlechaVidro(folha){
+  if(folha.tipoFolha === 'monolitico') return folha.laminas[0].espessura;
+  const soma = folha.laminas.reduce((s,l)=>s+Number(l.espessura||0),0);
+  return soma/eps2ForCount(folha.laminas.length);
+}
+
+// 4.7.6 — verificação da resistência (espessura equivalente eR)
+function calcularERVidro(state){
+  if(state.tipo === 'monolitico'){
+    const lam = state.laminas[0];
+    const eps3 = eps3For(lam.tipo);
+    const eR = lam.espessura/eps3;
+    return {eR, formula:`e_R = e_i/ε₃ = ${lam.espessura}/${eps3} = ${eR.toFixed(2)} mm`};
+  }
+  if(state.tipo === 'laminado'){
+    const soma = state.laminas.reduce((s,l)=>s+Number(l.espessura||0),0);
+    const eps2 = eps2ForCount(state.laminas.length);
+    const maxEps3 = maxEps3EmLaminasVidro(state.laminas);
+    const eR = soma/(0.9*eps2*maxEps3);
+    return {eR, formula:`e_R = Σe/(0,9×ε₂×MÁX(ε₃)) = ${soma.toFixed(1)}/(0,9×${eps2}×${maxEps3}) = ${eR.toFixed(2)} mm`};
+  }
+  const eps1 = eps1ForCount(state.folhas.length);
+  const maxEps3 = maxEps3EmLaminasVidro(todasLaminasVidro(state));
+  const somaFolhas = state.folhas.reduce((s,f)=>s+folhaEquivalenteResistenciaVidro(f),0);
+  const eR = somaFolhas/(0.9*eps1*maxEps3);
+  return {eR, formula:`e_R = Σ(equivalente por folha)/(0,9×ε₁×MÁX(ε₃)) = ${somaFolhas.toFixed(2)}/(0,9×${eps1}×${maxEps3}) = ${eR.toFixed(2)} mm`};
+}
+
+// 4.7.7.5 — cálculo da espessura equivalente eF para verificação da flecha
+function calcularEFVidro(state){
+  if(state.tipo === 'monolitico'){
+    const eF = state.laminas[0].espessura;
+    return {eF, formula:`e_F = e_i = ${eF} mm`};
+  }
+  if(state.tipo === 'laminado'){
+    const soma = state.laminas.reduce((s,l)=>s+Number(l.espessura||0),0);
+    const eps2 = eps2ForCount(state.laminas.length);
+    const eF = soma/eps2;
+    return {eF, formula:`e_F = Σe/ε₂ = ${soma.toFixed(1)}/${eps2} = ${eF.toFixed(2)} mm`};
+  }
+  const eps1 = eps1ForCount(state.folhas.length);
+  const somaFolhas = state.folhas.reduce((s,f)=>s+folhaEquivalenteFlechaVidro(f),0);
+  const eF = somaFolhas/eps1;
+  return {eF, formula:`e_F = Σ(equivalente por folha)/ε₁ = ${somaFolhas.toFixed(2)}/${eps1} = ${eF.toFixed(2)} mm`};
+}
+
+// 4.7.3 — espessura e1
+function calcularEspessuraE1Vidro(apoio, Lmm, lmm, P){
+  const L = Lmm/1000, l = lmm/1000;
+  const S = L*l;
+  let e1, formula;
+  if(apoio === '4lados'){
+    const razao = L/l;
+    if(razao <= 2.5){
+      e1 = Math.sqrt((S*P)/100);
+      formula = `Vidro apoiado em 4 lados, L/l = ${razao.toFixed(2)} ≤ 2,5: e₁ = √(S×P/100) = √(${S.toFixed(3)}×${P.toFixed(1)}/100) = ${e1.toFixed(2)} mm`;
+    } else {
+      e1 = (l*Math.sqrt(P))/6.3;
+      formula = `Vidro apoiado em 4 lados, L/l = ${razao.toFixed(2)} > 2,5: e₁ = l×√P/6,3 = ${e1.toFixed(2)} mm`;
+    }
+  } else if(apoio === '3lados-livre-menor'){
+    e1 = (l*Math.sqrt(P))/6.3;
+    formula = `Apoiado em 3 lados, borda livre menor: e₁ = l×√P/6,3 = ${e1.toFixed(2)} mm`;
+  } else if(apoio === '3lados-livre-maior'){
+    const razao = L/l;
+    if(razao <= 7.5){
+      e1 = Math.sqrt((L*3*l*P)/100);
+      formula = `Apoiado em 3 lados, borda livre maior, L/l = ${razao.toFixed(2)} ≤ 7,5: e₁ = √(L×3×l×P/100) = ${e1.toFixed(2)} mm`;
+    } else {
+      e1 = (3*l*Math.sqrt(P))/6.3;
+      formula = `Apoiado em 3 lados, borda livre maior, L/l = ${razao.toFixed(2)} > 7,5: e₁ = 3×l×√P/6,3 = ${e1.toFixed(2)} mm`;
+    }
+  } else if(apoio === '2lados-livre-maior'){
+    e1 = (L*Math.sqrt(P))/6.3;
+    formula = `Apoiado em 2 lados opostos, borda livre maior: e₁ = L×√P/6,3 = ${e1.toFixed(2)} mm`;
+  } else {
+    e1 = (l*Math.sqrt(P))/6.3;
+    formula = `Apoiado em 2 lados opostos, borda livre menor: e₁ = l×√P/6,3 = ${e1.toFixed(2)} mm`;
+  }
+  return {e1, formula, S, L, l};
+}
+
+// 4.6 — pressão de cálculo P
+function calcularPressaoDeCalculoVidro({inclinacao, area, PvPa, epTotalMm, tempPredominante, anguloVertical}){
+  const Pp = 25 * epTotalMm; // 4.5.2
+  let P, detalhe = [`Peso próprio Pp = 25 × ep = 25 × ${epTotalMm.toFixed(1)} = ${Pp.toFixed(1)} Pa`];
+  if(inclinacao === 'vertical'){
+    if(area === 'externa'){
+      P = PvPa * 1.5;
+      detalhe.push(`Vidro vertical, área externa: P = Pv × 1,5 = ${PvPa.toFixed(1)} × 1,5 = ${P.toFixed(1)} Pa`);
+    } else {
+      P = 600;
+      detalhe.push(`Vidro vertical, área interna: P = 600 Pa (4.6.1.2). Se identificada a necessidade de pressão maior, calcular conforme ABNT NBR 6123.`);
+    }
+  } else {
+    const thetaGraus = 90 - Math.min(89, Math.max(0, anguloVertical||0));
+    const thetaRad = thetaGraus * Math.PI/180;
+    const alphaCoef = tempPredominante ? 1 : 2;
+    if(area === 'externa'){
+      const P1 = PvPa * 1.5;
+      const P2 = 1.2 * (PvPa + alphaCoef*Pp*Math.cos(thetaRad));
+      P = Math.max(P1, P2);
+      detalhe.push(`Vidro inclinado, área externa: P1 = Pv×1,5 = ${P1.toFixed(1)} Pa`);
+      detalhe.push(`P2 = 1,2×(Pv + α×Pp×cosθ) = 1,2×(${PvPa.toFixed(1)} + ${alphaCoef}×${Pp.toFixed(1)}×cos${thetaGraus.toFixed(1)}°) = ${P2.toFixed(1)} Pa`);
+      detalhe.push(`P = máx(P1,P2) = ${P.toFixed(1)} Pa`);
+    } else {
+      const P3 = Pp * 4.7;
+      const P4 = 600 + Pp;
+      P = Math.max(P3, P4);
+      detalhe.push(`Vidro inclinado, área interna: P3 = Pp×4,7 = ${P3.toFixed(1)} Pa`);
+      detalhe.push(`P4 = Pv + Pp (Pv = 600 Pa) = ${P4.toFixed(1)} Pa`);
+      detalhe.push(`P = máx(P3,P4) = ${P.toFixed(1)} Pa`);
+    }
+  }
+  return {P, Pp, detalhe};
+}
+
+// 4.7.7 — verificação da flecha
+function calcularFlechaVidro(apoio, Lmm, lmm, P, eF){
+  const L = Lmm/1000, l = lmm/1000;
+  let b, alpha;
+  if(apoio === '4lados'){
+    b = l;
+    alpha = alphaTabela6(l/L);
+  } else if(apoio === '3lados-livre-menor'){
+    b = l;
+    alpha = alphaTabela7(L/l);
+  } else if(apoio === '3lados-livre-maior'){
+    b = L;
+    alpha = alphaTabela7(l/L);
+  } else if(apoio === '2lados-livre-maior'){
+    b = L;
+    alpha = 2.1143;
+  } else {
+    b = l;
+    alpha = 2.1143;
+  }
+  const f = alpha * (P/1.5) * Math.pow(b,4) / Math.pow(eF,3);
+  return {f, alpha, b};
+}
+
+function limiteFlechaAdmissivelVidro(apoio, b, tipoComposicao){
+  if(apoio === '4lados') return Math.min(b*16.67, 30);
+  if(apoio.startsWith('3lados')) return tipoComposicao==='insulado' ? Math.min(b*6.67,50) : Math.min(b*10,50);
+  return null; // 2 lados opostos, não estrutural — definir em projeto (4.7.7.3)
+}
+
+// 4.8.2.7 — Tabela 9: valores para embutimento mínimo do vidro (mm), por área do vidro (m²)
+function embutimentoMinimoVidro(areaM2, tipoComposicao){
+  const insulado = tipoComposicao === 'insulado';
+  if(areaM2 <= 0.25) return insulado ? 14 : 5;
+  if(areaM2 <= 1) return insulado ? 14 : 8;
+  if(areaM2 <= 2) return insulado ? 14 : 10;
+  if(areaM2 <= 6) return 14;
+  return 20;
+}
+
+// 4.8.2.7 — Tabela 10: espessura mínima dos calços de borda (mm), por área do vidro (m²)
+function espessuraMinimaCalcoVidro(areaM2, tipoComposicao){
+  const insulado = tipoComposicao === 'insulado';
+  if(areaM2 < 2) return insulado ? 4 : 3;
+  if(areaM2 <= 6) return 4;
+  return 5;
+}
+
+function initFormVidro(){
+  if(document.getElementById('vidAplicacao') && !document.getElementById('vidAplicacao').options.length){
+    popularAplicacoesVidro();
+  }
+  if(!vidComposicaoState){
+    mudarTipoComposicaoVidro();
+  } else {
+    renderComposicaoBuilderVidro();
+    renderCondicionantesVidro();
+  }
 }
 
 function calcularVidro(){
-  const largura = parseFloat(document.getElementById('vidLargura').value);
-  const altura = parseFloat(document.getElementById('vidAltura').value);
-  if(!largura || !altura){ toast('Informe as dimensões do painel de vidro.'); return; }
+  const nome = document.getElementById('vidNome').value.trim();
+  const Lmm = parseFloat(document.getElementById('vidL').value);
+  const lmm = parseFloat(document.getElementById('vidLm').value);
+  if(!Lmm || !lmm){ toast('Informe o maior e o menor lado do painel.'); return; }
+  if(lmm > Lmm){ toast('O menor lado (l) deve ser menor ou igual ao maior lado (L).'); return; }
+
+  if(!vidComposicaoState){ toast('Defina a composição do vidro.'); return; }
+  const laminas = todasLaminasVidro(vidComposicaoState);
+  if(laminas.some(l=>!l.espessura || l.espessura<=0)){ toast('Informe a espessura nominal de todas as lâminas da composição.'); return; }
 
   const pressaoKn = resolverPressaoProjeto('vidOrigemPressao','vidPressaoManual','vidVentoCalcId');
-  if(!pressaoKn || pressaoKn<=0){ toast('Informe/selecione a pressão de projeto.'); return; }
+  if(!pressaoKn || pressaoKn<=0){ toast('Informe/selecione a pressão de vento de projeto.'); return; }
+  const PvPa = pressaoKn * 1000;
 
-  const fatorTipo = parseFloat(document.getElementById('vidTipoVidro').value);
-  const vidro = estimarEspessuraVidro(largura, altura, pressaoKn, fatorTipo);
+  const apoio = document.getElementById('vidApoio').value;
+  const inclinacao = document.getElementById('vidInclinacao').value;
+  const angulo = parseFloat(document.getElementById('vidAngulo').value) || 0;
+  const area = document.getElementById('vidArea').value;
+  const posicao = document.getElementById('vidPosicao').value;
 
+  const epTotal = espessuraTotalComposicaoVidro(vidComposicaoState);
+  const tempPredominante = temperadoPredominanteVidro(vidComposicaoState);
+
+  const {P, Pp, detalhe: detalhePressao} = calcularPressaoDeCalculoVidro({
+    inclinacao, area, PvPa, epTotalMm: epTotal, tempPredominante, anguloVertical: angulo
+  });
+
+  const {e1, formula: formulaE1, S} = calcularEspessuraE1Vidro(apoio, Lmm, lmm, P);
+  const c = (area==='externa' && posicao==='terreo') ? 0.9 : 1.0;
+  const e1c = e1*c;
+
+  const {eR, formula: formulaER} = calcularERVidro(vidComposicaoState);
+  const resistenciaOk = eR >= e1c;
+
+  const {eF, formula: formulaEF} = calcularEFVidro(vidComposicaoState);
+  const {f, alpha, b} = calcularFlechaVidro(apoio, Lmm, lmm, P, eF);
+  const limiteFlecha = limiteFlechaAdmissivelVidro(apoio, b, vidComposicaoState.tipo);
+  const flechaOk = limiteFlecha===null ? null : (f <= limiteFlecha);
+
+  const violaEspMinima = laminas.some(l=>TIPOS_FLOAT_TEXTURIZADO.includes(l.tipo) && l.espessura < 3);
+
+  const aprovado = resistenciaOk && (flechaOk===null || flechaOk) && !violaEspMinima;
+
+  const embutimentoMin = embutimentoMinimoVidro(S, vidComposicaoState.tipo);
+  const calcoMin = espessuraMinimaCalcoVidro(S, vidComposicaoState.tipo);
+
+  const aplicacaoId = document.getElementById('vidAplicacao').value;
+  const aplicacao = TABELA8_APLICACOES.find(a=>a.id===aplicacaoId);
+
+  const resultado = {
+    nome, Lmm, lmm, apoio, inclinacao, angulo, area, posicao,
+    pressaoKn, P, Pp, e1, c, e1c, S, eR, eF, f, alpha, b, limiteFlecha,
+    resistenciaOk, flechaOk, violaEspMinima, aprovado, embutimentoMin, calcoMin,
+    composicao: JSON.parse(JSON.stringify(vidComposicaoState)),
+    aplicacaoId, aplicacaoNome: aplicacao ? aplicacao.nome : null,
+    detalhePressao, formulaE1, formulaER, formulaEF,
+  };
+  ultimoResultadoVidro = resultado;
+
+  const corResultado = aprovado ? '#1e8449' : '#a80e26';
   const box = document.getElementById('vidResultBox');
   box.style.display = 'block';
   box.innerHTML = `
-    <h4>Resultado — Vidro</h4>
+    <h4>Resultado — Dimensionamento de vidro (ABNT NBR 7199:2025)</h4>
     <div class="result-grid">
-      <div class="result-item"><div class="k">Razão de aspecto (a/b)</div><div class="v small">${vidro.razaoAspecto.toFixed(2)}</div></div>
-      <div class="result-item"><div class="k">Tensão admissível ref.</div><div class="v small">${vidro.tensaoAdm.toFixed(1)} MPa</div></div>
-      <div class="result-item"><div class="k">Pressão de projeto</div><div class="v small">${pressaoKn.toFixed(3)} kN/m²</div></div>
-      <div class="result-item"><div class="k">Espessura sugerida</div><div class="v">${vidro.espessura ? vidro.espessura+' mm' : 'Acima de 12mm — reavaliar'}</div></div>
+      <div class="result-item"><div class="k">Pressão de cálculo P</div><div class="v small">${P.toFixed(1)} Pa</div></div>
+      <div class="result-item"><div class="k">Espessura e₁ (referencial)</div><div class="v small">${e1.toFixed(2)} mm</div></div>
+      <div class="result-item"><div class="k">Fator de redução c</div><div class="v small">${c.toFixed(1)}</div></div>
+      <div class="result-item"><div class="k">e₁ × c (exigido)</div><div class="v">${e1c.toFixed(2)} mm</div></div>
+      <div class="result-item"><div class="k">e<sub>R</sub> — composição atual</div><div class="v" style="color:${resistenciaOk?'#1e8449':'#a80e26'}">${eR.toFixed(2)} mm</div></div>
+      <div class="result-item"><div class="k">Flecha f</div><div class="v" style="color:${flechaOk===false?'#a80e26':'#1e8449'}">${f.toFixed(2)} mm</div></div>
+      <div class="result-item"><div class="k">Flecha admissível</div><div class="v small">${limiteFlecha!==null ? limiteFlecha.toFixed(2)+' mm' : 'Definir em projeto (2 lados)'}</div></div>
+      <div class="result-item"><div class="k">Embutimento mínimo (4.8.2.7 · Tab. 9)</div><div class="v small">${embutimentoMin} mm</div></div>
+      <div class="result-item"><div class="k">Espessura mínima do calço de borda (Tab. 10)</div><div class="v small">${calcoMin} mm</div></div>
+      <div class="result-item"><div class="k">Resultado</div><div class="v" style="color:${corResultado}">${aprovado ? 'APROVADO' : 'REPROVADO'}</div></div>
     </div>
-    <div class="disclaimer">Modelo simplificado de placa apoiada nas 4 bordas. Resultado de triagem — validar espessura final na carta de vidro oficial (NBR 7199) e memória de cálculo assinada pelo engenheiro responsável.</div>
+    ${violaEspMinima ? `<div class="disclaimer" style="border-color:#a80e26;">A composição contém vidro float/texturizado com espessura nominal abaixo do mínimo normativo de 3 mm (4.7.2).</div>` : ''}
+    <div class="step-note" style="margin-top:10px;line-height:1.6;">
+      <strong>Memória de cálculo</strong><br>
+      ${detalhePressao.map(d=>esc(d)).join('<br>')}<br>
+      ${esc(formulaE1)}<br>
+      <strong>Verificação da resistência:</strong> ${esc(formulaER)} — condição e<sub>R</sub> ≥ e₁×c (${eR.toFixed(2)} ≥ ${e1c.toFixed(2)}) → <strong style="color:${resistenciaOk?'#1e8449':'#a80e26'}">${resistenciaOk?'atendida':'NÃO atendida'}</strong><br>
+      <strong>Verificação da flecha:</strong> ${esc(formulaEF)}; f = α×(P/1,5)×b⁴/e<sub>F</sub>³ = ${alpha.toFixed(4)}×(${P.toFixed(1)}/1,5)×${b.toFixed(3)}⁴/${eF.toFixed(2)}³ = ${f.toFixed(2)} mm
+      ${limiteFlecha!==null ? ` — limite ${limiteFlecha.toFixed(2)} mm → <strong style="color:${flechaOk?'#1e8449':'#a80e26'}">${flechaOk?'atendida':'NÃO atendida'}</strong>` : ' — flecha admissível a ser definida em projeto e acordada entre as partes (apoio em 2 lados, não estrutural — 4.7.7.3)'}<br>
+      <strong>Embutimento e calço (4.8.2.7):</strong> área do vidro S = ${S.toFixed(3)} m² → embutimento mínimo no caixilho ≥ ${embutimentoMin} mm (Tabela 9); espessura mínima do calço de borda ≥ ${calcoMin} mm (Tabela 10).
+    </div>
+    <div class="disclaimer">Cálculo de triagem conforme ABNT NBR 7199:2025. Não substitui a memória de cálculo assinada pelo engenheiro responsável, nem se aplica a vidro estrutural (colagem estrutural / <em>structural glazing</em>).</div>
     <div class="form-actions">
-      <button class="btn" onclick='salvarCalculoVidro(${JSON.stringify({largura,altura,pressaoKn,vidroEspessura:vidro.espessura})})'>Salvar cálculo</button>
+      <button class="btn" onclick="salvarCalculoVidro()">Salvar cálculo</button>
+      <button class="btn secondary" onclick="emitirMemoriaCalculoVidro()">Emitir memória de cálculo</button>
     </div>
   `;
 }
 
-function salvarCalculoVidro(dados){
+function salvarCalculoVidro(){
+  if(!ultimoResultadoVidro){ toast('Calcule antes de salvar.'); return; }
   const nome = document.getElementById('vidNome').value.trim() || 'Cálculo de vidro';
-  const record = { id: uid(), nome, obraId: document.getElementById('vidObraId').value, data: todayISO(), ...dados };
+  const record = { id: uid(), nome, obraId: document.getElementById('vidObraId').value, data: todayISO(), ...ultimoResultadoVidro, nome };
   let hist = load('calculosVidro');
   hist.push(record);
   save('calculosVidro', hist);
@@ -7673,25 +8265,196 @@ function salvarCalculoVidro(dados){
   toast('Cálculo de vidro salvo.');
 }
 
+const VID_APOIO_LABEL = {
+  '4lados': 'Apoiado em 4 lados',
+  '3lados-livre-menor': 'Apoiado em 3 lados — borda livre é a menor',
+  '3lados-livre-maior': 'Apoiado em 3 lados — borda livre é a do lado maior',
+  '2lados-livre-maior': 'Apoiado em 2 lados opostos — borda livre é a maior',
+  '2lados-livre-menor': 'Apoiado em 2 lados opostos — borda livre é a menor',
+};
+const VID_TIPOCOMP_LABEL = {monolitico:'Monolítico', laminado:'Laminado', insulado:'Insulado'};
+
+function linhasComposicaoVidro(comp){
+  if(!comp) return [];
+  const nomeTipo = k => (VIDRO_TIPOS_MONOLITICO.find(t=>t.key===k)||{}).label || k;
+  if(comp.tipo === 'monolitico'){
+    const l = comp.laminas[0];
+    return [`Monolítico — ${nomeTipo(l.tipo)}, ${l.espessura} mm`];
+  }
+  if(comp.tipo === 'laminado'){
+    return [`Laminado — ${comp.laminas.map(l=>`${nomeTipo(l.tipo)} ${l.espessura} mm`).join(' + ')} (${comp.laminas.length} lâminas)`];
+  }
+  return comp.folhas.map((f,i)=>{
+    const lado = i===0 ? ' (lado externo)' : (i===comp.folhas.length-1 ? ' (lado interno)' : '');
+    const desc = f.tipoFolha==='monolitico'
+      ? `${nomeTipo(f.laminas[0].tipo)} ${f.laminas[0].espessura} mm`
+      : `Laminado — ${f.laminas.map(l=>`${nomeTipo(l.tipo)} ${l.espessura} mm`).join(' + ')}`;
+    return `Folha ${i+1}${lado}: ${desc}`;
+  });
+}
+
+// Monta o HTML da memória de cálculo no padrão de documento do SGPT (mesma
+// área de impressão #rdoPrintArea usada pelos demais relatórios do sistema).
+function montarHtmlMemoriaVidro(dados){
+  const obra = load('obras').find(o=>o.id===dados.obraId) || {};
+  const funcionarios = load('funcionarios');
+  const tecnico = funcionarios.find(f=>f.id===obra.tecnicoResponsavel);
+  const aplicacao = TABELA8_APLICACOES.find(a=>a.id===dados.aplicacaoId);
+  const corResultado = dados.aprovado ? '#1e8449' : '#a80e26';
+
+  const catComposicao = dados.composicao.tipo === 'monolitico'
+    ? (temperadoPredominanteVidro(dados.composicao) ? 'temperado' : 'comum')
+    : (dados.composicao.tipo === 'laminado' ? 'laminado' : 'insulado');
+  const linhasTiposVidro = [
+    {key:'comum', label:'Float / Texturizado / Termoendurecido / Texturizado aramado'},
+    {key:'temperado', label:'Temperado'},
+    {key:'laminado', label:'Laminado de segurança'},
+    {key:'insulado', label:'Insulado'},
+  ];
+  const linhasRegras = aplicacao ? linhasTiposVidro.map(l=>{
+    const regra = aplicacao.regras[l.key] || '—';
+    return `<tr${l.key===catComposicao?' style="background:#fff7e6;"':''}><td>${esc(l.label)}${l.key===catComposicao?' <strong>(composição atual)</strong>':''}</td><td>${esc(regra)}</td></tr>`;
+  }).join('') : '';
+
+  return `
+    <h1>Memória de Cálculo — Dimensionamento de Vidro</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Identificação do painel: <strong>${esc(dados.nome||'—')}</strong><br>
+      ${tecnico ? `Técnico responsável: <strong>${esc(tecnico.nome)}</strong><br>` : ''}
+      Norma de referência: ABNT NBR 7199:2025 — Aplicações de vidros na construção civil — Requisitos<br>
+      Data do cálculo: ${fmtDate(dados.data)} · Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+
+    <h2>1. Dados do painel</h2>
+    <table>
+      <tbody>
+        <tr><td>Maior lado (L)</td><td>${dados.Lmm} mm</td></tr>
+        <tr><td>Menor lado (l)</td><td>${dados.lmm} mm</td></tr>
+        <tr><td>Área do painel (S)</td><td>${dados.S.toFixed(3)} m²</td></tr>
+        <tr><td>Condição de apoio</td><td>${esc(VID_APOIO_LABEL[dados.apoio]||dados.apoio)}</td></tr>
+        <tr><td>Inclinação</td><td>${dados.inclinacao==='inclinado' ? `Inclinado — ${dados.angulo}° em relação à vertical` : 'Vertical (≤ 15° em relação à vertical)'}</td></tr>
+        <tr><td>Posicionamento</td><td>${dados.area==='externa'?'Externa':'Interna'}${dados.area==='externa' ? (dados.posicao==='terreo' ? ' — piso térreo ou até 6 m do solo' : ' — demais casos') : ''}</td></tr>
+      </tbody>
+    </table>
+
+    <h2>2. Pressão de cálculo</h2>
+    <table>
+      <tbody>
+        <tr><td>Pressão de vento de projeto (Pv)</td><td>${dados.pressaoKn.toFixed(3)} kN/m²</td></tr>
+        <tr><td>Peso próprio por unidade de área (Pp)</td><td>${dados.Pp.toFixed(1)} Pa</td></tr>
+        <tr><td>Pressão de cálculo adotada (P)</td><td><strong>${dados.P.toFixed(1)} Pa</strong></td></tr>
+      </tbody>
+    </table>
+    <ul>${(dados.detalhePressao||[]).map(d=>`<li>${esc(d)}</li>`).join('')}</ul>
+
+    <h2>3. Composição do vidro</h2>
+    <ul>${linhasComposicaoVidro(dados.composicao).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>
+
+    <h2>4. Verificação da resistência (4.7.6)</h2>
+    <table>
+      <tbody>
+        <tr><td>Espessura referencial e₁</td><td>${dados.e1.toFixed(2)} mm</td></tr>
+        <tr><td>Fator de redução c</td><td>${dados.c.toFixed(1)}</td></tr>
+        <tr><td>Espessura exigida (e₁ × c)</td><td>${dados.e1c.toFixed(2)} mm</td></tr>
+        <tr><td>Espessura equivalente de resistência e<sub>R</sub></td><td>${dados.eR.toFixed(2)} mm</td></tr>
+        <tr><td>Condição e<sub>R</sub> ≥ e₁×c</td><td style="color:${dados.resistenciaOk?'#1e8449':'#a80e26'};font-weight:700;">${dados.resistenciaOk?'ATENDIDA':'NÃO ATENDIDA'}</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11.5px;color:#555;">${esc(dados.formulaE1||'')}<br>${esc(dados.formulaER||'')}</p>
+
+    <h2>5. Verificação da flecha (4.7.7)</h2>
+    <table>
+      <tbody>
+        <tr><td>Espessura equivalente de flecha e<sub>F</sub></td><td>${dados.eF.toFixed(2)} mm</td></tr>
+        <tr><td>Flecha calculada (f)</td><td>${dados.f.toFixed(2)} mm</td></tr>
+        <tr><td>Flecha admissível</td><td>${dados.limiteFlecha!=null ? dados.limiteFlecha.toFixed(2)+' mm' : 'A definir em projeto (apoio em 2 lados)'}</td></tr>
+        <tr><td>Condição f ≤ flecha admissível</td><td style="color:${dados.flechaOk===false?'#a80e26':'#1e8449'};font-weight:700;">${dados.flechaOk===null ? 'A definir em projeto' : (dados.flechaOk?'ATENDIDA':'NÃO ATENDIDA')}</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11.5px;color:#555;">${esc(dados.formulaEF||'')}</p>
+
+    <h2>6. Embutimento mínimo e calço de apoio (4.8.2.7)</h2>
+    <table>
+      <tbody>
+        <tr><td>Embutimento mínimo do vidro no caixilho (Tabela 9)</td><td><strong>${dados.embutimentoMin} mm</strong></td></tr>
+        <tr><td>Espessura mínima do calço de borda (Tabela 10)</td><td><strong>${dados.calcoMin} mm</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11.5px;color:#555;">Valores recomendados pela norma em função da área do painel (S = ${dados.S.toFixed(3)} m²) e do tipo de composição (${VID_TIPOCOMP_LABEL[dados.composicao.tipo]}). O detalhamento executivo do rebaixo, calços de apoio/laterais e folgas deve seguir o projeto de esquadria (4.8.2.5 a 4.8.2.7).</p>
+
+    ${aplicacao ? `
+    <h2>7. Condicionantes de uso e aplicação — ${esc(aplicacao.nome)} (Tabela 8)</h2>
+    <table>
+      <thead><tr><th>Tipo de vidro</th><th>Condição</th></tr></thead>
+      <tbody>${linhasRegras}</tbody>
+    </table>` : ''}
+
+    <h2>8. Conclusão</h2>
+    <p style="font-size:16px;font-weight:700;color:${corResultado};">${dados.aprovado ? 'APROVADO' : 'REPROVADO'}</p>
+    ${dados.violaEspMinima ? `<p style="color:#a80e26;">A composição contém vidro float/texturizado com espessura nominal abaixo do mínimo normativo de 3 mm (4.7.2).</p>` : ''}
+    <p style="font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;margin-top:20px;">
+      Cálculo de triagem gerado pelo SGPT conforme ABNT NBR 7199:2025. Não substitui a memória de cálculo assinada pelo engenheiro responsável,
+      nem se aplica a projetos de vidro estrutural (colagem estrutural / <em>structural glazing</em>). Os valores de embutimento e calço são
+      recomendações normativas de referência — a especificação final do sistema de esquadria deve ser validada com o fabricante.
+    </p>
+  `;
+}
+
+function emitirMemoriaCalculoVidro(id){
+  let dados;
+  if(id){
+    dados = load('calculosVidro').find(h=>h.id===id);
+    if(!dados){ toast('Cálculo não encontrado.'); return; }
+  } else {
+    if(!ultimoResultadoVidro){ toast('Calcule antes de emitir a memória.'); return; }
+    dados = {
+      ...ultimoResultadoVidro,
+      nome: document.getElementById('vidNome').value.trim() || 'Cálculo de vidro',
+      obraId: document.getElementById('vidObraId').value,
+      data: todayISO(),
+    };
+  }
+  document.getElementById('rdoPrintArea').innerHTML = montarHtmlMemoriaVidro(dados);
+  window.print();
+}
+
 function limparFormVidro(){
-  ['vidNome','vidPressaoManual','vidLargura','vidAltura'].forEach(f=>document.getElementById(f).value='');
+  ['vidNome','vidPressaoManual','vidL','vidLm','vidAngulo'].forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
   document.getElementById('vidObraId').value='';
   document.getElementById('vidOrigemPressao').value='manual';
   toggleOrigemPressaoVidro();
+  document.getElementById('vidApoio').value='4lados';
+  document.getElementById('vidInclinacao').value='vertical';
+  toggleInclinacaoVidro();
+  document.getElementById('vidArea').value='externa';
+  toggleAreaVidro();
+  document.getElementById('vidPosicao').value='terreo';
+  document.getElementById('vidTipoComposicao').value='monolitico';
+  mudarTipoComposicaoVidro();
+  if(document.getElementById('vidAplicacao').options.length) document.getElementById('vidAplicacao').selectedIndex = 0;
+  renderCondicionantesVidro();
   document.getElementById('vidResultBox').style.display='none';
+  ultimoResultadoVidro = null;
 }
 
 function renderVidHist(){
   const hist = load('calculosVidro').filter(h=>h.obraId===currentObraId);
   document.getElementById('vidHistEmpty').style.display = hist.length ? 'none' : 'block';
   document.getElementById('vidHistBody').innerHTML = hist.slice().reverse().map(h=>{
+    const compLabel = h.composicao ? ({monolitico:'Monolítico',laminado:'Laminado',insulado:'Insulado'}[h.composicao.tipo]||'—') : '—';
     return `<tr>
       <td>${esc(h.nome)}</td>
-      <td>${h.largura} x ${h.altura}</td>
-      <td>${h.pressaoKn.toFixed(3)}</td>
-      <td>${h.vidroEspessura ? h.vidroEspessura+' mm' : '—'}</td>
+      <td>${h.Lmm||'—'} x ${h.lmm||'—'}</td>
+      <td>${compLabel}</td>
+      <td>${h.eR!=null ? h.eR.toFixed(2)+' / '+h.e1c.toFixed(2) : '—'}</td>
+      <td>${h.f!=null ? h.f.toFixed(2)+' mm' : '—'}</td>
+      <td>${h.aprovado===true ? '<strong style="color:#1e8449;">Aprovado</strong>' : (h.aprovado===false ? '<strong style="color:#a80e26;">Reprovado</strong>' : '—')}</td>
       <td>${fmtDate(h.data)}</td>
-      <td style="text-align:right;"><button class="btn small danger" onclick="deleteCalculoVidro('${h.id}')">Excluir</button></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn secondary small" onclick="emitirMemoriaCalculoVidro('${h.id}')">Memória</button>
+        <button class="btn small danger" onclick="deleteCalculoVidro('${h.id}')">Excluir</button>
+      </td>
     </tr>`;
   }).join('');
 }
