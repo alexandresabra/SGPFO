@@ -2229,11 +2229,9 @@
       <section class="section" id="sec-almoxarifado">
 <div id="almoxApp">
 
-<div id="almoxLoadingWrap" style="padding:60px 0;text-align:center;color:var(--ink-soft);font-size:13px;">Carregando Almoxarifado…</div>
-
-<!-- ==================== APP ====================
-     Login único: o acesso já foi liberado pelo login geral do SGPT — não
-     existe mais uma tela de login separada para o Almoxarifado. -->
+<!-- ==================== APP ==================== -->
+<!-- Login único: reaproveita o login do SGPT. Este bloco só é exibido
+     depois que AlmoxApp.init() confirma um supabaseClient autenticado. -->
 <div id="appRoot" style="display:none">
   <header>
     <div class="logo"><svg width="28" height="28" viewBox="0 0 100 100"><circle cx="50" cy="50" r="36" fill="none" stroke="#c8102e" stroke-width="18"/></svg></div>
@@ -11104,9 +11102,10 @@ window.ChamadosApp = Object.assign(window.ChamadosApp||{}, {
 // ============================================================
 
 // ============================================================
-// BANCO DE DADOS — o Almoxarifado usa o MESMO banco/projeto Supabase do
-// SGPT (login único). O cliente é o `supabaseClient` já inicializado pelo
-// próprio SGPT no login geral; aqui só reaproveitamos a referência.
+// BANCO DE DADOS — o Almoxarifado agora usa tabelas próprias dentro do
+// MESMO projeto Supabase do SGPT (schema novo, vazio — sem relação com
+// as tabelas antigas do Almoxarifado). Login único: reaproveita o
+// `supabaseClient` já autenticado pelo login geral do SGPT.
 // ============================================================
 let supabase;
 
@@ -11115,8 +11114,6 @@ let supabase;
 // somente quando o usuário navega até a seção Almoxarifado pela primeira vez.
 
 async function entrarNoApp() {
-  const loadingEl = document.getElementById('almoxLoadingWrap');
-  if (loadingEl) loadingEl.style.display = 'none';
   document.getElementById('appRoot').style.display = 'block';
   await carregarCategorias();
   await carregarItens();
@@ -11136,143 +11133,6 @@ async function entrarNoApp() {
   renderDashboard();
 }
 
-// ============================================================
-// MODO DEMONSTRAÇÃO — banco de dados falso em memória, só para
-// testar o sistema visualmente quando o Supabase real está bloqueado
-// (ex: dentro da prévia/artifact do Claude). Nada aqui é salvo de verdade.
-// ============================================================
-function criarClienteDemo(db) {
-  function tabela(nome) {
-    let _filtros = [];
-    let _op = 'select';
-    let _payload = null;
-    let _order = null;
-    let _limit = null;
-
-    const builder = {
-      select() { return builder; },
-      insert(payload) { _op = 'insert'; _payload = payload; return builder; },
-      update(payload) { _op = 'update'; _payload = payload; return builder; },
-      delete() { _op = 'delete'; return builder; },
-      eq(col, val) { _filtros.push([col, val]); return builder; },
-      order(col, opts) { _order = { col, asc: !(opts && opts.ascending === false) }; return builder; },
-      limit(n) { _limit = n; return builder; },
-      then(resolve, reject) {
-        try { resolve(executar()); } catch (e) { resolve({ data: null, error: { message: e.message } }); }
-      }
-    };
-
-    function passaFiltros(linha) {
-      return _filtros.every(([c, v]) => String(linha[c]) === String(v));
-    }
-
-    function executar() {
-      db[nome] = db[nome] || [];
-      if (_op === 'insert') {
-        const linhas = Array.isArray(_payload) ? _payload : [_payload];
-        linhas.forEach(l => {
-          if (l.id === undefined || l.id === null) {
-            const maxId = db[nome].reduce((m, x) => Math.max(m, +x.id || 0), 0);
-            l.id = maxId + 1;
-          }
-        });
-        db[nome].push(...linhas);
-        return { data: linhas, error: null };
-      }
-      if (_op === 'update') {
-        const alterados = [];
-        db[nome].forEach(l => { if (passaFiltros(l)) { Object.assign(l, _payload); alterados.push(l); } });
-        return { data: alterados, error: null };
-      }
-      if (_op === 'delete') {
-        db[nome] = db[nome].filter(l => !passaFiltros(l));
-        return { data: null, error: null };
-      }
-      let linhas = db[nome].filter(passaFiltros);
-      if (_order) {
-        linhas = [...linhas].sort((a, b) => {
-          const av = a[_order.col], bv = b[_order.col];
-          if (av === bv) return 0;
-          return (av > bv ? 1 : -1) * (_order.asc ? 1 : -1);
-        });
-      }
-      if (_limit) linhas = linhas.slice(0, _limit);
-      return { data: linhas, error: null };
-    }
-
-    return builder;
-  }
-
-  return {
-    from: tabela,
-    auth: {
-      signInWithPassword: async () => ({ error: null }),
-      signOut: async () => ({ error: null }),
-      getSession: async () => ({ data: { session: null } }),
-      getUser: async () => ({ data: { user: { id: 'demo-user', email: 'demo@calper.com' } } }),
-    },
-    storage: {
-      from: (bucket) => ({
-        upload: async (path, arquivo) => {
-          try {
-            const dataUrl = await new Promise((resolve, reject) => {
-              const leitor = new FileReader();
-              leitor.onload = () => resolve(leitor.result);
-              leitor.onerror = () => reject(new Error('Falha ao ler arquivo'));
-              leitor.readAsDataURL(arquivo);
-            });
-            db.__storage = db.__storage || {};
-            db.__storage[bucket + '/' + path] = dataUrl;
-            return { data: { path }, error: null };
-          } catch (e) {
-            return { data: null, error: { message: e.message } };
-          }
-        },
-        getPublicUrl: (path) => ({ data: { publicUrl: (db.__storage && db.__storage[bucket + '/' + path]) || '#' } }),
-      }),
-    },
-  };
-}
-
-function gerarBancoDemo() {
-  return {
-    categorias: [
-      { id: 1, nome: 'Ferragem', descricao: 'Parafusos, dobradiças, roldanas' },
-      { id: 2, nome: 'Vidro', descricao: '' },
-      { id: 3, nome: 'Perfil', descricao: 'Perfis de alumínio' },
-      { id: 4, nome: 'EPI', descricao: 'Equipamentos de Proteção Individual' },
-    ],
-    itens: [
-      { codigo: 'FER-001', categoria: 'Ferragem', descricao: 'Dobradiça de embutir', unidade: 'UN', minimo: 20, quantidade: 8, custo: 12.5, localizacao: 'Rack A1' },
-      { codigo: 'PRF-010', categoria: 'Perfil', descricao: 'Perfil de esquadria linha Suprema', unidade: 'BR', minimo: 10, quantidade: 40, custo: 89.9, localizacao: 'Pátio 2' },
-      { codigo: 'EPI-LUV', categoria: 'EPI', descricao: 'Luva de raspa', unidade: 'PAR', minimo: 10, quantidade: 25, custo: 18, localizacao: 'Almoxarifado', ca: '31469', validade_ca: '2027-05-10', tamanho: 'Único', validade_uso_dias: 180 },
-      { codigo: 'EPI-OCU', categoria: 'EPI', descricao: 'Óculos de proteção', unidade: 'UN', minimo: 10, quantidade: 15, custo: 9.9, localizacao: 'Almoxarifado', ca: '25763', validade_ca: '2026-11-20', tamanho: 'Único', validade_uso_dias: 365 },
-    ],
-    funcionarios: [
-      { matricula: '0001', nome: 'João da Silva', funcao: 'Instalador', setor: 'Obra' },
-      { matricula: '0002', nome: 'Maria Souza', funcao: 'Almoxarife', setor: 'Fábrica' },
-    ],
-    obras: [
-      { codigo: 'OBR-01', nome: 'Murano' },
-      { codigo: 'OBR-02', nome: 'Reserva do Lago' },
-    ],
-    entradas: [], saidas: [], transferencias: [], epis: [],
-    fornecedores: [{ id: 1, razao_social: 'Alumínios São Paulo Ltda', cnpj: '12.345.678/0001-90', contato: 'Carlos', telefone: '(11) 4002-8922' }],
-    refeicoes: [], maletas: [],
-    ferramentas_cadastro: [
-      { id: 1, patrimonio: 'PAT-001', numero_serie: 'SN-8842', descricao: 'Furadeira de Impacto Bosch', categoria: 'Elétrica', estado_conservacao: 'Bom', observacoes: '', valor_compra: 489.9, data_compra: '2024-03-12' },
-      { id: 2, patrimonio: 'PAT-002', numero_serie: '', descricao: 'Nível a Laser', categoria: 'Medição', estado_conservacao: 'Novo', observacoes: '', valor_compra: 320, data_compra: '2025-01-20' },
-    ],
-    ferramentas: [], perfis: [], log_alteracoes: [],
-  };
-}
-
-async function iniciarModoDemo() {
-  supabase = criarClienteDemo(gerarBancoDemo());
-  document.getElementById('almoxLoginErro').textContent = '';
-  await entrarNoApp();
-  toast('🎭 Modo Demonstração ativo — nada aqui é salvo de verdade.', '#3a3a3d');
-}
 
 // ============================================================
 // UTILITÁRIOS
@@ -13523,18 +13383,12 @@ function imprimirPedidoCompra() {
 }
 
 // ============================================================
-// INICIALIZAÇÃO — chamado pelo SGPT (carregarAlmoxarifadoFrame) quando o
-// usuário navega até a seção Almoxarifado pela primeira vez. Login único:
-// reaproveita a sessão/cliente Supabase já autenticado pelo login geral do
-// SGPT, sem tela de login própria.
+// INICIALIZAÇÃO
 // ============================================================
+// Reaproveita o login único do SGPT: só entra se supabaseClient já
+// estiver autenticado (usuário logado no SGPT com Supabase ativo).
 function almoxInit() {
   if (!window.supabaseClient) {
-    // O SGPT ainda não terminou de iniciar o Supabase (ex.: seção aberta
-    // muito rápido) ou o usuário optou por "continuar sem login" — nesse
-    // caso não há sessão autenticada para usar aqui.
-    const loadingEl = document.getElementById('almoxLoadingWrap');
-    if (loadingEl) loadingEl.textContent = 'Não foi possível conectar ao banco de dados. Faça login no SGPT (com Supabase ativo) e abra o Almoxarifado novamente.';
     toast('Almoxarifado precisa do login do SGPT com Supabase ativo. Faça login e tente novamente.');
     return false;
   }
