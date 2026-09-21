@@ -5,12 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SGPT — Sistema de Gestão de Projetos e Técnica | Calper</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<!-- Módulo Almoxarifado: carregador do Supabase via ES module (projeto próprio do Almoxarifado, separado do Supabase do SGPT) -->
-<script type="module">
-  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-  window.__createSupabaseClient = createClient;
-  window.dispatchEvent(new Event('supabaseLibReady'));
-</script>
 <style>
   :root{
     --red: #bd0c1d;
@@ -671,13 +665,6 @@
   #almoxApp .toast{ position: fixed; bottom: 20px; right: 20px; background: var(--green); color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transform: translateY(10px); transition: .2s; pointer-events: none; z-index: 2000; }
   #almoxApp .toast.show{ opacity: 1; transform: translateY(0); }
   #almoxApp{ position: relative; min-height: 520px; }
-  #almoxApp #almoxLoginOverlay{ position: absolute; inset: 0; background: #141414; z-index: 50; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
-  #almoxApp .login-box{ background: #fff; border-radius: 10px; padding: 34px; width: 340px; }
-  #almoxApp .login-title{ font-family: Georgia, serif; font-size: 22px; font-weight: bold; }
-  #almoxApp .login-sub{ font-size: 11px; color: #8b8b90; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 22px; }
-  #almoxApp .login-box input{ width: 100%; margin-bottom: 10px; padding: 10px; }
-  #almoxApp .login-box button{ width: 100%; padding: 11px; margin-top: 6px; }
-  #almoxApp #almoxLoginErro{ color: var(--rust); font-size: 12px; margin-top: 10px; min-height: 16px; }
   #almoxApp #saveStatus{ font-size: 11px; color: #8b8b90; margin-left: auto; }
   #almoxApp .ac-wrap{ position: relative; }
   #almoxApp .ac-wrap input{ width: 100%; }
@@ -2242,24 +2229,11 @@
       <section class="section" id="sec-almoxarifado">
 <div id="almoxApp">
 
-<!-- ==================== LOGIN ==================== -->
-<div id="almoxLoginOverlay">
-  <div class="login-box">
-    <svg width="44" height="44" viewBox="0 0 100 100" style="display:block;margin:0 auto 14px"><circle cx="50" cy="50" r="36" fill="none" stroke="#c8102e" stroke-width="18"/></svg>
-    <div class="login-title" style="text-align:center">Almoxarifado</div>
-    <div class="login-sub" style="text-align:center">Construtora Calper — Divisão de Alumínio</div>
-    <input id="almoxLoginEmail" type="email" placeholder="E-mail">
-    <input id="almoxLoginSenha" type="password" placeholder="Senha">
-    <button class="btn" onclick="AlmoxApp.fazerLogin()">Entrar</button>
-    <div id="almoxLoginErro"></div>
-    <div id="demoWrap" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid #333;text-align:center">
-      <button class="btn" style="background:#3a3a3d;width:100%" onclick="AlmoxApp.iniciarModoDemo()">🎭 Modo Demonstração (testar sem Supabase)</button>
-      <div style="font-size:10px;color:#888;margin-top:6px">Usa dados de exemplo, guardados só nesta aba. Nada é salvo de verdade.</div>
-    </div>
-  </div>
-</div>
+<div id="almoxLoadingWrap" style="padding:60px 0;text-align:center;color:var(--ink-soft);font-size:13px;">Carregando Almoxarifado…</div>
 
-<!-- ==================== APP ==================== -->
+<!-- ==================== APP ====================
+     Login único: o acesso já foi liberado pelo login geral do SGPT — não
+     existe mais uma tela de login separada para o Almoxarifado. -->
 <div id="appRoot" style="display:none">
   <header>
     <div class="logo"><svg width="28" height="28" viewBox="0 0 100 100"><circle cx="50" cy="50" r="36" fill="none" stroke="#c8102e" stroke-width="18"/></svg></div>
@@ -2268,7 +2242,6 @@
       <div class="header-sub">Construtora Calper</div>
     </div>
     <span id="saveStatus"></span>
-    <button class="btn small" style="background:var(--card2);color:#fff" onclick="AlmoxApp.fazerLogout()">Sair</button>
   </header>
 
   <nav>
@@ -4202,8 +4175,9 @@ function carregarChamadosFrame(){
 let almoxarifadoCarregado = false;
 function carregarAlmoxarifadoFrame(){
   if(almoxarifadoCarregado) return;
-  if(window.AlmoxApp && typeof window.AlmoxApp.init === "function") window.AlmoxApp.init();
-  almoxarifadoCarregado = true;
+  if(window.AlmoxApp && typeof window.AlmoxApp.init === "function"){
+    almoxarifadoCarregado = window.AlmoxApp.init() !== false;
+  }
 }
 
 function showSection(id){
@@ -11130,52 +11104,19 @@ window.ChamadosApp = Object.assign(window.ChamadosApp||{}, {
 // ============================================================
 
 // ============================================================
-// CONFIGURAÇÃO SUPABASE — TROCAR PELOS SEUS VALORES REAIS
+// BANCO DE DADOS — o Almoxarifado usa o MESMO banco/projeto Supabase do
+// SGPT (login único). O cliente é o `supabaseClient` já inicializado pelo
+// próprio SGPT no login geral; aqui só reaproveitamos a referência.
 // ============================================================
-const SUPABASE_URL = "https://umavqybqaayrlojiwqnl.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtYXZxeWJxYWF5cmxvaml3cW5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMjU0MTYsImV4cCI6MjA5OTcwMTQxNn0.vZW1buH1wIp_OF6OSKb22QIInVmR6YDwjGXeue02TEU";
 let supabase;
-
-function iniciarSupabaseClient() {
-  supabase = window.__createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  verificarSessao();
-}
-
-// Detecta se estamos num ambiente sandbox que bloqueia rede externa (ex: prévia do Claude).
-// Se bloquear, mostra o botão de Modo Demonstração; numa publicação real (Vercel etc.) ele fica escondido.
-async function detectarSandbox() {
-  try {
-    await fetch(SUPABASE_URL + '/auth/v1/health', { mode: 'no-cors', cache: 'no-store' });
-  } catch (e) {
-    const el = document.getElementById('demoWrap');
-    if (el) el.style.display = 'block';
-  }
-}
 
 // NOTA: inicialização adiada — não roda mais automaticamente ao carregar o
 // script. É disparada pelo AlmoxApp.init() (ver rodapé), chamado pelo SGPT
 // somente quando o usuário navega até a seção Almoxarifado pela primeira vez.
 
-// ============================================================
-// AUTENTICAÇÃO
-// ============================================================
-async function fazerLogin() {
-  const email = document.getElementById('almoxLoginEmail').value;
-  const senha = document.getElementById('almoxLoginSenha').value;
-  document.getElementById('almoxLoginErro').textContent = '';
-  const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if (error) { document.getElementById('almoxLoginErro').textContent = 'E-mail ou senha inválidos.'; return; }
-  await entrarNoApp();
-}
-
-async function fazerLogout() {
-  await supabase.auth.signOut();
-  document.getElementById('appRoot').style.display = 'none';
-  document.getElementById('almoxLoginOverlay').style.display = 'flex';
-}
-
 async function entrarNoApp() {
-  document.getElementById('almoxLoginOverlay').style.display = 'none';
+  const loadingEl = document.getElementById('almoxLoadingWrap');
+  if (loadingEl) loadingEl.style.display = 'none';
   document.getElementById('appRoot').style.display = 'block';
   await carregarCategorias();
   await carregarItens();
@@ -11193,11 +11134,6 @@ async function entrarNoApp() {
   await carregarTransferencias();
   renderRelatorios();
   renderDashboard();
-}
-
-async function verificarSessao() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) await entrarNoApp();
 }
 
 // ============================================================
@@ -13587,20 +13523,24 @@ function imprimirPedidoCompra() {
 }
 
 // ============================================================
-// INICIALIZAÇÃO
+// INICIALIZAÇÃO — chamado pelo SGPT (carregarAlmoxarifadoFrame) quando o
+// usuário navega até a seção Almoxarifado pela primeira vez. Login único:
+// reaproveita a sessão/cliente Supabase já autenticado pelo login geral do
+// SGPT, sem tela de login própria.
 // ============================================================
-// (chamado por iniciarSupabaseClient() lá em cima, assim que a lib carrega)
-
-
 function almoxInit() {
-  if (window.__almoxInitialized) return;
-  window.__almoxInitialized = true;
-  if (window.__createSupabaseClient) {
-    iniciarSupabaseClient();
-  } else {
-    window.addEventListener('supabaseLibReady', iniciarSupabaseClient, { once: true });
+  if (!window.supabaseClient) {
+    // O SGPT ainda não terminou de iniciar o Supabase (ex.: seção aberta
+    // muito rápido) ou o usuário optou por "continuar sem login" — nesse
+    // caso não há sessão autenticada para usar aqui.
+    const loadingEl = document.getElementById('almoxLoadingWrap');
+    if (loadingEl) loadingEl.textContent = 'Não foi possível conectar ao banco de dados. Faça login no SGPT (com Supabase ativo) e abra o Almoxarifado novamente.';
+    toast('Almoxarifado precisa do login do SGPT com Supabase ativo. Faça login e tente novamente.');
+    return false;
   }
-  detectarSandbox();
+  supabase = window.supabaseClient;
+  entrarNoApp();
+  return true;
 }
 
 window.AlmoxApp = {
@@ -13649,12 +13589,9 @@ window.AlmoxApp = {
   excluirSaida: excluirSaida,
   excluirTransferencia: excluirTransferencia,
   executarImpressao: executarImpressao,
-  fazerLogin: fazerLogin,
-  fazerLogout: fazerLogout,
   fecharCategoriaModal: fecharCategoriaModal,
   imprimirPedidoCompra: imprimirPedidoCompra,
   imprimirTransferencia: imprimirTransferencia,
-  iniciarModoDemo: iniciarModoDemo,
   novaCategoria: novaCategoria,
   novaObra: novaObra,
   novaRefeicao: novaRefeicao,
