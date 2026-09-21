@@ -3917,6 +3917,11 @@ function initSupabase(){
   if(typeof window.supabase === 'undefined') return false;
   try{
     supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+    // Exposto em window: o módulo Almoxarifado (script separado, mesmo
+    // login único) lê window.supabaseClient para reaproveitar esta sessão.
+    // Uma variável `let` no escopo do script principal não vira propriedade
+    // de window sozinha — por isso a atribuição explícita abaixo.
+    window.supabaseClient = supabaseClient;
     return true;
   }catch(e){ console.error('Erro ao iniciar Supabase:', e); return false; }
 }
