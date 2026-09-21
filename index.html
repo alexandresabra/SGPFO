@@ -312,18 +312,21 @@
   }
   #chamadosApp a{color:inherit;}
 
-  #chamadosApp /* ---- Topbar ---- */
+  #chamadosApp /* ---- Topbar (integrada ao layout do SGPT — sem marca/branding duplicado) ---- */
   .topbar{
-    background:var(--ink);
-    color:#fff;
-    padding:0 24px;
+    background:transparent;
+    color:var(--ink);
+    padding:0;
     display:flex;
     align-items:center;
-    height:64px;
-    gap:28px;
-    position:sticky;top:0;z-index:50;
+    flex-wrap:wrap;
+    height:auto;
+    gap:12px;
+    position:static;
+    border-bottom:1px solid var(--line);
+    margin-bottom:20px;
   }
-  #chamadosApp .brand{display:flex;align-items:center;gap:10px;white-space:nowrap;}
+  #chamadosApp .brand{display:none;}
   #chamadosApp .brand-mark{
     width:34px;height:34px;
     display:flex;align-items:center;justify-content:center;
@@ -331,21 +334,19 @@
   #chamadosApp .brand-mark img{width:100%;height:100%;object-fit:contain;display:block;}
   #chamadosApp .brand-text{font-family:var(--font-display);font-size:16px;letter-spacing:.2px;}
   #chamadosApp .brand-text small{display:block;font-family:var(--font-body);font-size:10px;color:#b9bac2;letter-spacing:1.5px;text-transform:uppercase;margin-top:1px;}
-  #chamadosApp .nav{display:flex;gap:2px;margin-left:12px;flex:1;overflow-x:auto;}
+  #chamadosApp .nav{display:flex;gap:8px;margin-left:0;flex:1;overflow-x:auto;padding:14px 0;}
   #chamadosApp .nav button{
-    background:transparent;border:none;color:#c7c8d0;padding:10px 14px;
-    font-size:13px;font-weight:600;cursor:pointer;border-radius:4px;white-space:nowrap;
+    background:#fff;border:1px solid var(--line);color:var(--ink-soft);padding:7px 14px;
+    font-size:12.5px;font-weight:700;cursor:pointer;border-radius:6px;white-space:nowrap;
     display:flex;align-items:center;gap:7px;
   }
-  #chamadosApp .nav button:hover{background:rgba(255,255,255,.08);color:#fff;}
-  #chamadosApp .nav button.active{background:var(--red);color:#fff;}
-  #chamadosApp .sync-pill{
-    font-size:11px;color:#9fa1ab;display:flex;align-items:center;gap:6px;white-space:nowrap;
-  }
+  #chamadosApp .nav button:hover{background:var(--gray-bg);color:var(--ink);}
+  #chamadosApp .nav button.active{background:var(--red);color:#fff;border-color:var(--red);}
+  #chamadosApp .sync-pill{display:none;}
   #chamadosApp .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 
-  #chamadosApp .wrap{max-width:1280px;margin:0 auto;padding:26px 24px 60px;}
+  #chamadosApp .wrap{max-width:1280px;margin:0 auto;padding:0;}
   #chamadosApp .view{display:none;}
   #chamadosApp .view.active{display:block;animation:fade .25s ease;}
   @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
@@ -645,7 +646,7 @@
       <div class="nav-group-label">Suprimentos</div>
       <div class="nav-item" data-section="materiaisgeral"><span class="ico">▧</span><span class="label">Materiais — Visão Geral</span></div>
 
-      <div class="nav-group-label">Outros Sistemas</div>
+      <div class="nav-group-label">Assistência Técnica</div>
       <div class="nav-item" data-section="chamados"><span class="ico">☏</span><span class="label">Revisão de Esquadrias</span></div>
     </nav>
     <div style="padding:10px 18px;">
@@ -1865,8 +1866,8 @@
         </div>
       </section>
 
-      <!-- ============ REVISÃO DE ESQUADRIAS (sistema independente, embutido) ============ -->
-      <section class="section" id="sec-chamados" style="margin:-26px -28px 0;">
+      <!-- ============ REVISÃO DE ESQUADRIAS (módulo nativo do SGPT) ============ -->
+      <section class="section" id="sec-chamados">
 <div id="chamadosApp">
 
 <div class="topbar">
