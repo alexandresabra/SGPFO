@@ -215,6 +215,20 @@
     #rdoPrintArea{display:block;position:absolute;top:0;left:0;width:100%;padding:20px;}
   }
 
+  /* Pré-visualização em tela dos documentos de memória de cálculo — mesmo
+     estilo do documento impresso (#rdoPrintArea), mas exibida dentro de um
+     modal para permitir revisão, edição e impressão explícitas. */
+  .memoria-doc{background:#fff;border:1px solid var(--line);border-radius:6px;padding:24px;}
+  .memoria-doc h1{color:var(--red);font-family:var(--serif);font-size:22px;margin:0 0 4px;}
+  .memoria-doc .meta{font-size:12.5px;color:#555;line-height:1.6;margin-bottom:10px;border-bottom:2px solid var(--red);padding-bottom:14px;}
+  .memoria-doc h2{font-size:15px;border-bottom:1px solid #ddd;padding-bottom:5px;margin-top:26px;color:var(--ink);font-family:var(--serif);}
+  .memoria-doc ul{padding-left:0;list-style:none;margin:10px 0;}
+  .memoria-doc li{font-size:12.5px;padding:6px 0;border-bottom:1px solid #f0f0f0;}
+  .memoria-doc table{width:100%;border-collapse:collapse;margin:10px 0 20px;font-size:11.5px;}
+  .memoria-doc th{background:#f6f6f5;text-align:left;padding:5px 8px;border-bottom:2px solid var(--red);font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;}
+  .memoria-doc td{padding:5px 8px;border-bottom:1px solid #eee;}
+  .memoria-doc[contenteditable="true"]{outline:2px dashed var(--red-2);outline-offset:6px;background:#fffdf6;}
+
   .empty-state{text-align:center;padding:40px 20px;color:var(--ink-soft);}
   .empty-state .big{font-size:32px;margin-bottom:8px;}
 
@@ -648,10 +662,20 @@
   #almoxApp #printOverlay .print-panel{ background: #fff; border-radius: 10px; width: 95%; max-width: 900px; max-height: 92vh; overflow: auto; color: #000; }
   #almoxApp #printOverlay .print-toolbar{ position: sticky; top: 0; background: #fff; padding: 10px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 8px; z-index: 1; }
   @media print {
-    body > *:not(#printOverlay) { display: none !important; }
-    #almoxApp #printOverlay{ position: static !important; background: #fff !important; inset: auto !important; display: block !important; }
-    #almoxApp #printOverlay .print-panel{ max-width: none !important; width: 100% !important; max-height: none !important; overflow: visible !important; border-radius: 0 !important; }
-    #almoxApp #printOverlay .print-toolbar{ display: none !important; }
+    /* Escopada por body.printing-almox (ver AlmoxApp.executarImpressao()).
+       Usa o mesmo truque de visibility do #rdoPrintArea (em vez de
+       "body > *:not(#printOverlay){display:none!important}") porque
+       #printOverlay não é filho direto de <body> — está aninhado dentro de
+       #almoxApp/#appRoot — então a regra por ">"" acabava escondendo o
+       próprio ancestral que contém #printOverlay, deixando a impressão do
+       Almoxarifado (e, sem a classe de escopo, qualquer outra impressão do
+       sistema) em branco. */
+    body.printing-almox *{ visibility: hidden !important; }
+    body.printing-almox #almoxApp #printOverlay,
+    body.printing-almox #almoxApp #printOverlay *{ visibility: visible !important; }
+    body.printing-almox #almoxApp #printOverlay{ position: fixed !important; inset: 0 !important; background: #fff !important; display: block !important; z-index: 99999 !important; }
+    body.printing-almox #almoxApp #printOverlay .print-panel{ max-width: none !important; width: 100% !important; max-height: none !important; overflow: visible !important; border-radius: 0 !important; }
+    body.printing-almox #almoxApp #printOverlay .print-toolbar{ display: none !important; }
   }
   #almoxApp .modal-header{ display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
   #almoxApp .modal-title{ font-weight: bold; }
@@ -3874,6 +3898,22 @@
 <div id="rdoPrintArea"></div>
 <div id="printOsWrap"></div>
 <div id="printPresWrap"></div>
+
+<div class="modal-overlay" id="vidMemoriaModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-head">
+      <h3>Memória de cálculo — Vidro</h3>
+      <button class="modal-close" onclick="fecharMemoriaVidroModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-actions" style="margin-bottom:14px;">
+        <button class="btn secondary" id="vidMemEditBtn" onclick="alternarEdicaoMemoriaVidro()">Editar</button>
+        <button class="btn" onclick="imprimirMemoriaVidro()">Imprimir / salvar PDF</button>
+      </div>
+      <div id="vidMemoriaConteudo" class="memoria-doc"></div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -8172,6 +8212,14 @@ function calcularVidro(){
 
   const pressaoKn = resolverPressaoProjeto('vidOrigemPressao','vidPressaoManual','vidVentoCalcId');
   if(!pressaoKn || pressaoKn<=0){ toast('Informe/selecione a pressão de vento de projeto.'); return; }
+  // Alerta de unidade: pressões de vento reais para vidro ficam tipicamente
+  // entre 0,3 e 3,0 kN/m². Um valor muito maior costuma indicar que o número
+  // foi digitado em Pa (por engano) no campo que pede kN/m² — nesse caso o
+  // sistema aplicaria ×1000 de novo, inflando o resultado em 3 casas decimais.
+  if(pressaoKn > 5){
+    const seguir = confirm(`A pressão de vento informada é ${pressaoKn.toFixed(2)} kN/m² (equivale a ${(pressaoKn*1000).toFixed(0)} Pa) — bem acima do usual para vidro (normalmente 0,3 a 3,0 kN/m²).\n\nConfira a unidade: o campo pede kN/m². Se o valor que você tem é em Pa, informe-o dividido por 1000 (ex.: 890 Pa = 0,89 kN/m²).\n\nDeseja continuar mesmo assim com ${pressaoKn.toFixed(2)} kN/m²?`);
+    if(!seguir) return;
+  }
   const PvPa = pressaoKn * 1000;
 
   const apoio = document.getElementById('vidApoio').value;
@@ -8415,9 +8463,34 @@ function emitirMemoriaCalculoVidro(id){
       data: todayISO(),
     };
   }
-  document.getElementById('rdoPrintArea').innerHTML = montarHtmlMemoriaVidro(dados);
+  document.getElementById('vidMemoriaConteudo').innerHTML = montarHtmlMemoriaVidro(dados);
+  document.getElementById('vidMemoriaConteudo').contentEditable = 'false';
+  document.getElementById('vidMemEditBtn').textContent = 'Editar';
+  document.getElementById('vidMemoriaModal').classList.add('open');
+}
+
+function fecharMemoriaVidroModal(){
+  document.getElementById('vidMemoriaModal').classList.remove('open');
+}
+
+function alternarEdicaoMemoriaVidro(){
+  const el = document.getElementById('vidMemoriaConteudo');
+  const editando = el.contentEditable === 'true';
+  el.contentEditable = editando ? 'false' : 'true';
+  document.getElementById('vidMemEditBtn').textContent = editando ? 'Editar' : 'Concluir edição';
+  if(!editando) el.focus();
+}
+
+// Imprime (ou salva como PDF) o conteúdo atualmente exibido no modal —
+// incluindo eventuais edições manuais feitas antes de imprimir.
+function imprimirMemoriaVidro(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('vidMemoriaConteudo').innerHTML;
   window.print();
 }
+
+document.getElementById('vidMemoriaModal').addEventListener('click', (e)=>{
+  if(e.target.id==='vidMemoriaModal') e.currentTarget.classList.remove('open');
+});
 
 function limparFormVidro(){
   ['vidNome','vidPressaoManual','vidL','vidLm','vidAngulo'].forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
@@ -11925,8 +11998,10 @@ function imprimirHtml(htmlCompleto) {
 }
 
 function executarImpressao() {
+  document.body.classList.add('printing-almox');
   try { window.print(); }
   catch (e) { toast('A impressão direta está bloqueada aqui. Use o botão "Baixar" e imprima pelo arquivo.', 'var(--rust)'); }
+  finally { setTimeout(()=>{ document.body.classList.remove('printing-almox'); }, 1000); }
 }
 
 function baixarDocumentoImpressao() {
