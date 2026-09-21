@@ -4163,16 +4163,16 @@ async function fazerLogout(){
 // passam a valer para quem realmente está logado, não para
 // quem a pessoa escolher no seletor.
 function vincularUsuarioLogado(email){
-  const emailLower = (email||'').toLowerCase();
+  const emailLower = (email||'').trim().toLowerCase();
   const info = document.getElementById('loginInfo');
-  const resp = load('responsaveis').find(r => (r.email||'').toLowerCase() === emailLower);
+  const resp = load('responsaveis').find(r => (r.email||'').trim().toLowerCase() === emailLower);
   if(resp){
     contaSemCadastroVinculado = false;
     localStorage.setItem(CURRENT_USER_KEY, 'r:'+resp.id);
     if(info){ info.style.display='block'; info.textContent = `Logado como ${resp.nome} (${resp.papel})`; }
     return;
   }
-  const func = load('funcionarios').find(f => (f.email||'').toLowerCase() === emailLower);
+  const func = load('funcionarios').find(f => (f.email||'').trim().toLowerCase() === emailLower);
   if(func){
     contaSemCadastroVinculado = false;
     localStorage.setItem(CURRENT_USER_KEY, 'f:'+func.id);
@@ -10401,15 +10401,42 @@ let contaSemCadastroVinculado = false;
 // Papéis com acesso ao Financeiro e a dados de salário/benefício de
 // funcionários. "RH" e "DP" continuam aceitos aqui para não quebrar
 // cadastros antigos feitos antes da unificação em "RH/DP".
+// OBS: a comparação é por PALAVRA dentro do papel (não é mais texto exato).
+// Isso evita que um papel cadastrado como "Gerente da Divisão de Alumínio"
+// ou "Gerente de Obras", por exemplo, fique sem acesso só porque o texto
+// não é idêntico a "Gerente" — o cadastro de papéis (Gerenciar papéis) é
+// livre, então o texto exato nunca deveria ser a única forma de reconhecer
+// o papel.
 const PAPEIS_ACESSO_FINANCEIRO = ['Gerente','Administrativo','RH/DP','RH','DP'];
 const PAPEIS_ACESSO_RH = ['Gerente','Administrativo','RH/DP','RH','DP'];
+
+// Normaliza um texto (papel/cargo) para comparação: minúsculas, sem
+// acentos e sem espaços nas pontas. Usada para reconhecer o papel mesmo
+// quando o cadastro tem variações de texto (maiúsculas, acentos etc.).
+function normalizarTextoPapel(txt){
+  return (txt||'').toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+
+// Verifica se um papel (texto livre, cadastrado em "Gerenciar papéis")
+// contém, como palavra inteira, algum dos papéis com direito de acesso.
+// Ex.: "Gerente da Divisão de Alumínio" contém a palavra "gerente" e
+// portanto tem acesso, mesmo não sendo um texto idêntico a "Gerente".
+function papelConcedeAcesso(papel, listaPapeis){
+  const p = normalizarTextoPapel(papel);
+  if(!p) return false;
+  return listaPapeis.some(base=>{
+    const b = normalizarTextoPapel(base).replace(/\//g,'\\/');
+    return new RegExp('(^|[^a-z0-9])'+b+'([^a-z0-9]|$)').test(p);
+  });
+}
 
 function temAcessoFinanceiro(){
   if(contaSemCadastroVinculado) return false;
   const sel = getCurrentUserSelection();
   if(!sel) return true;
   if(sel.tipo === 'responsavel'){
-    return PAPEIS_ACESSO_FINANCEIRO.includes(sel.registro.papel);
+    return papelConcedeAcesso(sel.registro.papel, PAPEIS_ACESSO_FINANCEIRO);
   }
   return false;
 }
@@ -10421,7 +10448,7 @@ function temAcessoRH(){
   const sel = getCurrentUserSelection();
   if(!sel) return true;
   if(sel.tipo === 'responsavel'){
-    return PAPEIS_ACESSO_RH.includes(sel.registro.papel);
+    return papelConcedeAcesso(sel.registro.papel, PAPEIS_ACESSO_RH);
   }
   return false;
 }
@@ -10433,7 +10460,7 @@ function souGerente(){
   if(contaSemCadastroVinculado) return false;
   const sel = getCurrentUserSelection();
   if(!sel) return true; // sem login/Supabase configurado: mantém o acesso total de sempre
-  return sel.tipo === 'responsavel' && sel.registro.papel === 'Gerente';
+  return sel.tipo === 'responsavel' && papelConcedeAcesso(sel.registro.papel, ['Gerente']);
 }
 
 // Cargos cujo salário só o Gerente pode ver — nem RH/DP, nem Administrativo.
@@ -10477,7 +10504,7 @@ function renderDashboard(){
 
   const userSel = getCurrentUserSelection();
   const currentUser = userSel ? userSel.registro : null;
-  const isManager = !userSel || (userSel.tipo==='funcionario' && userSel.registro.gerente) || (userSel.tipo==='responsavel' && userSel.registro.papel==='Gerente');
+  const isManager = !userSel || (userSel.tipo==='funcionario' && userSel.registro.gerente) || (userSel.tipo==='responsavel' && papelConcedeAcesso(userSel.registro.papel, ['Gerente']));
 
   document.getElementById('dashManagerView').style.display = isManager ? 'block' : 'none';
   document.getElementById('dashUserView').style.display = isManager ? 'none' : 'block';
