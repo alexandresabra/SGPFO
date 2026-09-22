@@ -8719,6 +8719,11 @@ function montarHtmlMemoriaPerfil(dados){
   const funcionarios = load('funcionarios');
   const tecnico = funcionarios.find(f=>f.id===obra.tecnicoResponsavel);
   const corResultado = dados.atendeDeformacao ? '#1e8449' : '#a80e26';
+  // Cálculos salvos ANTES desta funcionalidade não têm todos os campos
+  // (pressaoEnsaioPa, cargaEnsaio, cargaSeguranca, momentoFletor, largura,
+  // rótulos etc.) — trata como opcional em vez de travar a emissão.
+  const num = (v, casas) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(casas) : '—';
+  const dadosLimitados = dados.pressaoEnsaioPa===undefined || dados.cargaEnsaio===undefined || dados.momentoFletor===undefined;
 
   return `
     <h1>Memória de Cálculo — Dimensionamento de Perfis</h1>
@@ -8730,13 +8735,15 @@ function montarHtmlMemoriaPerfil(dados){
       Data do cálculo: ${fmtDate(dados.data)} · Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
     </div>
 
+    ${dadosLimitados ? `<p style="font-size:11.5px;color:#a80e26;background:#fff3f0;border:1px solid #f3c9c2;padding:8px 10px;border-radius:4px;">Este cálculo foi salvo antes da memória de cálculo detalhada existir no sistema — alguns dados de entrada (pressão, cargas, momento fletor) não ficaram registrados e aparecem como "—" abaixo. Para uma memória completa, refaça o cálculo e salve novamente.</p>` : ''}
+
     <h2>1. Geometria e condições de apoio</h2>
     <table>
       <tbody>
-        <tr><td>Maior largura do módulo</td><td>${dados.larguraMedia} mm</td></tr>
-        <tr><td>Altura / vão</td><td>${dados.altura} mm</td></tr>
-        <tr><td>Condição de apoio</td><td>${esc(dados.apoioLabel||dados.apoio)}</td></tr>
-        <tr><td>Limite de deformação adotado</td><td>${esc(dados.limiteFlechaLabel||('L/'+dados.limiteFlechaDiv))}</td></tr>
+        <tr><td>Maior largura do módulo</td><td>${dados.larguraMedia!==undefined ? dados.larguraMedia+' mm' : '—'}</td></tr>
+        <tr><td>Altura / vão</td><td>${dados.altura!==undefined ? dados.altura+' mm' : '—'}</td></tr>
+        <tr><td>Condição de apoio</td><td>${esc(dados.apoioLabel||dados.apoio||'—')}</td></tr>
+        <tr><td>Limite de deformação adotado</td><td>${esc(dados.limiteFlechaLabel||(dados.limiteFlechaDiv?('L/'+dados.limiteFlechaDiv):'—'))}</td></tr>
       </tbody>
     </table>
 
@@ -8744,20 +8751,20 @@ function montarHtmlMemoriaPerfil(dados){
     <table>
       <tbody>
         <tr><td>Origem da pressão de ensaio</td><td>${esc(dados.origemPressaoDesc||'—')}</td></tr>
-        <tr><td>Pressão de ensaio</td><td>${dados.pressaoEnsaioPa.toFixed(1)} Pa</td></tr>
-        <tr><td>Carga de ensaio</td><td>${dados.cargaEnsaio.toFixed(3)} kN/m</td></tr>
-        <tr><td>Carga de segurança (ensaio × 1,5)</td><td><strong>${dados.cargaSeguranca.toFixed(3)} kN/m</strong></td></tr>
+        <tr><td>Pressão de ensaio</td><td>${num(dados.pressaoEnsaioPa,1)} Pa</td></tr>
+        <tr><td>Carga de ensaio</td><td>${num(dados.cargaEnsaio,3)} kN/m</td></tr>
+        <tr><td>Carga de segurança (ensaio × 1,5)</td><td><strong>${num(dados.cargaSeguranca,3)} kN/m</strong></td></tr>
       </tbody>
     </table>
 
     <h2>3. Verificação estrutural</h2>
     <table>
       <tbody>
-        <tr><td>Momento fletor</td><td>${dados.momentoFletor.toFixed(0)}</td></tr>
-        <tr><td>Jx total do conjunto</td><td>${dados.jxTotal.toFixed(0)} mm⁴</td></tr>
-        <tr><td>Jx mínimo exigido</td><td>${dados.jxMinimo.toFixed(0)} mm⁴</td></tr>
-        <tr><td>Deformação calculada</td><td>${dados.deformacaoCalculada.toFixed(2)} mm</td></tr>
-        <tr><td>Deformação permitida</td><td>${dados.deformacaoPermitida.toFixed(2)} mm</td></tr>
+        <tr><td>Momento fletor</td><td>${num(dados.momentoFletor,0)}</td></tr>
+        <tr><td>Jx total do conjunto</td><td>${num(dados.jxTotal,0)} mm⁴</td></tr>
+        <tr><td>Jx mínimo exigido</td><td>${num(dados.jxMinimo,0)} mm⁴</td></tr>
+        <tr><td>Deformação calculada</td><td>${num(dados.deformacaoCalculada,2)} mm</td></tr>
+        <tr><td>Deformação permitida</td><td>${num(dados.deformacaoPermitida,2)} mm</td></tr>
         <tr><td>Situação</td><td style="color:${corResultado};font-weight:700;">${dados.atendeDeformacao?'ATENDE':'NÃO ATENDE'}</td></tr>
       </tbody>
     </table>
@@ -8766,14 +8773,14 @@ function montarHtmlMemoriaPerfil(dados){
     <table>
       <thead><tr><th>Perfil</th><th>Material</th><th>% do Jx</th><th>Tensão máx. (Kgf/mm²)</th><th>Ligas verificadas</th></tr></thead>
       <tbody>
-        ${(dados.linhasResultado||[]).map(r=>`
+        ${(dados.linhasResultado||[]).length ? dados.linhasResultado.map(r=>`
           <tr>
             <td>${esc(r.nomePerfil)}</td>
             <td>${r.material==='Aco'?'Aço':'Alumínio'}</td>
-            <td>${(r.pct*100).toFixed(1)}%</td>
-            <td>${r.tensaoMax.toFixed(2)}</td>
-            <td>${r.ligas.map(l=>`${esc(l.nome)}: ${l.ok?'OK':'NÃO ATENDE'}`).join(' · ')}</td>
-          </tr>`).join('')}
+            <td>${num((r.pct||0)*100,1)}%</td>
+            <td>${num(r.tensaoMax,2)}</td>
+            <td>${(r.ligas||[]).map(l=>`${esc(l.nome)}: ${l.ok?'OK':'NÃO ATENDE'}`).join(' · ')}</td>
+          </tr>`).join('') : `<tr><td colspan="5" style="color:#777;">Detalhamento por perfil não disponível para este cálculo.</td></tr>`}
       </tbody>
     </table>
 
