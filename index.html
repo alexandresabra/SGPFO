@@ -3915,6 +3915,38 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="ventoMemoriaModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-head">
+      <h3>Memória de cálculo — Pressão de vento</h3>
+      <button class="modal-close" onclick="fecharMemoriaVentoModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-actions" style="margin-bottom:14px;">
+        <button class="btn secondary" id="ventoMemEditBtn" onclick="alternarEdicaoMemoriaVento()">Editar</button>
+        <button class="btn" onclick="imprimirMemoriaVento()">Imprimir / salvar PDF</button>
+      </div>
+      <div id="ventoMemoriaConteudo" class="memoria-doc"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="perfMemoriaModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-head">
+      <h3>Memória de cálculo — Perfis</h3>
+      <button class="modal-close" onclick="fecharMemoriaPerfilModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-actions" style="margin-bottom:14px;">
+        <button class="btn secondary" id="perfMemEditBtn" onclick="alternarEdicaoMemoriaPerfil()">Editar</button>
+        <button class="btn" onclick="imprimirMemoriaPerfil()">Imprimir / salvar PDF</button>
+      </div>
+      <div id="perfMemoriaConteudo" class="memoria-doc"></div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
@@ -7369,6 +7401,8 @@ function calcularS2(){
   return s2;
 }
 
+let ultimoResultadoVento = null;
+
 function calcularVento(){
   const v0 = parseFloat(document.getElementById('ventoV0').value);
   if(!v0 || v0<=0){ toast('Informe a velocidade básica V₀.'); return; }
@@ -7387,7 +7421,27 @@ function calcularVento(){
   const pressaoPa = q * Math.abs(deltaCp);
   const pressaoKn = pressaoPa / 1000;
 
-  const resultado = { v0, s1, s2, s3, vk, q, cpe, cpi, deltaCp, pressaoPa, pressaoKn };
+  // Rótulos descritivos dos selects, capturados no momento do cálculo —
+  // usados depois na memória de cálculo, sem precisar remapear valores.
+  const selText = id => { const el = document.getElementById(id); return el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : ''; };
+  const categoria = document.getElementById('ventoCategoria').value;
+  const classe = document.getElementById('ventoClasse').value;
+  const s1Tipo = document.getElementById('ventoS1Tipo').value;
+
+  const resultado = {
+    v0, s1, s2, s3, vk, q, cpe, cpi, deltaCp, pressaoPa, pressaoKn,
+    z, categoria, classe, s1Tipo,
+    v0Label: selText('ventoCidadeRef') || 'Inserido manualmente',
+    s1TipoLabel: selText('ventoS1Tipo'),
+    s1Angulo: parseFloat(document.getElementById('ventoS1Angulo').value) || null,
+    s1PosicaoLabel: s1Tipo==='talude' ? selText('ventoS1Posicao') : null,
+    categoriaLabel: selText('ventoCategoria'),
+    classeLabel: selText('ventoClasse'),
+    s3Label: selText('ventoGrupoS3'),
+    cpeLabel: selText('ventoZona'),
+    cpiLabel: selText('ventoCpi'),
+  };
+  ultimoResultadoVento = resultado;
 
   const box = document.getElementById('ventoResultBox');
   box.style.display = 'block';
@@ -7404,19 +7458,22 @@ function calcularVento(){
     </div>
     <div class="disclaimer">Vk = V₀ · S1 · S2 · S3 &nbsp;|&nbsp; q = 0,613 · Vk² &nbsp;|&nbsp; Δp = |Cpe − Cpi| · q. Confirme geometria completa e demais zonas de fachada com a metodologia integral da NBR 6123.</div>
     <div class="form-actions">
-      <button class="btn" onclick='salvarCalculoVento(${JSON.stringify(resultado)})'>Salvar cálculo</button>
+      <button class="btn" onclick="salvarCalculoVento()">Salvar cálculo</button>
+      <button class="btn secondary" onclick="emitirMemoriaCalculoVento()">Emitir memória de cálculo</button>
     </div>
   `;
 }
 
-function salvarCalculoVento(resultado){
+function salvarCalculoVento(){
+  if(!ultimoResultadoVento){ toast('Calcule antes de salvar.'); return; }
   const nome = document.getElementById('ventoNome').value.trim() || 'Cálculo de vento';
   const record = {
     id: uid(),
     nome,
     obraId: document.getElementById('ventoObraId').value,
     data: todayISO(),
-    ...resultado
+    ...ultimoResultadoVento,
+    nome
   };
   let hist = load('calculosVento');
   hist.push(record);
@@ -7432,6 +7489,7 @@ function limparFormVento(){
   document.getElementById('ventoS1Tipo').value='plano';
   toggleS1Fields();
   document.getElementById('ventoResultBox').style.display='none';
+  ultimoResultadoVento = null;
 }
 
 function renderVentoHist(){
@@ -7444,7 +7502,10 @@ function renderVentoHist(){
       <td>${h.q.toFixed(1)}</td>
       <td><strong>${h.pressaoKn.toFixed(3)}</strong></td>
       <td>${fmtDate(h.data)}</td>
-      <td style="text-align:right;"><button class="btn small danger" onclick="deleteCalculoVento('${h.id}')">Excluir</button></td>
+      <td style="text-align:right;">
+        <button class="btn small secondary" onclick="emitirMemoriaCalculoVento('${h.id}')">Memória</button>
+        <button class="btn small danger" onclick="deleteCalculoVento('${h.id}')">Excluir</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -7566,6 +7627,20 @@ function renderLinhasPerfil(){
 }
 
 /* ---------------- Cálculo principal ---------------- */
+let ultimoResultadoPerfil = null;
+
+// Descreve de onde veio a pressão de ensaio usada no cálculo (valor manual
+// ou cálculo de vento vinculado), para constar na memória de cálculo.
+function descreverOrigemPressaoPerfil(){
+  const origem = document.getElementById('perfOrigemPressao').value;
+  if(origem==='manual'){
+    return `Valor manual: ${document.getElementById('perfPressaoManual').value || '—'} Pa`;
+  }
+  const calcId = document.getElementById('perfVentoCalcId').value;
+  const calc = load('calculosVento').find(h=>h.id===calcId);
+  return calc ? `Vinculada ao cálculo de vento "${calc.nome}" (${calc.pressaoKn.toFixed(3)} kN/m²)` : 'Cálculo de vento vinculado não encontrado';
+}
+
 function calcularPerfil(){
   const larguraMedia = parseFloat(document.getElementById('perfLarguraMedia').value);
   const altura = parseFloat(document.getElementById('perfAltura').value);
@@ -7577,7 +7652,10 @@ function calcularPerfil(){
   if(!pressaoEnsaioPa || pressaoEnsaioPa<=0){ toast('Informe/selecione a pressão de ensaio.'); return; }
 
   const apoio = document.getElementById('perfApoio').value; // '1' Bi-apoiada, '2' Engastada-Apoiada, '3' Bi-Engastada
+  const apoioLabel = document.getElementById('perfApoio').options[document.getElementById('perfApoio').selectedIndex].text;
   const limiteFlechaDiv = parseFloat(document.getElementById('perfLimiteFlecha').value);
+  const limiteFlechaLabel = document.getElementById('perfLimiteFlecha').options[document.getElementById('perfLimiteFlecha').selectedIndex].text;
+  const origemPressaoDesc = descreverOrigemPressaoPerfil();
 
   const cargaEnsaio = (pressaoEnsaioPa/1000) * (larguraMedia/1000); // kN/m
   const cargaSeguranca = cargaEnsaio * 1.5; // kN/m
@@ -7619,6 +7697,16 @@ function calcularPerfil(){
 
   const atendeDeformacao = deformacaoCalculada <= deformacaoPermitida;
 
+  const resultado = {
+    larguraMedia, altura, apoio, apoioLabel, limiteFlechaDiv, limiteFlechaLabel,
+    pressaoEnsaioPa, origemPressaoDesc,
+    cargaEnsaio, cargaSeguranca, momentoFletor,
+    deformacaoPermitida, deformacaoCalculada: isFinite(deformacaoCalculada)?deformacaoCalculada:0,
+    jxTotal, jxMinimo, atendeDeformacao,
+    linhasResultado,
+  };
+  ultimoResultadoPerfil = resultado;
+
   const box = document.getElementById('perfResultBox');
   box.style.display = 'block';
   box.innerHTML = `
@@ -7651,14 +7739,16 @@ function calcularPerfil(){
 
     <div class="disclaimer">Segue a metodologia do Memorial de Cálculo de Perfis da divisão (carga de segurança = ensaio × 1,5; deformação limitada a L/${limiteFlechaDiv}, máx. 30mm). Resultado de apoio — validar com o engenheiro responsável (ART) antes de aplicar em projeto.</div>
     <div class="form-actions">
-      <button class="btn" onclick='salvarCalculoPerfil(${JSON.stringify({altura,jxTotal,jxMinimo,deformacaoCalculada:isFinite(deformacaoCalculada)?deformacaoCalculada:0,deformacaoPermitida,atendeDeformacao})})'>Salvar cálculo</button>
+      <button class="btn" onclick="salvarCalculoPerfil()">Salvar cálculo</button>
+      <button class="btn secondary" onclick="emitirMemoriaCalculoPerfil()">Emitir memória de cálculo</button>
     </div>
   `;
 }
 
-function salvarCalculoPerfil(dados){
+function salvarCalculoPerfil(){
+  if(!ultimoResultadoPerfil){ toast('Calcule antes de salvar.'); return; }
   const nome = document.getElementById('perfNome').value.trim() || 'Cálculo de perfil';
-  const record = { id: uid(), nome, obraId: document.getElementById('perfObraId').value, data: todayISO(), ...dados };
+  const record = { id: uid(), nome, obraId: document.getElementById('perfObraId').value, data: todayISO(), ...ultimoResultadoPerfil, nome };
   let hist = load('calculosPerfil');
   hist.push(record);
   save('calculosPerfil', hist);
@@ -7674,6 +7764,7 @@ function limparFormPerfil(){
   tempPerfilLinhas = [];
   renderLinhasPerfil();
   document.getElementById('perfResultBox').style.display='none';
+  ultimoResultadoPerfil = null;
 }
 
 function renderPerfHist(){
@@ -7687,7 +7778,10 @@ function renderPerfHist(){
       <td>${h.deformacaoCalculada.toFixed(2)} / ${h.deformacaoPermitida.toFixed(2)}</td>
       <td>${h.atendeDeformacao?'<span class="status-pill status-ativo">Atende</span>':'<span class="status-pill status-pausado">Excede</span>'}</td>
       <td>${fmtDate(h.data)}</td>
-      <td style="text-align:right;"><button class="btn small danger" onclick="deleteCalculoPerfil('${h.id}')">Excluir</button></td>
+      <td style="text-align:right;">
+        <button class="btn small secondary" onclick="emitirMemoriaCalculoPerfil('${h.id}')">Memória</button>
+        <button class="btn small danger" onclick="deleteCalculoPerfil('${h.id}')">Excluir</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -8490,6 +8584,248 @@ function imprimirMemoriaVidro(){
 
 document.getElementById('vidMemoriaModal').addEventListener('click', (e)=>{
   if(e.target.id==='vidMemoriaModal') e.currentTarget.classList.remove('open');
+});
+
+/* ============================================================
+   MEMÓRIA DE CÁLCULO — Pressão de vento (NBR 6123), no mesmo
+   padrão de documento usado pela memória de vidro (#rdoPrintArea).
+   ============================================================ */
+function montarHtmlMemoriaVento(dados){
+  const obra = load('obras').find(o=>o.id===dados.obraId) || {};
+  const funcionarios = load('funcionarios');
+  const tecnico = funcionarios.find(f=>f.id===obra.tecnicoResponsavel);
+
+  return `
+    <h1>Memória de Cálculo — Pressão de Vento</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Identificação do cálculo: <strong>${esc(dados.nome||'—')}</strong><br>
+      ${tecnico ? `Técnico responsável: <strong>${esc(tecnico.nome)}</strong><br>` : ''}
+      Norma de referência: ABNT NBR 6123 — Forças devidas ao vento em edificações<br>
+      Data do cálculo: ${fmtDate(dados.data)} · Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+
+    <h2>1. Velocidade básica do vento (V₀)</h2>
+    <table>
+      <tbody>
+        <tr><td>Referência de V₀</td><td>${esc(dados.v0Label||'—')}</td></tr>
+        <tr><td>V₀ adotado</td><td><strong>${dados.v0} m/s</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>2. Fator topográfico (S1)</h2>
+    <table>
+      <tbody>
+        <tr><td>Configuração do terreno</td><td>${esc(dados.s1TipoLabel||'—')}</td></tr>
+        ${dados.s1Tipo==='talude' ? `<tr><td>Inclinação (θ)</td><td>${dados.s1Angulo}°</td></tr><tr><td>Posição do ponto</td><td>${esc(dados.s1PosicaoLabel||'—')}</td></tr>` : ''}
+        <tr><td>S1 adotado</td><td><strong>${dados.s1.toFixed(3)}</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. Fator de rugosidade, dimensões e altura (S2)</h2>
+    <table>
+      <tbody>
+        <tr><td>Categoria de rugosidade do terreno</td><td>${esc(dados.categoriaLabel||'—')}</td></tr>
+        <tr><td>Classe da edificação</td><td>${esc(dados.classeLabel||'—')}</td></tr>
+        <tr><td>Altura z acima do terreno</td><td>${dados.z} m</td></tr>
+        <tr><td>S2 adotado</td><td><strong>${dados.s2.toFixed(3)}</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. Fator estatístico (S3)</h2>
+    <table>
+      <tbody>
+        <tr><td>Grupo / tipo de ocupação</td><td>${esc(dados.s3Label||'—')}</td></tr>
+        <tr><td>S3 adotado</td><td><strong>${dados.s3.toFixed(2)}</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>5. Velocidade característica e pressão dinâmica</h2>
+    <table>
+      <tbody>
+        <tr><td>Velocidade característica V<sub>k</sub> = V₀ · S1 · S2 · S3</td><td><strong>${dados.vk.toFixed(2)} m/s</strong></td></tr>
+        <tr><td>Pressão dinâmica q = 0,613 · V<sub>k</sub>²</td><td><strong>${dados.q.toFixed(1)} N/m²</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>6. Coeficientes de forma e pressão de projeto</h2>
+    <table>
+      <tbody>
+        <tr><td>Zona da fachada (Cpe)</td><td>${esc(dados.cpeLabel||'—')}</td></tr>
+        <tr><td>Coeficiente de pressão interna (Cpi)</td><td>${esc(dados.cpiLabel||'—')}</td></tr>
+        <tr><td>ΔCp = |Cpe − Cpi|</td><td>${Math.abs(dados.deltaCp).toFixed(2)}</td></tr>
+        <tr><td>Pressão de projeto Δp = ΔCp · q</td><td><strong>${dados.pressaoPa.toFixed(1)} Pa (${dados.pressaoKn.toFixed(3)} kN/m²)</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>7. Conclusão</h2>
+    <p style="font-size:16px;font-weight:700;">Pressão de projeto adotada: ${dados.pressaoKn.toFixed(3)} kN/m²</p>
+    <p style="font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;margin-top:20px;">
+      Ferramenta de apoio ao cálculo, baseada nos métodos gerais da NBR 6123 (velocidade característica V<sub>k</sub>, pressão dinâmica q
+      e coeficientes de forma simplificados de referência prática para dimensionamento de esquadrias). Não substitui a memória de cálculo
+      assinada pelo engenheiro responsável — confirme geometria completa, mapa de isopletas oficial e demais zonas de fachada com a
+      metodologia integral da norma antes de aplicar em projeto.
+    </p>
+  `;
+}
+
+function emitirMemoriaCalculoVento(id){
+  let dados;
+  if(id){
+    dados = load('calculosVento').find(h=>h.id===id);
+    if(!dados){ toast('Cálculo não encontrado.'); return; }
+  } else {
+    if(!ultimoResultadoVento){ toast('Calcule antes de emitir a memória.'); return; }
+    dados = {
+      ...ultimoResultadoVento,
+      nome: document.getElementById('ventoNome').value.trim() || 'Cálculo de vento',
+      obraId: document.getElementById('ventoObraId').value,
+      data: todayISO(),
+    };
+  }
+  document.getElementById('ventoMemoriaConteudo').innerHTML = montarHtmlMemoriaVento(dados);
+  document.getElementById('ventoMemoriaConteudo').contentEditable = 'false';
+  document.getElementById('ventoMemEditBtn').textContent = 'Editar';
+  document.getElementById('ventoMemoriaModal').classList.add('open');
+}
+
+function fecharMemoriaVentoModal(){
+  document.getElementById('ventoMemoriaModal').classList.remove('open');
+}
+
+function alternarEdicaoMemoriaVento(){
+  const el = document.getElementById('ventoMemoriaConteudo');
+  const editando = el.contentEditable === 'true';
+  el.contentEditable = editando ? 'false' : 'true';
+  document.getElementById('ventoMemEditBtn').textContent = editando ? 'Editar' : 'Concluir edição';
+  if(!editando) el.focus();
+}
+
+function imprimirMemoriaVento(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('ventoMemoriaConteudo').innerHTML;
+  window.print();
+}
+
+document.getElementById('ventoMemoriaModal').addEventListener('click', (e)=>{
+  if(e.target.id==='ventoMemoriaModal') e.currentTarget.classList.remove('open');
+});
+
+/* ============================================================
+   MEMÓRIA DE CÁLCULO — Perfis (Memorial de Cálculo de Perfis da
+   divisão), no mesmo padrão de documento usado pelas demais.
+   ============================================================ */
+function montarHtmlMemoriaPerfil(dados){
+  const obra = load('obras').find(o=>o.id===dados.obraId) || {};
+  const funcionarios = load('funcionarios');
+  const tecnico = funcionarios.find(f=>f.id===obra.tecnicoResponsavel);
+  const corResultado = dados.atendeDeformacao ? '#1e8449' : '#a80e26';
+
+  return `
+    <h1>Memória de Cálculo — Dimensionamento de Perfis</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Identificação: <strong>${esc(dados.nome||'—')}</strong><br>
+      ${tecnico ? `Técnico responsável: <strong>${esc(tecnico.nome)}</strong><br>` : ''}
+      Metodologia: Memorial de Cálculo de Perfis da divisão (carga de segurança = ensaio × 1,5)<br>
+      Data do cálculo: ${fmtDate(dados.data)} · Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+
+    <h2>1. Geometria e condições de apoio</h2>
+    <table>
+      <tbody>
+        <tr><td>Maior largura do módulo</td><td>${dados.larguraMedia} mm</td></tr>
+        <tr><td>Altura / vão</td><td>${dados.altura} mm</td></tr>
+        <tr><td>Condição de apoio</td><td>${esc(dados.apoioLabel||dados.apoio)}</td></tr>
+        <tr><td>Limite de deformação adotado</td><td>${esc(dados.limiteFlechaLabel||('L/'+dados.limiteFlechaDiv))}</td></tr>
+      </tbody>
+    </table>
+
+    <h2>2. Pressão e cargas</h2>
+    <table>
+      <tbody>
+        <tr><td>Origem da pressão de ensaio</td><td>${esc(dados.origemPressaoDesc||'—')}</td></tr>
+        <tr><td>Pressão de ensaio</td><td>${dados.pressaoEnsaioPa.toFixed(1)} Pa</td></tr>
+        <tr><td>Carga de ensaio</td><td>${dados.cargaEnsaio.toFixed(3)} kN/m</td></tr>
+        <tr><td>Carga de segurança (ensaio × 1,5)</td><td><strong>${dados.cargaSeguranca.toFixed(3)} kN/m</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. Verificação estrutural</h2>
+    <table>
+      <tbody>
+        <tr><td>Momento fletor</td><td>${dados.momentoFletor.toFixed(0)}</td></tr>
+        <tr><td>Jx total do conjunto</td><td>${dados.jxTotal.toFixed(0)} mm⁴</td></tr>
+        <tr><td>Jx mínimo exigido</td><td>${dados.jxMinimo.toFixed(0)} mm⁴</td></tr>
+        <tr><td>Deformação calculada</td><td>${dados.deformacaoCalculada.toFixed(2)} mm</td></tr>
+        <tr><td>Deformação permitida</td><td>${dados.deformacaoPermitida.toFixed(2)} mm</td></tr>
+        <tr><td>Situação</td><td style="color:${corResultado};font-weight:700;">${dados.atendeDeformacao?'ATENDE':'NÃO ATENDE'}</td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. Tensão por perfil</h2>
+    <table>
+      <thead><tr><th>Perfil</th><th>Material</th><th>% do Jx</th><th>Tensão máx. (Kgf/mm²)</th><th>Ligas verificadas</th></tr></thead>
+      <tbody>
+        ${(dados.linhasResultado||[]).map(r=>`
+          <tr>
+            <td>${esc(r.nomePerfil)}</td>
+            <td>${r.material==='Aco'?'Aço':'Alumínio'}</td>
+            <td>${(r.pct*100).toFixed(1)}%</td>
+            <td>${r.tensaoMax.toFixed(2)}</td>
+            <td>${r.ligas.map(l=>`${esc(l.nome)}: ${l.ok?'OK':'NÃO ATENDE'}`).join(' · ')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+
+    <h2>5. Conclusão</h2>
+    <p style="font-size:16px;font-weight:700;color:${corResultado};">${dados.atendeDeformacao?'ATENDE':'NÃO ATENDE'}</p>
+    <p style="font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;margin-top:20px;">
+      Segue a metodologia do Memorial de Cálculo de Perfis usado pela divisão (momento fletor, deformação limitada conforme critério
+      adotado, e verificação de tensão por liga de alumínio). Resultado de apoio — não substitui a memória de cálculo assinada pelo
+      engenheiro responsável (ART); validar antes de aplicar em projeto.
+    </p>
+  `;
+}
+
+function emitirMemoriaCalculoPerfil(id){
+  let dados;
+  if(id){
+    dados = load('calculosPerfil').find(h=>h.id===id);
+    if(!dados){ toast('Cálculo não encontrado.'); return; }
+  } else {
+    if(!ultimoResultadoPerfil){ toast('Calcule antes de emitir a memória.'); return; }
+    dados = {
+      ...ultimoResultadoPerfil,
+      nome: document.getElementById('perfNome').value.trim() || 'Cálculo de perfil',
+      obraId: document.getElementById('perfObraId').value,
+      data: todayISO(),
+    };
+  }
+  document.getElementById('perfMemoriaConteudo').innerHTML = montarHtmlMemoriaPerfil(dados);
+  document.getElementById('perfMemoriaConteudo').contentEditable = 'false';
+  document.getElementById('perfMemEditBtn').textContent = 'Editar';
+  document.getElementById('perfMemoriaModal').classList.add('open');
+}
+
+function fecharMemoriaPerfilModal(){
+  document.getElementById('perfMemoriaModal').classList.remove('open');
+}
+
+function alternarEdicaoMemoriaPerfil(){
+  const el = document.getElementById('perfMemoriaConteudo');
+  const editando = el.contentEditable === 'true';
+  el.contentEditable = editando ? 'false' : 'true';
+  document.getElementById('perfMemEditBtn').textContent = editando ? 'Editar' : 'Concluir edição';
+  if(!editando) el.focus();
+}
+
+function imprimirMemoriaPerfil(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('perfMemoriaConteudo').innerHTML;
+  window.print();
+}
+
+document.getElementById('perfMemoriaModal').addEventListener('click', (e)=>{
+  if(e.target.id==='perfMemoriaModal') e.currentTarget.classList.remove('open');
 });
 
 function limparFormVidro(){
