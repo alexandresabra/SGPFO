@@ -1151,7 +1151,10 @@
                     <option value="atrasado">Atrasado</option>
                   </select>
                 </div>
-                <button class="btn" onclick="openMaterialModal()">+ Novo pedido</button>
+                <div>
+                  <button class="btn secondary" onclick="gerarRelatorioPendenciasMateriais()">Relatório de pendências</button>
+                  <button class="btn" onclick="openMaterialModal()">+ Novo pedido</button>
+                </div>
               </div>
               <div id="materiaisTableBody"></div>
               <div class="empty-state" id="materiaisEmpty" style="display:none;">
@@ -3943,6 +3946,22 @@
         <button class="btn" onclick="imprimirMemoriaPerfil()">Imprimir / salvar PDF</button>
       </div>
       <div id="perfMemoriaConteudo" class="memoria-doc"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="matPendModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-head">
+      <h3>Relatório de pendências — Materiais</h3>
+      <button class="modal-close" onclick="fecharRelatorioPendenciasMateriais()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-actions" style="margin-bottom:14px;">
+        <button class="btn secondary" id="matPendEditBtn" onclick="alternarEdicaoPendenciasMateriais()">Editar</button>
+        <button class="btn" onclick="imprimirPendenciasMateriais()">Imprimir / salvar PDF</button>
+      </div>
+      <div id="matPendConteudo" class="memoria-doc"></div>
     </div>
   </div>
 </div>
@@ -9420,6 +9439,110 @@ function deleteMaterial(id){
   renderMateriaisGeral();
   toast('Pedido excluído.');
 }
+
+/* ============================================================
+   RELATÓRIO DE PENDÊNCIAS — Materiais (itens ainda a receber),
+   separado por Fornecedor e, dentro de cada um, por Pedido
+   (documento). Mesmo padrão de documento do SGPT (#rdoPrintArea).
+   ============================================================ */
+function montarHtmlRelatorioPendenciasMateriais(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const pedidos = load('materiais').filter(m=>m.obraId===currentObraId);
+
+  const porFornecedor = {};
+  let totalItensPendentes = 0;
+  let totalPedidosComPendencia = 0;
+
+  pedidos.forEach(p=>{
+    const itensPendentes = (p.itens||[]).map(it=>{
+      const pedida = parseFloat(it.qtdPedida) || 0;
+      const recebida = qtdRecebidaItem(it);
+      const aReceber = Math.max(0, pedida - recebida);
+      const status = calcularStatusItemPedido(it, p.dataPrevista);
+      return { ...it, pedida, recebida, aReceber, status };
+    }).filter(it=>it.aReceber > 0);
+    if(!itensPendentes.length) return;
+    totalPedidosComPendencia++;
+    totalItensPendentes += itensPendentes.length;
+    const fornecedor = (p.fornecedor||'').trim() || 'Fornecedor não informado';
+    if(!porFornecedor[fornecedor]) porFornecedor[fornecedor] = [];
+    porFornecedor[fornecedor].push({ pedido: p, itensPendentes });
+  });
+
+  const fornecedoresOrdenados = Object.keys(porFornecedor).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+
+  const cabecalho = `
+    <h1>Relatório de Pendências — Materiais</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>`;
+
+  if(!fornecedoresOrdenados.length){
+    return cabecalho + `<p style="margin-top:20px;">Não há pendências de recebimento de material nesta obra no momento — todos os pedidos cadastrados estão com recebimento completo.</p>`;
+  }
+
+  const statusLabel = { atrasado:'Atrasado', parcial:'Recebimento parcial', pendente:'Pendente' };
+
+  const blocos = fornecedoresOrdenados.map(fornecedor=>{
+    const docs = porFornecedor[fornecedor].map(({pedido, itensPendentes})=>{
+      const linhas = itensPendentes.map(it=>`
+        <tr>
+          <td>${esc(it.item)}</td>
+          <td>${it.pedida} ${esc(it.unidade||'')}</td>
+          <td>${it.recebida} ${esc(it.unidade||'')}</td>
+          <td><strong>${it.aReceber} ${esc(it.unidade||'')}</strong></td>
+          <td style="${it.status==='atrasado'?'color:#a80e26;font-weight:700;':''}">${statusLabel[it.status]||it.status}</td>
+        </tr>`).join('');
+      return `
+        <h3 style="margin:14px 0 4px;">Documento: Pedido ${pedido.numPedido ? ('nº '+esc(pedido.numPedido)) : '(sem número)'}</h3>
+        <div class="step-note" style="margin-bottom:6px;">Data do pedido: ${fmtDate(pedido.dataPedido)} · Previsão de entrega: ${fmtDate(pedido.dataPrevista)}${pedido.observacoes?' · '+esc(pedido.observacoes):''}</div>
+        <table>
+          <thead><tr><th>Item</th><th>Pedida</th><th>Recebida</th><th>A receber</th><th>Situação</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>`;
+    }).join('');
+    return `<h2>Fornecedor: ${esc(fornecedor)}</h2>${docs}<hr style="margin:20px 0;border:none;border-top:1px solid #ddd;">`;
+  }).join('');
+
+  return cabecalho + `
+    <p style="font-size:12.5px;color:#555;">${fornecedoresOrdenados.length} fornecedor(es) · ${totalPedidosComPendencia} pedido(s)/documento(s) com pendência · ${totalItensPendentes} item(ns) a receber.</p>
+    ${blocos}
+    <p style="font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;margin-top:10px;">
+      Relatório gerado a partir dos pedidos de material cadastrados nesta obra. Inclui apenas itens com quantidade a receber maior que zero
+      (pedidos totalmente recebidos não aparecem aqui).
+    </p>
+  `;
+}
+
+function gerarRelatorioPendenciasMateriais(){
+  if(!currentObraId){ toast('Abra uma obra para gerar o relatório.'); return; }
+  document.getElementById('matPendConteudo').innerHTML = montarHtmlRelatorioPendenciasMateriais();
+  document.getElementById('matPendConteudo').contentEditable = 'false';
+  document.getElementById('matPendEditBtn').textContent = 'Editar';
+  document.getElementById('matPendModal').classList.add('open');
+}
+
+function fecharRelatorioPendenciasMateriais(){
+  document.getElementById('matPendModal').classList.remove('open');
+}
+
+function alternarEdicaoPendenciasMateriais(){
+  const el = document.getElementById('matPendConteudo');
+  const editando = el.contentEditable === 'true';
+  el.contentEditable = editando ? 'false' : 'true';
+  document.getElementById('matPendEditBtn').textContent = editando ? 'Editar' : 'Concluir edição';
+  if(!editando) el.focus();
+}
+
+function imprimirPendenciasMateriais(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('matPendConteudo').innerHTML;
+  window.print();
+}
+
+document.getElementById('matPendModal').addEventListener('click', (e)=>{
+  if(e.target.id==='matPendModal') e.currentTarget.classList.remove('open');
+});
 
 /* ---------------- Entradas (recebimentos fracionados, por item do pedido) ---------------- */
 function openEntradaModal(pedidoId, itemId){
