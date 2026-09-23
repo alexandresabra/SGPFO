@@ -1001,6 +1001,37 @@
           </div>
 
           <div class="panel">
+            <div class="panel-head">
+              <span>Progresso por bloco</span>
+              <button class="btn secondary" onclick="imprimirProgressoBlocos()">Imprimir / salvar PDF</button>
+            </div>
+            <div class="panel-body">
+              <div class="step-note" style="margin-bottom:12px;">Peso e área com base no peso líquido e nas dimensões cadastrados em cada item. "Produzido" conta quando todas as fases de Produção do item estão OK; "instalado" conta quando todas as fases de Instalação daquela unidade estão OK. % de andamento = peso instalado ÷ peso previsto do bloco.</div>
+              <div class="empty-state" id="blocosChartsEmpty" style="display:none;">
+                <div class="big">⛭</div>Nenhum bloco cadastrado para esta obra ainda.
+              </div>
+              <div id="blocosChartsWrap">
+                <h4 style="font-family:var(--serif);margin:6px 0 10px;">% de andamento por bloco</h4>
+                <div id="blocoAndamentoBox" style="position:relative;"><canvas id="chartBlocoAndamento"></canvas></div>
+
+                <h4 style="font-family:var(--serif);margin:24px 0 10px;">Peso (Kg) por bloco — produzido x instalado</h4>
+                <div id="blocoPesoBox" style="position:relative;"><canvas id="chartBlocoPeso"></canvas></div>
+
+                <h4 style="font-family:var(--serif);margin:24px 0 10px;">Área (m²) por bloco — produzido x instalado</h4>
+                <div id="blocoAreaBox" style="position:relative;"><canvas id="chartBlocoArea"></canvas></div>
+
+                <table style="margin-top:24px;">
+                  <thead><tr>
+                    <th>Bloco</th><th>Peso previsto (Kg)</th><th>Peso produzido (Kg)</th><th>Peso instalado (Kg)</th>
+                    <th>Área prevista (m²)</th><th>Área produzida (m²)</th><th>Área instalada (m²)</th><th>% andamento</th>
+                  </tr></thead>
+                  <tbody id="blocosTabelaBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
             <div class="panel-head">RDO — Relatório Diário de Obra</div>
             <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
               <div class="step-note">Reúne, num único relatório, tudo que foi atualizado na obra em uma data: materiais recebidos, fases de projeto/produção/instalação marcadas, comentários e fotos.</div>
@@ -4466,6 +4497,169 @@ function renderObraWorkspaceGeral(){
   document.getElementById('owAreaPrevista').textContent = areaPrevista.toFixed(2);
   document.getElementById('owAreaProduzida').textContent = areaProduzida.toFixed(2);
   document.getElementById('owAreaInstalada').textContent = areaInstalada.toFixed(2);
+
+  renderProgressoPorBloco();
+}
+
+// Mesma lógica de peso/área usada no total da obra (acima), mas somada
+// bloco a bloco — é a base tanto dos gráficos de barra horizontal quanto
+// da tabela de apoio usada na impressão.
+function calcularDadosPorBloco(){
+  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  return blocos.map(bloco=>{
+    let pesoPrevisto=0, pesoProduzido=0, pesoInstalado=0, areaPrevista=0, areaProduzida=0, areaInstalada=0;
+    itens.filter(it=>it.blocoId===bloco.id).forEach(item=>{
+      const largura = parseFloat(item.largura) || 0;
+      const altura = parseFloat(item.altura) || 0;
+      const pesoUnitario = parseFloat(item.pesoLiquido) || 0;
+      const areaUnitaria = (largura * altura) / 1000000; // mm² -> m²
+      const qtdTotal = qtdTotalLocalizacoes(item);
+
+      pesoPrevisto += pesoUnitario * qtdTotal;
+      areaPrevista += areaUnitaria * qtdTotal;
+
+      const progProducao = calcProgressoModulo(item, 'producao');
+      if(progProducao.total > 0 && progProducao.done === progProducao.total){
+        pesoProduzido += pesoUnitario * qtdTotal;
+        areaProduzida += areaUnitaria * qtdTotal;
+      }
+
+      gerarUnidadesInstalacao(item).forEach(u=>{
+        const state = getUnidadeState(item, u.unitKey);
+        const progUnidade = calcProgressoUnidade(state);
+        if(progUnidade.total > 0 && progUnidade.done === progUnidade.total){
+          pesoInstalado += pesoUnitario;
+          areaInstalada += areaUnitaria;
+        }
+      });
+    });
+    const andamentoPct = pesoPrevisto > 0 ? (pesoInstalado / pesoPrevisto) * 100 : 0;
+    return { id: bloco.id, nome: bloco.nome, pesoPrevisto, pesoProduzido, pesoInstalado, areaPrevista, areaProduzida, areaInstalada, andamentoPct };
+  });
+}
+
+function renderProgressoPorBloco(){
+  const dados = calcularDadosPorBloco();
+  document.getElementById('blocosChartsEmpty').style.display = dados.length ? 'none' : 'block';
+  document.getElementById('blocosChartsWrap').style.display = dados.length ? 'block' : 'none';
+  if(!dados.length) return;
+
+  document.getElementById('blocosTabelaBody').innerHTML = dados.map(d=>`
+    <tr>
+      <td><strong>${esc(d.nome)}</strong></td>
+      <td>${d.pesoPrevisto.toFixed(1)}</td>
+      <td>${d.pesoProduzido.toFixed(1)}</td>
+      <td>${d.pesoInstalado.toFixed(1)}</td>
+      <td>${d.areaPrevista.toFixed(2)}</td>
+      <td>${d.areaProduzida.toFixed(2)}</td>
+      <td>${d.areaInstalada.toFixed(2)}</td>
+      <td>${d.andamentoPct.toFixed(0)}%</td>
+    </tr>`).join('');
+
+  // altura proporcional ao número de blocos, pra barras horizontais
+  // ficarem legíveis mesmo com muitos blocos na obra
+  const alturaPx = Math.max(120, dados.length * 46 + 30);
+  ['blocoAndamentoBox','blocoPesoBox','blocoAreaBox'].forEach(id=>{
+    document.getElementById(id).style.height = alturaPx + 'px';
+  });
+
+  const labels = dados.map(d=>d.nome);
+
+  if(chartBlocoAndamento) chartBlocoAndamento.destroy();
+  chartBlocoAndamento = new Chart(document.getElementById('chartBlocoAndamento'), {
+    type: 'bar',
+    data: { labels, datasets: [{
+      label: '% de andamento',
+      data: dados.map(d=>+d.andamentoPct.toFixed(1)),
+      backgroundColor: '#c8102e',
+      borderRadius: 3
+    }]},
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+
+  if(chartBlocoPeso) chartBlocoPeso.destroy();
+  chartBlocoPeso = new Chart(document.getElementById('chartBlocoPeso'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Produzido (Kg)', data: dados.map(d=>+d.pesoProduzido.toFixed(1)), backgroundColor: '#8a8a90', borderRadius: 3 },
+      { label: 'Instalado (Kg)', data: dados.map(d=>+d.pesoInstalado.toFixed(1)), backgroundColor: '#c8102e', borderRadius: 3 }
+    ]},
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom' } }
+    }
+  });
+
+  if(chartBlocoArea) chartBlocoArea.destroy();
+  chartBlocoArea = new Chart(document.getElementById('chartBlocoArea'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Produzida (m²)', data: dados.map(d=>+d.areaProduzida.toFixed(2)), backgroundColor: '#8a8a90', borderRadius: 3 },
+      { label: 'Instalada (m²)', data: dados.map(d=>+d.areaInstalada.toFixed(2)), backgroundColor: '#c8102e', borderRadius: 3 }
+    ]},
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom' } }
+    }
+  });
+}
+
+// Canvas não sobrevive a innerHTML copiado pro #rdoPrintArea (é o truque
+// de impressão padrão do sistema) — por isso convertemos cada gráfico
+// pra imagem (toBase64Image) antes de montar o documento de impressão.
+function imprimirProgressoBlocos(){
+  if(!currentObraId){ toast('Abra uma obra para imprimir o relatório.'); return; }
+  const dados = calcularDadosPorBloco();
+  if(!dados.length){ toast('Cadastre ao menos um bloco para gerar o relatório.'); return; }
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+
+  const linhas = dados.map(d=>`
+    <tr>
+      <td>${esc(d.nome)}</td>
+      <td>${d.pesoPrevisto.toFixed(1)}</td>
+      <td>${d.pesoProduzido.toFixed(1)}</td>
+      <td>${d.pesoInstalado.toFixed(1)}</td>
+      <td>${d.areaPrevista.toFixed(2)}</td>
+      <td>${d.areaProduzida.toFixed(2)}</td>
+      <td>${d.areaInstalada.toFixed(2)}</td>
+      <td>${d.andamentoPct.toFixed(0)}%</td>
+    </tr>`).join('');
+
+  const imgAndamento = chartBlocoAndamento ? `<img src="${chartBlocoAndamento.toBase64Image()}" style="max-width:100%;">` : '';
+  const imgPeso = chartBlocoPeso ? `<img src="${chartBlocoPeso.toBase64Image()}" style="max-width:100%;">` : '';
+  const imgArea = chartBlocoArea ? `<img src="${chartBlocoArea.toBase64Image()}" style="max-width:100%;">` : '';
+
+  const html = `
+    <h1>Progresso por Bloco</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    <h2>% de andamento por bloco</h2>
+    ${imgAndamento}
+    <h2>Peso (Kg) por bloco — produzido x instalado</h2>
+    ${imgPeso}
+    <h2>Área (m²) por bloco — produzido x instalado</h2>
+    ${imgArea}
+    <h2>Dados por bloco</h2>
+    <table>
+      <thead><tr>
+        <th>Bloco</th><th>Peso previsto (Kg)</th><th>Peso produzido (Kg)</th><th>Peso instalado (Kg)</th>
+        <th>Área prevista (m²)</th><th>Área produzida (m²)</th><th>Área instalada (m²)</th><th>% andamento</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <p style="font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;margin-top:10px;">
+      Peso e área calculados a partir do peso líquido e das dimensões cadastrados em cada item. % de andamento = peso instalado ÷ peso previsto do bloco.
+    </p>`;
+
+  document.getElementById('rdoPrintArea').innerHTML = html;
+  window.print();
 }
 
 /* ---------------- RDO — Relatório Diário de Obra (consolidado) ---------------- */
@@ -7382,6 +7576,7 @@ function deleteSetor(id){
    Contexto de obra ativa (workspace)
    ============================================================ */
 let currentObraId = null;
+let chartBlocoAndamento = null, chartBlocoPeso = null, chartBlocoArea = null;
 
 function setObraContextFields(){
   ['ventoObraId','perfObraId','vidObraId','matObraId'].forEach(id=>{
