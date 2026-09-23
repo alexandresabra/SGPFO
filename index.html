@@ -4031,6 +4031,14 @@ function load(key){ try{ return JSON.parse(localStorage.getItem(DB_PREFIX+key)) 
 function save(key, data){ localStorage.setItem(DB_PREFIX+key, JSON.stringify(data)); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
+// Ordenação alfabética (pt-BR, ignora acentos/maiúsculas) usada em toda
+// listagem de blocos e itens — cadastro deixa de ser "por ordem de
+// criação" e passa a ser sempre alfabético, tanto nos dropdowns quanto
+// nos agrupamentos das abas de Projeto/Produção/Instalação.
+function ordenarPorCampo(lista, campo){
+  return (lista||[]).slice().sort((a,b)=> (a[campo]||'').localeCompare((b[campo]||''), 'pt-BR', {sensitivity:'base'}));
+}
+
 /* ---------------- Sincronização com Supabase (opcional) ----------------
    Preencha SUPABASE_CONFIG.url e .anonKey (Configurações > API do seu
    projeto Supabase) para ativar. Sem preencher, o sistema continua
@@ -4505,7 +4513,7 @@ function renderObraWorkspaceGeral(){
 // bloco a bloco — é a base tanto dos gráficos de barra horizontal quanto
 // da tabela de apoio usada na impressão.
 function calcularDadosPorBloco(){
-  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
   const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
   return blocos.map(bloco=>{
     let pesoPrevisto=0, pesoProduzido=0, pesoInstalado=0, areaPrevista=0, areaProduzida=0, areaInstalada=0;
@@ -10043,7 +10051,7 @@ function statusProdInstPill(status){
 
 /* ---------------- Blocos ---------------- */
 function refreshItemBlocoSelect(){
-  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
   const sel = document.getElementById('itemBlocoId');
   sel.innerHTML = blocos.length
     ? blocos.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')
@@ -10095,7 +10103,7 @@ function openReplicarBlocoModal(blocoId){
   if(!bloco) return;
   document.getElementById('replicarBlocoOrigemId').value = blocoId;
   document.getElementById('replicarBlocoOrigemNome').value = bloco.nome;
-  const outros = load('blocos').filter(b=>b.obraId===currentObraId && b.id!==blocoId);
+  const outros = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId && b.id!==blocoId), 'nome');
   const sel = document.getElementById('replicarBlocoDestinoId');
   sel.innerHTML = outros.length
     ? outros.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')
@@ -10282,7 +10290,7 @@ function renderItensModulo(moduleKey){
   const filtroEl = document.getElementById(p+'FiltroStatus');
   if(!searchEl || !filtroEl) return;
 
-  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
   const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
   const search = (searchEl.value || '').toLowerCase();
   const filtroStatus = filtroEl.value;
@@ -10318,7 +10326,7 @@ function renderItensModulo(moduleKey){
   const orderedKeys = [...blocoKeys, ...(groups['__sem_bloco__'] ? ['__sem_bloco__'] : [])];
 
   document.getElementById(p+'BlocosGroups').innerHTML = orderedKeys.map(key=>{
-    const items = (groups[key]||[]).slice().reverse();
+    const items = ordenarPorCampo(groups[key]||[], 'nomenclatura');
     const bloco = blocos.find(b=>b.id===key);
     const blocoNome = key==='__sem_bloco__' ? 'Sem bloco' : (bloco ? bloco.nome : '—');
     const blocoActions = key==='__sem_bloco__' ? '' : `
@@ -10552,10 +10560,10 @@ function renderStatusExecucaoDashboard(){
   const obrasHtml = obras.map(obra=>{
     const itensObraArr = itens.filter(it=>it.obraId===obra.id);
     if(!itensObraArr.length) return '';
-    const blocosObra = blocos.filter(b=>b.obraId===obra.id);
+    const blocosObra = ordenarPorCampo(blocos.filter(b=>b.obraId===obra.id), 'nome');
 
     const blocosHtml = blocosObra.map(bloco=>{
-      const itensBloco = itensObraArr.filter(it=>it.blocoId===bloco.id);
+      const itensBloco = ordenarPorCampo(itensObraArr.filter(it=>it.blocoId===bloco.id), 'nomenclatura');
       if(!itensBloco.length) return '';
       return `<details class="item-group" open>
         <summary>${esc(bloco.nome)} <span class="count">${itensBloco.length} item${itensBloco.length===1?'':'s'}</span></summary>
@@ -10566,7 +10574,7 @@ function renderStatusExecucaoDashboard(){
       </details>`;
     }).join('');
 
-    const itensSemBloco = itensObraArr.filter(it=> !blocosObra.some(b=>b.id===it.blocoId));
+    const itensSemBloco = ordenarPorCampo(itensObraArr.filter(it=> !blocosObra.some(b=>b.id===it.blocoId)), 'nomenclatura');
     const semBlocoHtml = itensSemBloco.length ? `<details class="item-group" open>
         <summary>Sem bloco <span class="count">${itensSemBloco.length} item${itensSemBloco.length===1?'':'s'}</span></summary>
         <table>
@@ -10587,7 +10595,7 @@ function renderStatusExecucaoDashboard(){
 }
 
 function renderInstalacaoTab(){
-  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
   const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
   const search = (document.getElementById('instSearch').value || '').toLowerCase();
   const filtroStatus = document.getElementById('instFiltroStatus').value;
@@ -10639,7 +10647,7 @@ function renderInstalacaoTab(){
       porItem[u.item.id].unidades.push(u);
     });
 
-    const itemGroupsHtml = Object.values(porItem).map(grupo=>{
+    const itemGroupsHtml = ordenarPorCampo(Object.values(porItem).map(g=>({...g, nomenclatura:g.item.nomenclatura})), 'nomenclatura').map(grupo=>{
       const concluidas = grupo.unidades.filter(u=>u.status==='concluido').length;
       const rows = grupo.unidades.map(u=>{
         const temFotos = (u.state.fotos||[]).length;
