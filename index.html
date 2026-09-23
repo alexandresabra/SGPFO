@@ -1042,6 +1042,7 @@
                 <div style="display:flex;gap:8px;">
                   <button class="btn secondary" onclick="openBlocoModal()">+ Novo bloco</button>
                   <button class="btn secondary" onclick="gerarTarefasModulo('projeto')">Gerar tarefas</button>
+                  <button class="btn secondary" onclick="gerarRelatorioItensIncompletos()">Relatório de itens incompletos</button>
                   <button class="btn" onclick="openItemModal()">+ Novo item</button>
                 </div>
               </div>
@@ -3962,6 +3963,22 @@
         <button class="btn" onclick="imprimirPendenciasMateriais()">Imprimir / salvar PDF</button>
       </div>
       <div id="matPendConteudo" class="memoria-doc"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="itensIncompModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-head">
+      <h3>Relatório de itens com informações incompletas</h3>
+      <button class="modal-close" onclick="fecharRelatorioItensIncompletos()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-actions" style="margin-bottom:14px;">
+        <button class="btn secondary" id="itensIncompEditBtn" onclick="alternarEdicaoItensIncompletos()">Editar</button>
+        <button class="btn" onclick="imprimirItensIncompletos()">Imprimir / salvar PDF</button>
+      </div>
+      <div id="itensIncompConteudo" class="memoria-doc"></div>
     </div>
   </div>
 </div>
@@ -9542,6 +9559,107 @@ function imprimirPendenciasMateriais(){
 
 document.getElementById('matPendModal').addEventListener('click', (e)=>{
   if(e.target.id==='matPendModal') e.currentTarget.classList.remove('open');
+});
+
+/* ---------------- Relatório de itens com informações incompletas ---------------- */
+// Cadastro compartilhado (Projeto/Produção/Instalação) permite salvar um
+// item sem largura, altura, peso líquido, tipo de esquadria ou
+// localização — isso trava tanto a memória de cálculo (vento/perfil,
+// que dependem de largura/altura) quanto o cronograma de instalação
+// baseado em peso. Este relatório lista, por bloco, quais itens estão
+// faltando o quê.
+const CAMPOS_ITEM_OBRIGATORIOS = [
+  { label:'Largura (mm)',        check: it => !it.largura },
+  { label:'Altura (mm)',         check: it => !it.altura },
+  { label:'Peso líquido (Kg)',   check: it => !(parseFloat(it.pesoLiquido) > 0) },
+  { label:'Tipo de esquadria',   check: it => !it.tipoEsquadria },
+  { label:'Localizações',        check: it => !(it.localizacoes && it.localizacoes.length) },
+];
+
+function montarHtmlRelatorioItensIncompletos(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+
+  const porBloco = {};
+  let totalItensIncompletos = 0;
+
+  itens.forEach(it=>{
+    const faltando = CAMPOS_ITEM_OBRIGATORIOS.filter(c=>c.check(it)).map(c=>c.label);
+    if(!faltando.length) return;
+    totalItensIncompletos++;
+    const blocoId = it.blocoId || '__sem_bloco__';
+    if(!porBloco[blocoId]) porBloco[blocoId] = [];
+    porBloco[blocoId].push({ item: it, faltando });
+  });
+
+  const nomeBloco = id => id==='__sem_bloco__'
+    ? 'Sem bloco vinculado'
+    : ((blocos.find(b=>b.id===id)||{}).nome || '— bloco excluído —');
+  const blocoKeys = Object.keys(porBloco).sort((a,b)=> nomeBloco(a).localeCompare(nomeBloco(b),'pt-BR'));
+
+  const cabecalho = `
+    <h1>Relatório de Itens com Informações Incompletas</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>`;
+
+  if(!blocoKeys.length){
+    return cabecalho + `<p style="margin-top:20px;">Nenhum item com informação incompleta — todos os itens cadastrados nesta obra têm largura, altura, peso líquido, tipo de esquadria e ao menos uma localização preenchidos.</p>`;
+  }
+
+  const blocosHtml = blocoKeys.map(blocoId=>{
+    const linhas = porBloco[blocoId].map(({item, faltando})=>`
+      <tr>
+        <td>${esc(item.nomenclatura || '(sem nomenclatura)')}</td>
+        <td style="color:#a80e26;font-weight:600;">${esc(faltando.join(', '))}</td>
+      </tr>`).join('');
+    return `
+      <h2>Bloco: ${esc(nomeBloco(blocoId))} <span style="font-weight:400;color:#777;font-size:12.5px;">(${porBloco[blocoId].length} item${porBloco[blocoId].length===1?'':'s'})</span></h2>
+      <table>
+        <thead><tr><th>Item</th><th>Informações faltando</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <hr style="margin:20px 0;border:none;border-top:1px solid #ddd;">`;
+  }).join('');
+
+  return cabecalho + `
+    <p style="font-size:12.5px;color:#555;">${blocoKeys.length} bloco(s) com pendência · ${totalItensIncompletos} item(ns) com informação incompleta, de ${itens.length} cadastrado(s) nesta obra.</p>
+    ${blocosHtml}
+    <p style="font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;margin-top:10px;">
+      Relatório gerado a partir dos itens cadastrados em Projeto (cadastro único, compartilhado com Produção e Instalação). Considera incompleto o item que não tem largura, altura, peso líquido, tipo de esquadria ou nenhuma localização preenchida.
+    </p>
+  `;
+}
+
+function gerarRelatorioItensIncompletos(){
+  if(!currentObraId){ toast('Abra uma obra para gerar o relatório.'); return; }
+  document.getElementById('itensIncompConteudo').innerHTML = montarHtmlRelatorioItensIncompletos();
+  document.getElementById('itensIncompConteudo').contentEditable = 'false';
+  document.getElementById('itensIncompEditBtn').textContent = 'Editar';
+  document.getElementById('itensIncompModal').classList.add('open');
+}
+
+function fecharRelatorioItensIncompletos(){
+  document.getElementById('itensIncompModal').classList.remove('open');
+}
+
+function alternarEdicaoItensIncompletos(){
+  const el = document.getElementById('itensIncompConteudo');
+  const editando = el.contentEditable === 'true';
+  el.contentEditable = editando ? 'false' : 'true';
+  document.getElementById('itensIncompEditBtn').textContent = editando ? 'Editar' : 'Concluir edição';
+  if(!editando) el.focus();
+}
+
+function imprimirItensIncompletos(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('itensIncompConteudo').innerHTML;
+  window.print();
+}
+
+document.getElementById('itensIncompModal').addEventListener('click', (e)=>{
+  if(e.target.id==='itensIncompModal') e.currentTarget.classList.remove('open');
 });
 
 /* ---------------- Entradas (recebimentos fracionados, por item do pedido) ---------------- */
