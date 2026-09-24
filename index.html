@@ -871,7 +871,7 @@
           <div class="panel-body" style="padding:0;">
             <table>
               <thead><tr>
-                <th>Obra</th><th>Gerente(s) responsável(is)</th><th>Técnico Responsável</th><th>Status</th><th>Início</th><th id="thObraSaldo" style="display:none;">Saldo a gastar</th><th></th>
+                <th>Obra</th><th>Gerente(s) responsável(is)</th><th>Técnico Responsável</th><th>Status</th><th>Início</th><th>% Avanço</th><th id="thObraSaldo" style="display:none;">Saldo a gastar</th><th></th>
               </tr></thead>
               <tbody id="obrasTableBody"></tbody>
             </table>
@@ -1007,6 +1007,12 @@
             </div>
             <div class="panel-body">
               <div class="step-note" style="margin-bottom:12px;">Peso e área com base no peso líquido e nas dimensões cadastrados em cada item. "Produzido" conta quando todas as fases de Produção do item estão OK; "instalado" conta quando todas as fases de Instalação daquela unidade estão OK. % de andamento = peso instalado ÷ peso previsto do bloco.</div>
+              <div class="field" style="max-width:280px;margin-bottom:12px;">
+                <label>Filtrar por fase</label>
+                <select id="progressoFaseFiltro" onchange="renderProgressoPorBloco()">
+                  <option value="">Todas as fases</option>
+                </select>
+              </div>
               <div class="empty-state" id="blocosChartsEmpty" style="display:none;">
                 <div class="big">⛭</div>Nenhum bloco cadastrado para esta obra ainda.
               </div>
@@ -1022,7 +1028,7 @@
 
                 <table style="margin-top:24px;">
                   <thead><tr>
-                    <th>Bloco</th><th>Peso previsto (Kg)</th><th>Peso produzido (Kg)</th><th>Peso instalado (Kg)</th>
+                    <th>Fase</th><th>Bloco</th><th>Peso previsto (Kg)</th><th>Peso produzido (Kg)</th><th>Peso instalado (Kg)</th>
                     <th>Área prevista (m²)</th><th>Área produzida (m²)</th><th>Área instalada (m²)</th><th>% andamento</th>
                   </tr></thead>
                   <tbody id="blocosTabelaBody"></tbody>
@@ -1698,6 +1704,7 @@
                 <div id="finComparativo"></div>
                 <div class="form-actions" style="border-top:none;padding-top:0;margin-top:14px;">
                   <button class="btn small secondary" onclick="gerarRelatorioDespesasPorCategoria()">Relatório de Despesas por Categoria</button>
+                  <button class="btn small secondary" onclick="gerarRelatorioCustoVidro()">Relatório de Custo de Vidro</button>
                   <button class="btn small secondary" onclick="gerarHistoricoPrecoKgAluminio()">Histórico de R$/Kg — Alumínio</button>
                 </div>
               </div>
@@ -3766,12 +3773,69 @@
     <div class="modal-head"><h3 id="modalBlocoTitle">Novo bloco</h3><button class="modal-close" onclick="closeModal('modalBloco')">&times;</button></div>
     <div class="modal-body">
       <input type="hidden" id="blocoId">
+      <input type="hidden" id="blocoVoltarParaSelect">
       <div class="form-grid">
+        <div class="field full">
+          <label>Fase</label>
+          <div style="display:flex;gap:8px;">
+            <select id="blocoFaseId" style="flex:1;"></select>
+            <button type="button" class="btn small secondary" onclick="openFaseModal(null,'blocoFaseId')">+ Nova fase</button>
+          </div>
+        </div>
         <div class="field full"><label>Nome do bloco</label><input type="text" id="blocoNome" placeholder="Ex.: Bloco 1, Torre A, Bloco B - Fase 2..."></div>
       </div>
       <div class="form-actions">
         <button class="btn secondary" onclick="closeModal('modalBloco')">Cancelar</button>
         <button class="btn" onclick="saveBloco()">Salvar bloco</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalFaseObra">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalFaseObraTitle">Nova fase</h3><button class="modal-close" onclick="closeModal('modalFaseObra')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="faseObraId">
+      <input type="hidden" id="faseObraVoltarParaSelect">
+      <div class="form-grid">
+        <div class="field full"><label>Nome da fase</label><input type="text" id="faseObraNome" placeholder="Ex.: Fase 1A, Fase 1B, Fase 2..."></div>
+      </div>
+      <div class="step-note">Uma fase agrupa vários blocos e permite cadastrar uma tipologia de esquadria (medidas e peso) uma única vez, reaproveitando-a em cada bloco.</div>
+      <div class="form-actions">
+        <button class="btn secondary" onclick="closeModal('modalFaseObra')">Cancelar</button>
+        <button class="btn" onclick="saveFaseObra()">Salvar fase</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalTipologia">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalTipologiaTitle">Nova tipologia</h3><button class="modal-close" onclick="closeModal('modalTipologia')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="tipologiaId">
+      <input type="hidden" id="tipologiaFaseId">
+      <div class="disclaimer" style="background:#f6f6f5;border-color:var(--line);border-left-color:var(--red-2);color:var(--ink-soft);">
+        A tipologia é cadastrada uma vez para a fase e pode depois ser aplicada a vários blocos — cada item pode ainda ajustar a medida/peso pontualmente, se aquele bloco específico precisar.
+      </div>
+      <div class="form-grid" style="margin-top:14px;">
+        <div class="field full"><label>Nomenclatura</label><input type="text" id="tipologiaNomenclatura" placeholder="Ex.: Janela tipo J-01, Porta de vidro P-02..."></div>
+        <div class="field">
+          <label>Tipo de esquadria</label>
+          <select id="tipologiaTipoEsquadria">
+            <option value="Janela e Porta">Janela e Porta</option>
+            <option value="Guarda-corpo">Guarda-corpo</option>
+            <option value="Fachada">Fachada</option>
+          </select>
+        </div>
+        <div class="field"><label>Largura (mm)</label><input type="number" id="tipologiaLargura" step="1"></div>
+        <div class="field"><label>Altura (mm)</label><input type="number" id="tipologiaAltura" step="1"></div>
+        <div class="field"><label>Peso líquido da esquadria (Kg)</label><input type="number" id="tipologiaPesoLiquido" step="0.01" placeholder="Ex.: 18.5"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn secondary" onclick="closeModal('modalTipologia')">Cancelar</button>
+        <button class="btn" onclick="saveTipologia()">Salvar tipologia</button>
       </div>
     </div>
   </div>
@@ -3819,8 +3883,25 @@
       </div>
       <div class="form-grid" style="margin-top:14px;">
         <div class="field full">
+          <label>Fase</label>
+          <div style="display:flex;gap:8px;">
+            <select id="itemFaseId" style="flex:1;" onchange="onItemFaseChange()"></select>
+            <button type="button" class="btn small secondary" onclick="openFaseModal(null,'itemFaseId')">+ Nova fase</button>
+          </div>
+        </div>
+        <div class="field full">
+          <label>Tipologia</label>
+          <div style="display:flex;gap:8px;">
+            <select id="itemTipologiaId" style="flex:1;" onchange="onItemTipologiaChange()"></select>
+            <button type="button" class="btn small secondary" onclick="openTipologiaModalFromItem()">+ Nova tipologia</button>
+          </div>
+        </div>
+        <div class="field full">
           <label>Bloco</label>
-          <select id="itemBlocoId"></select>
+          <div style="display:flex;gap:8px;">
+            <select id="itemBlocoId" style="flex:1;"></select>
+            <button type="button" class="btn small secondary" onclick="openBlocoModalFromItem()">+ Novo bloco</button>
+          </div>
         </div>
         <div class="field full"><label>Nomenclatura</label><input type="text" id="itemNomenclatura" placeholder="Ex.: Janela tipo J-01, Porta de vidro P-02..."></div>
         <div class="field">
@@ -4420,6 +4501,7 @@ function openObraWorkspace(obraId){
   const obra = load('obras').find(o=>o.id===obraId);
   if(!obra) return;
   currentObraId = obraId;
+  garantirFaseNaoClassificado(obraId);
 
   document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -4512,8 +4594,13 @@ function renderObraWorkspaceGeral(){
 // Mesma lógica de peso/área usada no total da obra (acima), mas somada
 // bloco a bloco — é a base tanto dos gráficos de barra horizontal quanto
 // da tabela de apoio usada na impressão.
-function calcularDadosPorBloco(){
-  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
+function calcularDadosPorBloco(faseFiltroId){
+  garantirFaseNaoClassificado(currentObraId);
+  const fasesObra = load('fasesObra').filter(f=>f.obraId===currentObraId);
+  const faseNomePorId = {};
+  fasesObra.forEach(f=>{ faseNomePorId[f.id] = f.nome; });
+  let blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
+  if(faseFiltroId) blocos = blocos.filter(b=>b.faseId===faseFiltroId);
   const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
   return blocos.map(bloco=>{
     let pesoPrevisto=0, pesoProduzido=0, pesoInstalado=0, areaPrevista=0, areaProduzida=0, areaInstalada=0;
@@ -4543,18 +4630,33 @@ function calcularDadosPorBloco(){
       });
     });
     const andamentoPct = pesoPrevisto > 0 ? (pesoInstalado / pesoPrevisto) * 100 : 0;
-    return { id: bloco.id, nome: bloco.nome, pesoPrevisto, pesoProduzido, pesoInstalado, areaPrevista, areaProduzida, areaInstalada, andamentoPct };
+    return { id: bloco.id, nome: bloco.nome, faseNome: faseNomePorId[bloco.faseId] || 'Não classificado', pesoPrevisto, pesoProduzido, pesoInstalado, areaPrevista, areaProduzida, areaInstalada, andamentoPct };
   });
 }
 
 function renderProgressoPorBloco(){
-  const dados = calcularDadosPorBloco();
+  if(!currentObraId) return;
+  garantirFaseNaoClassificado(currentObraId);
+  const filtroSel = document.getElementById('progressoFaseFiltro');
+  if(filtroSel){
+    const fasesObra = load('fasesObra').filter(f=>f.obraId===currentObraId);
+    const classificadas = ordenarPorCampo(fasesObra.filter(f=>!f.naoClassificado), 'nome');
+    const naoClassificadas = fasesObra.filter(f=>f.naoClassificado);
+    const fasesOrdenadas = classificadas.concat(naoClassificadas);
+    const valorAtual = filtroSel.value;
+    filtroSel.innerHTML = '<option value="">Todas as fases</option>' +
+      fasesOrdenadas.map(f=>`<option value="${f.id}">${esc(f.nome)}</option>`).join('');
+    filtroSel.value = fasesOrdenadas.find(f=>f.id===valorAtual) ? valorAtual : '';
+  }
+  const faseFiltroId = filtroSel ? filtroSel.value : '';
+  const dados = calcularDadosPorBloco(faseFiltroId);
   document.getElementById('blocosChartsEmpty').style.display = dados.length ? 'none' : 'block';
   document.getElementById('blocosChartsWrap').style.display = dados.length ? 'block' : 'none';
   if(!dados.length) return;
 
   document.getElementById('blocosTabelaBody').innerHTML = dados.map(d=>`
     <tr>
+      <td>${esc(d.faseNome)}</td>
       <td><strong>${esc(d.nome)}</strong></td>
       <td>${d.pesoPrevisto.toFixed(1)}</td>
       <td>${d.pesoProduzido.toFixed(1)}</td>
@@ -4572,7 +4674,9 @@ function renderProgressoPorBloco(){
     document.getElementById(id).style.height = alturaPx + 'px';
   });
 
-  const labels = dados.map(d=>d.nome);
+  // sem filtro de fase ativo, o rótulo do gráfico mostra "Fase — Bloco"
+  // pra facilitar a leitura quando há blocos de fases diferentes juntos
+  const labels = dados.map(d=> faseFiltroId ? d.nome : `${d.faseNome} — ${d.nome}`);
 
   if(chartBlocoAndamento) chartBlocoAndamento.destroy();
   chartBlocoAndamento = new Chart(document.getElementById('chartBlocoAndamento'), {
@@ -4622,12 +4726,16 @@ function renderProgressoPorBloco(){
 // pra imagem (toBase64Image) antes de montar o documento de impressão.
 function imprimirProgressoBlocos(){
   if(!currentObraId){ toast('Abra uma obra para imprimir o relatório.'); return; }
-  const dados = calcularDadosPorBloco();
+  const filtroSel = document.getElementById('progressoFaseFiltro');
+  const faseFiltroId = filtroSel ? filtroSel.value : '';
+  const dados = calcularDadosPorBloco(faseFiltroId);
   if(!dados.length){ toast('Cadastre ao menos um bloco para gerar o relatório.'); return; }
   const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const faseFiltroNome = faseFiltroId ? (filtroSel.options[filtroSel.selectedIndex]||{}).textContent : '';
 
   const linhas = dados.map(d=>`
     <tr>
+      <td>${esc(d.faseNome)}</td>
       <td>${esc(d.nome)}</td>
       <td>${d.pesoPrevisto.toFixed(1)}</td>
       <td>${d.pesoProduzido.toFixed(1)}</td>
@@ -4646,6 +4754,7 @@ function imprimirProgressoBlocos(){
     <h1>Progresso por Bloco</h1>
     <div class="meta">
       Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      ${faseFiltroId ? `Fase: <strong>${esc(faseFiltroNome)}</strong><br>` : ''}
       Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}
     </div>
     <h2>% de andamento por bloco</h2>
@@ -4657,7 +4766,7 @@ function imprimirProgressoBlocos(){
     <h2>Dados por bloco</h2>
     <table>
       <thead><tr>
-        <th>Bloco</th><th>Peso previsto (Kg)</th><th>Peso produzido (Kg)</th><th>Peso instalado (Kg)</th>
+        <th>Fase</th><th>Bloco</th><th>Peso previsto (Kg)</th><th>Peso produzido (Kg)</th><th>Peso instalado (Kg)</th>
         <th>Área prevista (m²)</th><th>Área produzida (m²)</th><th>Área instalada (m²)</th><th>% andamento</th>
       </tr></thead>
       <tbody>${linhas}</tbody>
@@ -4754,6 +4863,29 @@ function calcularSaldoAGastarObra(obraId){
   return { valor:null, base:null, gastoTotal, tendenciaTotal, orcTotal };
 }
 
+// % de avanço geral da obra = peso instalado ÷ peso previsto (somando todos
+// os itens de todos os blocos) — mesma fórmula já usada no KPI "Peso e Área"
+// e no painel "Progresso por bloco" dentro da obra, só que agregada aqui em
+// nível de obra pra aparecer na listagem geral.
+function calcularAvancoObra(obraId){
+  const itens = load('itensObra').filter(it=>it.obraId===obraId);
+  let pesoPrevisto=0, pesoInstalado=0;
+  itens.forEach(item=>{
+    const pesoUnitario = parseFloat(item.pesoLiquido) || 0;
+    const qtdTotal = qtdTotalLocalizacoes(item);
+    pesoPrevisto += pesoUnitario * qtdTotal;
+    gerarUnidadesInstalacao(item).forEach(u=>{
+      const state = getUnidadeState(item, u.unitKey);
+      const progUnidade = calcProgressoUnidade(state);
+      if(progUnidade.total > 0 && progUnidade.done === progUnidade.total){
+        pesoInstalado += pesoUnitario;
+      }
+    });
+  });
+  const pct = pesoPrevisto > 0 ? (pesoInstalado / pesoPrevisto) * 100 : null;
+  return { pct, pesoPrevisto, pesoInstalado };
+}
+
 function renderObras(){
   const obras = load('obras');
   const responsaveis = load('responsaveis');
@@ -4787,6 +4919,11 @@ function renderObras(){
       saldoCell = `<td style="${displaySaldo}${cor}">${fmtMoeda(saldo.valor)}<div class="step-note" style="font-weight:400;">base: ${baseLabel}</div></td>`;
     }
 
+    const avanco = calcularAvancoObra(o.id);
+    const avancoCell = avanco.pct===null
+      ? `<td class="step-note">Sem itens cadastrados</td>`
+      : `<td><strong>${avanco.pct.toFixed(0)}%</strong></td>`;
+
     return `
     <tr>
       <td><strong>${esc(o.nome)}</strong><div class="step-note">${esc(o.endereco||'')}</div></td>
@@ -4794,6 +4931,7 @@ function renderObras(){
       <td>${tecnico ? esc(tecnico.nome) : '—'}</td>
       <td>${statusPill(o.status)}</td>
       <td>${fmtDate(o.dataInicio)}</td>
+      ${avancoCell}
       ${saldoCell}
       <td style="text-align:right;white-space:nowrap;">
         <button class="btn small" onclick="openObraWorkspace('${o.id}')">Abrir obra</button>
@@ -5429,6 +5567,65 @@ function gerarRelatorioDespesasPorCategoria(){
   window.print();
 }
 
+// Relatório de custo total de vidro desta obra, separado por categoria:
+// 1ª pedido, Quebra/Arranhão (Fábrica/Instalação) e Quebra/Arranhão (Obra).
+// Usa os lançamentos de despesa (categoria "vidro") gerados automaticamente
+// ao registrar cada entrada de um item de vidro — lançamentos manuais na
+// categoria Vidro (sem a tag de tipo/subcategoria) entram em "Outros".
+function gerarRelatorioCustoVidro(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const despesasVidro = load('lancamentosFinanceiros').filter(l=>l.obraId===currentObraId && l.tipo==='despesa' && l.categoria==='vidro');
+
+  if(!despesasVidro.length){
+    toast('Nenhuma despesa de vidro lançada nesta obra ainda.');
+    return;
+  }
+
+  const ORDEM_CATEGORIAS = ['primeiroPedido:', 'reposicao:quebraFabrica', 'reposicao:quebraObra', 'outros'];
+  const porCategoria = {};
+  let totalGeral = 0;
+  despesasVidro.forEach(l=>{
+    const chave = l.vidroTipo ? `${l.vidroTipo}:${l.vidroSubcategoria||''}` : 'outros';
+    porCategoria[chave] = (porCategoria[chave]||0) + l.valor;
+    totalGeral += l.valor;
+  });
+
+  const labelPorChave = chave => {
+    if(chave==='outros') return 'Outros lançamentos de vidro (sem categoria/manuais)';
+    const [tipo, sub] = chave.split(':');
+    return vidroCategoriaLabel(tipo, sub);
+  };
+
+  const chavesOrdenadas = Object.keys(porCategoria).sort((a,b)=>{
+    const ia = ORDEM_CATEGORIAS.indexOf(a), ib = ORDEM_CATEGORIAS.indexOf(b);
+    return (ia<0?99:ia) - (ib<0?99:ib);
+  });
+
+  const linhas = chavesOrdenadas.map(chave=>{
+    const valor = porCategoria[chave];
+    const pct = totalGeral>0 ? (valor/totalGeral*100) : 0;
+    return `<tr>
+      <td>${esc(labelPorChave(chave))}</td>
+      <td>${fmtMoeda(valor)}</td>
+      <td>${pct.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rdoPrintArea').innerHTML = `
+    <h1>Relatório de Custo de Vidro</h1>
+    <div class="meta">
+      Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Custo total de vidro: <strong>${fmtMoeda(totalGeral)}</strong><br>
+      Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
+    </div>
+    <table>
+      <thead><tr><th>Categoria</th><th>Valor</th><th>% do total</th></tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr><td>TOTAL</td><td>${fmtMoeda(totalGeral)}</td><td>100,0%</td></tr></tfoot>
+    </table>`;
+  window.print();
+}
+
 // Histórico de R$/Kg pago em compras de Alumínio, em ordem cronológica — pra
 // enxergar a variação do preço por Kg mês a mês e cruzar com a quantidade
 // comprada, ajudando a identificar se um estouro veio de preço ou de volume.
@@ -5652,6 +5849,32 @@ function deleteLancamentoFinanceiro(id){
 }
 
 const FIN_CATEGORIA_LABEL = { material:'Material', aluminio:'Material — Alumínio', acessorios:'Material — Acessórios', maoDeObra:'Mão de obra', vidro:'Vidro', sucata:'Sucata', vendaObra:'Venda/Transferência entre Obras', equipamento:'Equipamentos', administrativo:'Administrativo', custoOperacionalFabrica:'Custo Operacional da Fábrica', outros:'Outros' };
+
+/* ---------------- Vidro (itens de pedido de material do tipo vidro) ---------------- */
+const VIDRO_TIPO_LABEL = { primeiroPedido: '1ª pedido', reposicao: 'Reposição' };
+const VIDRO_SUBCATEGORIA_LABEL = { quebraFabrica: 'Quebra/Arranhão (Fábrica/Instalação)', quebraObra: 'Quebra/Arranhão (Obra)' };
+
+// Arredondamento padrão de medida de vidro: sempre para o próximo múltiplo
+// de 50mm (nunca para baixo) — ex.: 2410→2450, 2455→2500, 2400→2400.
+function arredondarVidroMm(valorMm){
+  const v = parseFloat(valorMm) || 0;
+  if(v<=0) return 0;
+  return Math.ceil(v/50) * 50;
+}
+
+function calcularAreaVidroM2(larguraMm, alturaMm){
+  const l = arredondarVidroMm(larguraMm);
+  const a = arredondarVidroMm(alturaMm);
+  return (l * a) / 1000000; // mm² -> m²
+}
+
+// Rótulo curto usado na categoria do relatório de custo de vidro — combina
+// tipo (1ª pedido / Reposição) com a subcategoria de reposição quando houver.
+function vidroCategoriaLabel(vidroTipo, vidroSubcategoria){
+  if(vidroTipo==='reposicao') return VIDRO_SUBCATEGORIA_LABEL[vidroSubcategoria] || 'Reposição (subcategoria não informada)';
+  if(vidroTipo==='primeiroPedido') return VIDRO_TIPO_LABEL.primeiroPedido;
+  return 'Outros lançamentos de vidro';
+}
 
 // % físico médio da obra (Projeto + Produção + Instalação, mesma base do
 // Dashboard) — usado como referência para projetar a Tendência de custo.
@@ -9488,7 +9711,8 @@ let tempItensPedido = [];
 
 function renderTempItensPedido(){
   document.getElementById('itensPedidoBody').innerHTML = tempItensPedido.map((it,i)=>`
-    <div class="form-grid cols-3" style="align-items:end;margin-bottom:6px;">
+    <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;">
+    <div class="form-grid cols-3" style="align-items:end;">
       <div class="field full">
         <label>Item / Material</label>
         <input type="text" value="${esc(it.item||'')}" placeholder="Ex.: Perfil de alumínio linha 25, Vidro temperado 8mm..."
@@ -9498,18 +9722,59 @@ function renderTempItensPedido(){
         <label>Quantidade pedida</label>
         <input type="number" step="0.01" value="${it.qtdPedida||''}" oninput="tempItensPedido[${i}].qtdPedida=this.value;">
       </div>
-      <div class="field">
+      <div class="field" style="${it.isVidro?'display:none;':''}">
         <label>Unidade</label>
         <input type="text" value="${esc(it.unidade||'')}" placeholder="Ex.: un, kg, m, m², barra" oninput="tempItensPedido[${i}].unidade=this.value;">
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${it.isVidro?'checked':''} style="width:auto;"
+            onchange="tempItensPedido[${i}].isVidro=this.checked; if(this.checked){ tempItensPedido[${i}].unidade='un'; if(!tempItensPedido[${i}].vidroTipo) tempItensPedido[${i}].vidroTipo='primeiroPedido'; } renderTempItensPedido();">
+          É vidro?
+        </label>
       </div>
       <div class="field" style="text-align:right;">
         <button type="button" class="btn small danger" onclick="removerLinhaItemPedido(${i})">Remover item</button>
       </div>
+    </div>
+    ${it.isVidro ? `
+    <div class="form-grid cols-3" style="align-items:end;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);">
+      <div class="field">
+        <label>Tipo</label>
+        <select onchange="tempItensPedido[${i}].vidroTipo=this.value; renderTempItensPedido();">
+          <option value="primeiroPedido" ${it.vidroTipo==='primeiroPedido'?'selected':''}>1ª pedido</option>
+          <option value="reposicao" ${it.vidroTipo==='reposicao'?'selected':''}>Reposição</option>
+        </select>
+      </div>
+      ${it.vidroTipo==='reposicao' ? `
+      <div class="field full">
+        <label>Motivo da reposição</label>
+        <select onchange="tempItensPedido[${i}].vidroSubcategoria=this.value;">
+          <option value="">— Selecione —</option>
+          <option value="quebraFabrica" ${it.vidroSubcategoria==='quebraFabrica'?'selected':''}>Quebra/Arranhão (Fábrica/Instalação)</option>
+          <option value="quebraObra" ${it.vidroSubcategoria==='quebraObra'?'selected':''}>Quebra/Arranhão (Obra)</option>
+        </select>
+      </div>` : ''}
+      <div class="field">
+        <label>Largura (mm)</label>
+        <input type="number" step="1" value="${it.vidroLargura||''}" oninput="tempItensPedido[${i}].vidroLargura=this.value;">
+      </div>
+      <div class="field">
+        <label>Altura (mm)</label>
+        <input type="number" step="1" value="${it.vidroAltura||''}" oninput="tempItensPedido[${i}].vidroAltura=this.value;">
+      </div>
+      <div class="field">
+        <label>R$/m²</label>
+        <input type="number" step="0.01" value="${it.vidroPrecoM2||''}" oninput="tempItensPedido[${i}].vidroPrecoM2=this.value;">
+      </div>
+    </div>
+    <div class="step-note" style="margin-top:6px;">Medidas arredondadas para o próximo múltiplo de 50mm antes do cálculo da área. Ao registrar cada entrada (recebimento) deste item, o custo daquela entrega é lançado automaticamente em Despesas, categoria Vidro.</div>
+    ` : ''}
     </div>`).join('') || '<div class="step-note">Nenhum item adicionado ainda.</div>';
 }
 
 function adicionarLinhaItemPedido(){
-  tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[] });
+  tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[], isVidro:false, vidroTipo:'', vidroSubcategoria:'', vidroLargura:'', vidroAltura:'', vidroPrecoM2:'' });
   renderTempItensPedido();
 }
 
@@ -9610,8 +9875,9 @@ function renderMateriais(){
       const aReceber = Math.max(0, pedida - recebida);
       const numEntregas = (it.entregas||[]).length;
       const statusItem = calcularStatusItemPedido(it, p.dataPrevista);
+      const vidroTag = it.isVidro ? `<div class="step-note" style="margin-top:2px;">🪟 Vidro — ${esc(vidroCategoriaLabel(it.vidroTipo, it.vidroSubcategoria))}</div>` : '';
       return `<tr>
-        <td>${esc(it.item)}</td>
+        <td>${esc(it.item)}${vidroTag}</td>
         <td>${pedida} ${esc(it.unidade||'')}</td>
         <td>${recebida} ${esc(it.unidade||'')}</td>
         <td><strong>${aReceber} ${esc(it.unidade||'')}</strong></td>
@@ -9664,8 +9930,12 @@ function openMaterialModal(id){
 
 function saveMaterial(){
   const fornecedor = document.getElementById('matFornecedor').value.trim();
-  const itensValidos = tempItensPedido.filter(it => (it.item||'').trim() && parseFloat(it.qtdPedida) > 0);
+  let itensValidos = tempItensPedido.filter(it => (it.item||'').trim() && parseFloat(it.qtdPedida) > 0);
   if(!itensValidos.length){ toast('Adicione ao menos um item com nome e quantidade pedida.'); return; }
+  const itemVidroIncompleto = itensValidos.find(it => it.isVidro && (!(parseFloat(it.vidroLargura)>0) || !(parseFloat(it.vidroAltura)>0) || !(parseFloat(it.vidroPrecoM2)>0)));
+  if(itemVidroIncompleto){ toast(`Preencha largura, altura e R$/m² do item de vidro "${itemVidroIncompleto.item}".`); return; }
+  const itemVidroSemMotivo = itensValidos.find(it => it.isVidro && it.vidroTipo==='reposicao' && !it.vidroSubcategoria);
+  if(itemVidroSemMotivo){ toast(`Selecione o motivo da reposição do item de vidro "${itemVidroSemMotivo.item}".`); return; }
   const id = document.getElementById('matId').value || uid();
   let pedidos = load('materiais');
   const record = {
@@ -9680,8 +9950,14 @@ function saveMaterial(){
       id: it.id || uid(),
       item: it.item.trim(),
       qtdPedida: parseFloat(it.qtdPedida),
-      unidade: (it.unidade||'').trim(),
-      entregas: it.entregas || []
+      unidade: it.isVidro ? 'un' : (it.unidade||'').trim(),
+      entregas: it.entregas || [],
+      isVidro: !!it.isVidro,
+      vidroTipo: it.isVidro ? (it.vidroTipo||'primeiroPedido') : '',
+      vidroSubcategoria: (it.isVidro && it.vidroTipo==='reposicao') ? (it.vidroSubcategoria||'') : '',
+      vidroLargura: it.isVidro ? parseFloat(it.vidroLargura)||0 : '',
+      vidroAltura: it.isVidro ? parseFloat(it.vidroAltura)||0 : '',
+      vidroPrecoM2: it.isVidro ? parseFloat(it.vidroPrecoM2)||0 : ''
     }))
   };
   const idx = pedidos.findIndex(p=>p.id===id);
@@ -9932,16 +10208,24 @@ function renderEntradaModalContent(pedidoId, itemId){
      Recebido até agora: <strong>${recebida} ${esc(it.unidade||'')}</strong> &nbsp;|&nbsp;
      A receber: <strong>${aReceber} ${esc(it.unidade||'')}</strong>`;
 
+  if(it.isVidro){
+    const areaM2 = calcularAreaVidroM2(it.vidroLargura, it.vidroAltura);
+    document.getElementById('entradaResumo').innerHTML += `<br>🪟 Vidro — ${esc(vidroCategoriaLabel(it.vidroTipo, it.vidroSubcategoria))} · ${it.vidroLargura||0}mm × ${it.vidroAltura||0}mm (arredondado: ${arredondarVidroMm(it.vidroLargura)}mm × ${arredondarVidroMm(it.vidroAltura)}mm = ${areaM2.toFixed(2)}m²) · R$/m²: ${fmtMoeda(it.vidroPrecoM2)}<br><span class="step-note">Cada entrada registrada abaixo lança automaticamente a despesa correspondente em Financeiro → categoria Vidro.</span>`;
+  }
+
   const entregas = (it.entregas||[]).slice().sort((a,b)=> (b.data||'').localeCompare(a.data||''));
   document.getElementById('entradasHistEmpty').style.display = entregas.length ? 'none' : 'block';
-  document.getElementById('entradasHistBody').innerHTML = entregas.map(e=>`
+  document.getElementById('entradasHistBody').innerHTML = entregas.map(e=>{
+    const valorTxt = e.lancamentoFinanceiroId ? `<div class="step-note">${fmtMoeda(calcularAreaVidroM2(it.vidroLargura, it.vidroAltura) * e.quantidade * (parseFloat(it.vidroPrecoM2)||0))} lançado em Vidro</div>` : '';
+    return `
     <tr>
       <td>${fmtDate(e.data)}</td>
-      <td>${e.quantidade} ${esc(it.unidade||'')}</td>
+      <td>${e.quantidade} ${esc(it.unidade||'')}${valorTxt}</td>
       <td>${esc(e.numNF||'—')}</td>
       <td>${esc(e.observacoes||'—')}</td>
       <td style="text-align:right;"><button class="btn small danger" onclick="deleteEntrada('${p.id}','${it.id}','${e.id}')">Excluir</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function registrarEntrada(){
@@ -9965,6 +10249,39 @@ function registrarEntrada(){
     numNF: document.getElementById('entradaNF').value.trim(),
     observacoes: document.getElementById('entradaObs').value.trim()
   };
+
+  // Vidro: cada entrada recebida já lança automaticamente a despesa
+  // correspondente na categoria Vidro — qtd desta entrega × área
+  // arredondada (múltiplo de 50mm) × R$/m² cadastrado no item.
+  const itemAntesDoPush = pedidos[idxPedido].itens[idxItem];
+  let valorVidroLancado = null;
+  if(itemAntesDoPush.isVidro){
+    const areaM2 = calcularAreaVidroM2(itemAntesDoPush.vidroLargura, itemAntesDoPush.vidroAltura);
+    const valor = areaM2 * quantidade * (parseFloat(itemAntesDoPush.vidroPrecoM2)||0);
+    if(valor > 0){
+      const lancamentoId = uid();
+      let lancamentos = load('lancamentosFinanceiros');
+      lancamentos.push({
+        id: lancamentoId,
+        obraId: pedidos[idxPedido].obraId,
+        tipo: 'despesa',
+        categoria: 'vidro',
+        descricao: `Vidro recebido — ${itemAntesDoPush.item} (${vidroCategoriaLabel(itemAntesDoPush.vidroTipo, itemAntesDoPush.vidroSubcategoria)})${entrega.numNF?' — NF '+entrega.numNF:''}`,
+        valor,
+        data,
+        qtdKg: 0,
+        precoKg: 0,
+        notaFiscal: entrega.numNF,
+        vidroTipo: itemAntesDoPush.vidroTipo,
+        vidroSubcategoria: itemAntesDoPush.vidroSubcategoria||'',
+        origemEntregaId: entrega.id
+      });
+      save('lancamentosFinanceiros', lancamentos);
+      entrega.lancamentoFinanceiroId = lancamentoId;
+      valorVidroLancado = valor;
+    }
+  }
+
   if(!pedidos[idxPedido].itens[idxItem].entregas) pedidos[idxPedido].itens[idxItem].entregas = [];
   pedidos[idxPedido].itens[idxItem].entregas.push(entrega);
   save('materiais', pedidos);
@@ -9981,18 +10298,24 @@ function registrarEntrada(){
   renderEntradaModalContent(pedidoId, itemId);
   renderMateriais();
   renderMateriaisGeral();
-  toast('Entrada registrada — quantidade abatida automaticamente.');
+  toast(valorVidroLancado
+    ? `Entrada registrada — ${fmtMoeda(valorVidroLancado)} lançado em Despesas (categoria Vidro).`
+    : 'Entrada registrada — quantidade abatida automaticamente.');
 }
 
 function deleteEntrada(pedidoId, itemId, entregaId){
-  if(!confirm('Excluir esta entrada do histórico?')) return;
+  if(!confirm('Excluir esta entrada do histórico? Se houver uma despesa de vidro lançada automaticamente a partir dela, ela também será excluída.')) return;
   let pedidos = load('materiais');
   const idxPedido = pedidos.findIndex(p=>p.id===pedidoId);
   if(idxPedido<0) return;
   const idxItem = (pedidos[idxPedido].itens||[]).findIndex(it=>it.id===itemId);
   if(idxItem<0) return;
+  const entregaRemovida = (pedidos[idxPedido].itens[idxItem].entregas||[]).find(e=>e.id===entregaId);
   pedidos[idxPedido].itens[idxItem].entregas = (pedidos[idxPedido].itens[idxItem].entregas||[]).filter(e=>e.id!==entregaId);
   save('materiais', pedidos);
+  if(entregaRemovida && entregaRemovida.lancamentoFinanceiroId){
+    save('lancamentosFinanceiros', load('lancamentosFinanceiros').filter(l=>l.id!==entregaRemovida.lancamentoFinanceiroId));
+  }
   renderEntradaModalContent(pedidoId, itemId);
   renderMateriais();
   renderMateriaisGeral();
@@ -10090,24 +10413,197 @@ function statusProdInstPill(status){
   return `<span class="status-pill ${cls}">${label}</span>`;
 }
 
+/* ---------------- Fases ---------------- */
+// Garante que toda obra tenha uma fase "Não classificado", e que todo
+// bloco sem faseId (blocos cadastrados antes da existência de Fases)
+// seja automaticamente atribuído a ela — sem bloquear o uso do sistema
+// enquanto o usuário não reclassifica manualmente.
+function garantirFaseNaoClassificado(obraId){
+  let fases = load('fasesObra');
+  let fase = fases.find(f=>f.obraId===obraId && f.naoClassificado);
+  if(!fase){
+    fase = { id: uid(), obraId, nome:'Não classificado', naoClassificado:true };
+    fases.push(fase);
+    save('fasesObra', fases);
+  }
+  let blocos = load('blocos');
+  let changed = false;
+  blocos.forEach(b=>{
+    if(b.obraId===obraId && !b.faseId){ b.faseId = fase.id; changed = true; }
+  });
+  if(changed) save('blocos', blocos);
+  return fase;
+}
+
+function refreshFaseSelect(selectId){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  const todas = load('fasesObra').filter(f=>f.obraId===currentObraId);
+  const classificadas = ordenarPorCampo(todas.filter(f=>!f.naoClassificado), 'nome');
+  const naoClassificadas = todas.filter(f=>f.naoClassificado);
+  const fases = classificadas.concat(naoClassificadas);
+  sel.innerHTML = fases.map(f=>`<option value="${f.id}">${esc(f.nome)}</option>`).join('');
+}
+
+function openFaseModal(id, voltarParaSelect){
+  document.getElementById('modalFaseObraTitle').textContent = id ? 'Editar fase' : 'Nova fase';
+  document.getElementById('faseObraId').value = '';
+  document.getElementById('faseObraNome').value = '';
+  document.getElementById('faseObraVoltarParaSelect').value = voltarParaSelect || '';
+  if(id){
+    const f = load('fasesObra').find(x=>x.id===id);
+    if(f){
+      document.getElementById('faseObraId').value = f.id;
+      document.getElementById('faseObraNome').value = f.nome||'';
+    }
+  }
+  openModal('modalFaseObra');
+}
+
+function saveFaseObra(){
+  const nome = document.getElementById('faseObraNome').value.trim();
+  if(!nome){ toast('Informe o nome da fase.'); return; }
+  const id = document.getElementById('faseObraId').value || uid();
+  let fases = load('fasesObra');
+  const existente = fases.find(f=>f.id===id);
+  const record = { id, nome, obraId: currentObraId, naoClassificado: existente ? !!existente.naoClassificado : false };
+  const idx = fases.findIndex(f=>f.id===id);
+  if(idx>=0) fases[idx] = record; else fases.push(record);
+  save('fasesObra', fases);
+  closeModal('modalFaseObra');
+  const voltarPara = document.getElementById('faseObraVoltarParaSelect').value;
+  if(voltarPara==='blocoFaseId'){
+    refreshFaseSelect('blocoFaseId');
+    document.getElementById('blocoFaseId').value = id;
+  }
+  if(voltarPara==='itemFaseId'){
+    refreshFaseSelect('itemFaseId');
+    document.getElementById('itemFaseId').value = id;
+    onItemFaseChange();
+  }
+  renderProgressoPorBloco();
+  toast('Fase salva com sucesso.');
+}
+
+function deleteFaseObra(id){
+  const fase = load('fasesObra').find(f=>f.id===id);
+  if(!fase || fase.naoClassificado){ toast('Esta fase não pode ser excluída.'); return; }
+  const blocosNaFase = load('blocos').filter(b=>b.faseId===id);
+  const msg = blocosNaFase.length
+    ? `Esta fase tem ${blocosNaFase.length} bloco(s). Eles serão movidos para "Não classificado". Deseja continuar?`
+    : 'Excluir esta fase?';
+  if(!confirm(msg)) return;
+  const naoClass = garantirFaseNaoClassificado(currentObraId);
+  let blocos = load('blocos');
+  blocos.forEach(b=>{ if(b.faseId===id) b.faseId = naoClass.id; });
+  save('blocos', blocos);
+  save('fasesObra', load('fasesObra').filter(f=>f.id!==id));
+  save('tipologias', load('tipologias').filter(t=>t.faseId!==id));
+  renderAllItemModulos();
+  renderProgressoPorBloco();
+  toast('Fase excluída.');
+}
+
+/* ---------------- Tipologias ---------------- */
+// Uma tipologia é cadastrada uma vez por fase (nomenclatura, tipo de
+// esquadria, largura, altura, peso líquido) e pode ser aplicada a vários
+// itens/blocos — cada item ainda guarda sua própria cópia editável dessas
+// medidas, para permitir ajuste pontual num bloco específico.
+function refreshTipologiaSelect(faseId){
+  const sel = document.getElementById('itemTipologiaId');
+  if(!sel) return;
+  const tipologias = ordenarPorCampo(load('tipologias').filter(t=>t.faseId===faseId), 'nomenclatura');
+  sel.innerHTML = '<option value="">— Sem tipologia (preencher manualmente) —</option>' +
+    tipologias.map(t=>`<option value="${t.id}">${esc(t.nomenclatura)} (${esc(t.tipoEsquadria||'')})</option>`).join('');
+}
+
+function onItemFaseChange(){
+  const faseId = document.getElementById('itemFaseId').value;
+  refreshTipologiaSelect(faseId);
+  document.getElementById('itemTipologiaId').value = '';
+  refreshItemBlocoSelect(faseId);
+}
+
+function onItemTipologiaChange(){
+  const tipologiaId = document.getElementById('itemTipologiaId').value;
+  if(!tipologiaId) return;
+  const t = load('tipologias').find(x=>x.id===tipologiaId);
+  if(!t) return;
+  document.getElementById('itemNomenclatura').value = t.nomenclatura||'';
+  document.getElementById('itemTipoEsquadria').value = t.tipoEsquadria||'Janela e Porta';
+  document.getElementById('itemLargura').value = t.largura||'';
+  document.getElementById('itemAltura').value = t.altura||'';
+  document.getElementById('itemPesoLiquido').value = t.pesoLiquido||'';
+}
+
+function openTipologiaModalFromItem(){
+  const faseId = document.getElementById('itemFaseId').value;
+  if(!faseId){ toast('Selecione a fase primeiro.'); return; }
+  document.getElementById('modalTipologiaTitle').textContent = 'Nova tipologia';
+  document.getElementById('tipologiaId').value = '';
+  document.getElementById('tipologiaFaseId').value = faseId;
+  document.getElementById('tipologiaNomenclatura').value = document.getElementById('itemNomenclatura').value || '';
+  document.getElementById('tipologiaTipoEsquadria').value = document.getElementById('itemTipoEsquadria').value || 'Janela e Porta';
+  document.getElementById('tipologiaLargura').value = document.getElementById('itemLargura').value || '';
+  document.getElementById('tipologiaAltura').value = document.getElementById('itemAltura').value || '';
+  document.getElementById('tipologiaPesoLiquido').value = document.getElementById('itemPesoLiquido').value || '';
+  openModal('modalTipologia');
+}
+
+function saveTipologia(){
+  const nomenclatura = document.getElementById('tipologiaNomenclatura').value.trim();
+  const faseId = document.getElementById('tipologiaFaseId').value;
+  if(!faseId){ toast('Selecione a fase.'); return; }
+  if(!nomenclatura){ toast('Informe a nomenclatura da tipologia.'); return; }
+  const id = document.getElementById('tipologiaId').value || uid();
+  let tipologias = load('tipologias');
+  const record = {
+    id, faseId, obraId: currentObraId,
+    nomenclatura,
+    tipoEsquadria: document.getElementById('tipologiaTipoEsquadria').value,
+    largura: document.getElementById('tipologiaLargura').value,
+    altura: document.getElementById('tipologiaAltura').value,
+    pesoLiquido: parseFloat(document.getElementById('tipologiaPesoLiquido').value) || 0,
+  };
+  const idx = tipologias.findIndex(t=>t.id===id);
+  if(idx>=0) tipologias[idx] = record; else tipologias.push(record);
+  save('tipologias', tipologias);
+  closeModal('modalTipologia');
+  refreshTipologiaSelect(faseId);
+  document.getElementById('itemTipologiaId').value = id;
+  onItemTipologiaChange();
+  toast('Tipologia salva com sucesso.');
+}
+
 /* ---------------- Blocos ---------------- */
-function refreshItemBlocoSelect(){
-  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
+function refreshItemBlocoSelect(faseId){
+  const filtro = faseId || (document.getElementById('itemFaseId') ? document.getElementById('itemFaseId').value : '');
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId && (!filtro || b.faseId===filtro)), 'nome');
   const sel = document.getElementById('itemBlocoId');
   sel.innerHTML = blocos.length
     ? blocos.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')
-    : '<option value="">— Cadastre um bloco primeiro —</option>';
+    : '<option value="">— Cadastre um bloco nesta fase primeiro —</option>';
 }
 
-function openBlocoModal(id){
+function openBlocoModalFromItem(){
+  const faseId = document.getElementById('itemFaseId').value;
+  openBlocoModal(null, faseId, 'itemBlocoId');
+}
+
+function openBlocoModal(id, presetFaseId, voltarParaSelect){
   document.getElementById('modalBlocoTitle').textContent = id ? 'Editar bloco' : 'Novo bloco';
   document.getElementById('blocoId').value = '';
   document.getElementById('blocoNome').value = '';
+  document.getElementById('blocoVoltarParaSelect').value = voltarParaSelect || '';
+  const naoClass = garantirFaseNaoClassificado(currentObraId);
+  refreshFaseSelect('blocoFaseId');
+  document.getElementById('blocoFaseId').value = presetFaseId || naoClass.id;
   if(id){
     const b = load('blocos').find(x=>x.id===id);
     if(b){
       document.getElementById('blocoId').value = b.id;
       document.getElementById('blocoNome').value = b.nome||'';
+      document.getElementById('blocoFaseId').value = b.faseId || naoClass.id;
     }
   }
   openModal('modalBloco');
@@ -10116,14 +10612,22 @@ function openBlocoModal(id){
 function saveBloco(){
   const nome = document.getElementById('blocoNome').value.trim();
   if(!nome){ toast('Informe o nome do bloco.'); return; }
+  const faseId = document.getElementById('blocoFaseId').value || garantirFaseNaoClassificado(currentObraId).id;
   const id = document.getElementById('blocoId').value || uid();
   let blocos = load('blocos');
-  const record = { id, nome, obraId: currentObraId };
+  const isNovo = !blocos.find(b=>b.id===id);
+  const record = { id, nome, obraId: currentObraId, faseId };
   const idx = blocos.findIndex(b=>b.id===id);
   if(idx>=0) blocos[idx] = record; else blocos.push(record);
   save('blocos', blocos);
   closeModal('modalBloco');
   renderAllItemModulos();
+  renderProgressoPorBloco();
+  const voltarPara = document.getElementById('blocoVoltarParaSelect').value;
+  if(voltarPara==='itemBlocoId' && isNovo){
+    refreshItemBlocoSelect(faseId);
+    document.getElementById('itemBlocoId').value = id;
+  }
   toast('Bloco salvo com sucesso.');
 }
 
@@ -10136,6 +10640,7 @@ function deleteBloco(id){
   save('blocos', load('blocos').filter(b=>b.id!==id));
   save('itensObra', load('itensObra').filter(it=>it.blocoId!==id));
   renderAllItemModulos();
+  renderProgressoPorBloco();
   toast('Bloco excluído.');
 }
 
@@ -10170,7 +10675,9 @@ function confirmarReplicarBloco(){
     const nome = document.getElementById('replicarBlocoDestinoNovoNome').value.trim();
     if(!nome){ toast('Informe o nome do novo bloco.'); return; }
     destinoId = uid();
-    blocos.push({ id: destinoId, obraId: currentObraId, nome });
+    const blocoOrigem = blocos.find(b=>b.id===origemId);
+    const faseId = (blocoOrigem && blocoOrigem.faseId) || garantirFaseNaoClassificado(currentObraId).id;
+    blocos.push({ id: destinoId, obraId: currentObraId, nome, faseId });
     save('blocos', blocos);
   } else {
     destinoId = document.getElementById('replicarBlocoDestinoId').value;
@@ -10186,6 +10693,7 @@ function confirmarReplicarBloco(){
     id: uid(),
     obraId: currentObraId,
     blocoId: destinoId,
+    tipologiaId: it.tipologiaId || null,
     nomenclatura: it.nomenclatura,
     tipoEsquadria: it.tipoEsquadria,
     largura: it.largura,
@@ -10243,7 +10751,8 @@ function removeTempLocalizacao(index){
 }
 
 function openItemModal(id){
-  refreshItemBlocoSelect();
+  const naoClass = garantirFaseNaoClassificado(currentObraId);
+  refreshFaseSelect('itemFaseId');
   const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
   if(!blocos.length && !id){ toast('Cadastre um bloco antes de adicionar itens.'); return; }
   document.getElementById('modalItemTitle').textContent = id ? 'Editar item' : 'Novo item';
@@ -10252,10 +10761,17 @@ function openItemModal(id){
   document.getElementById('novoLocalTexto').value = '';
   document.getElementById('novoLocalQtd').value = '';
   tempLocalizacoes = [];
+  let faseIdAtual = naoClass.id;
   if(id){
     const it = load('itensObra').find(x=>x.id===id);
     if(it){
+      const blocoDoItem = load('blocos').find(b=>b.id===it.blocoId);
+      faseIdAtual = (blocoDoItem && blocoDoItem.faseId) || naoClass.id;
+      document.getElementById('itemFaseId').value = faseIdAtual;
+      refreshTipologiaSelect(faseIdAtual);
+      refreshItemBlocoSelect(faseIdAtual);
       document.getElementById('itemId').value = it.id;
+      document.getElementById('itemTipologiaId').value = it.tipologiaId || '';
       document.getElementById('itemBlocoId').value = it.blocoId||'';
       document.getElementById('itemNomenclatura').value = it.nomenclatura||'';
       document.getElementById('itemTipoEsquadria').value = (it.tipoEsquadria==='Janela'||it.tipoEsquadria==='Porta') ? 'Janela e Porta' : (it.tipoEsquadria||'Janela e Porta');
@@ -10264,6 +10780,11 @@ function openItemModal(id){
       document.getElementById('itemPesoLiquido').value = it.pesoLiquido||'';
       tempLocalizacoes = (it.localizacoes||[]).map(l=>({...l}));
     }
+  } else {
+    document.getElementById('itemFaseId').value = faseIdAtual;
+    refreshTipologiaSelect(faseIdAtual);
+    refreshItemBlocoSelect(faseIdAtual);
+    document.getElementById('itemTipologiaId').value = '';
   }
   renderTempLocalizacoes();
   openModal('modalItem');
@@ -10272,6 +10793,7 @@ function openItemModal(id){
 function saveItem(){
   const nomenclatura = document.getElementById('itemNomenclatura').value.trim();
   const blocoId = document.getElementById('itemBlocoId').value;
+  const tipologiaId = document.getElementById('itemTipologiaId').value || null;
   if(!blocoId){ toast('Selecione o bloco.'); return; }
   if(!nomenclatura){ toast('Informe a nomenclatura do item.'); return; }
   if(!tempLocalizacoes.length){ toast('Adicione ao menos uma localização.'); return; }
@@ -10283,6 +10805,7 @@ function saveItem(){
     id,
     obraId: currentObraId,
     blocoId,
+    tipologiaId,
     nomenclatura,
     tipoEsquadria: document.getElementById('itemTipoEsquadria').value,
     largura: document.getElementById('itemLargura').value,
