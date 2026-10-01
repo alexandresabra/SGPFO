@@ -210,10 +210,31 @@
   #rdoPrintArea .foto-grid figcaption{font-size:10.5px;color:#666;margin-top:4px;}
 
   @media print{
-    body *{visibility:hidden;}
-    #rdoPrintArea, #rdoPrintArea *{visibility:visible;}
-    #rdoPrintArea{display:block;position:absolute;top:0;left:0;width:100%;padding:20px;}
+    /* Antes usava visibility:hidden + position:absolute pra isolar só o
+       #rdoPrintArea na impressão. Mas position:absolute tira o elemento do
+       fluxo normal e isso quebra a troca de tamanho/orientação de página via
+       CSS (usada pelos relatórios largos, ver .rdo-landscape-wrap abaixo) —
+       o Chrome ignora o @page nomeado quando o container está absolutamente
+       posicionado. Troquei pra display:none nos irmãos (ele é filho direto
+       de <body>), que isola igual mas mantém o fluxo normal. */
+    body > *:not(#rdoPrintArea){display:none !important;}
+    #rdoPrintArea{display:block;width:100%;padding:20px;}
   }
+
+  /* Relatórios com tabelas largas (ex.: Rateio de Mão de Obra — Resumo/Completo,
+     com 11 a 14 colunas) cortavam na impressão em retrato A4. Esses relatórios
+     envolvem o conteúdo numa div com essa classe, que força página paisagem
+     (via "named page" do CSS Paged Media) e reduz fonte/padding da tabela pra
+     caber todas as colunas sem cortar. */
+  @page rdo-landscape{ size: landscape; margin: 12mm; }
+  #rdoPrintArea .rdo-landscape-wrap{ page: rdo-landscape; }
+  #rdoPrintArea .rdo-landscape-wrap table{ font-size:10px; table-layout:fixed; word-wrap:break-word; }
+  #rdoPrintArea .rdo-landscape-wrap th{ padding:4px 5px; font-size:8.5px; }
+  #rdoPrintArea .rdo-landscape-wrap td{ padding:4px 5px; }
+  #rdoPrintArea .rdo-landscape-wrap h2{ page-break-before:always; margin-top:0; padding-top:14px; }
+  #rdoPrintArea .rdo-landscape-wrap h2:first-of-type{ page-break-before:avoid; }
+  #rdoPrintArea .rdo-landscape-wrap table{ page-break-inside:auto; }
+  #rdoPrintArea .rdo-landscape-wrap tr{ page-break-inside:avoid; }
 
   /* Pré-visualização em tela dos documentos de memória de cálculo — mesmo
      estilo do documento impresso (#rdoPrintArea), mas exibida dentro de um
@@ -6789,6 +6810,7 @@ function gerarRelatorioRateioResumo(){
   const obraSelecionada = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
 
   document.getElementById('rdoPrintArea').innerHTML = `
+    <div class="rdo-landscape-wrap">
     <h1>Relatório de Rateio de Mão de Obra — Resumo</h1>
     <div class="meta">
       ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
@@ -6809,7 +6831,8 @@ function gerarRelatorioRateioResumo(){
         <td>${fmtMoeda(totFabrica)}</td><td>${fmtMoeda(totIndireto)}</td>
         <td>${fmtMoeda(totalGeral)}</td>
       </tr></tfoot>
-    </table>`;
+    </table>
+    </div>`;
   window.print();
 }
 
@@ -6872,6 +6895,7 @@ function gerarRelatorioRateioCompleto(){
   const obraSelecionada = filtroObraId ? load('obras').find(o=>o.id===filtroObraId) : null;
 
   document.getElementById('rdoPrintArea').innerHTML = `
+    <div class="rdo-landscape-wrap">
     <h1>Relatório de Rateio de Mão de Obra — Completo</h1>
     <div class="meta">
       ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
@@ -6879,8 +6903,10 @@ function gerarRelatorioRateioCompleto(){
       Total geral da folha no mês: <strong>${fmtMoeda(totalGeral)}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
       A linha "Rateio da Fábrica" mostra a fatia do custo de mão de obra da Fábrica alocada àquela obra, proporcional ao Kg produzido — o detalhamento de encargos dela pertence ao relatório da própria Fábrica, não é repetido aqui.
+      ${!obraSelecionada ? '<br>Cada obra começa numa página nova na impressão, pra sair isolada (uma por página).' : ''}
     </div>
-    ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}`;
+    ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}
+    </div>`;
   window.print();
 }
 
