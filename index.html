@@ -6753,17 +6753,23 @@ function gerarRelatorioRateioResumo(){
   const linhas = chaves.map(id=>{
     const g = porObra[id];
     totalGeral += g.totalObra;
-    const salarios = g.linhas.reduce((s,l)=>s+(l.salarioBruto||0),0);
-    const encargos = g.linhas.reduce((s,l)=>s+(l.encargosTotal||0),0);
-    const beneficios = g.linhas.reduce((s,l)=>s+(l.beneficios||0),0);
-    const alimentacao = g.linhas.reduce((s,l)=>s+(l.alimentacao||0),0);
-    const treinamentos = g.linhas.reduce((s,l)=>s+(l.treinamentosExames||0),0);
-    const provisionamentos = g.linhas.reduce((s,l)=>s+(l.provisoes||0),0);
+    // PJ é mão de obra indireta: todo o custo dele (salário/pró-labore,
+    // alimentação lançada, etc.) entra SÓ na coluna "Indireto" — as colunas
+    // de detalhamento (Salários, Encargos, Benefícios, Alimentação,
+    // Treinamentos, Provisionamentos) mostram só a mão de obra CLT direta,
+    // pra não misturar os dois tipos de custo na mesma coluna.
+    const linhasClt = g.linhas.filter(l=>!l.ehPJ);
+    const salarios = linhasClt.reduce((s,l)=>s+(l.salarioBruto||0),0);
+    const encargos = linhasClt.reduce((s,l)=>s+(l.encargosTotal||0),0);
+    const beneficios = linhasClt.reduce((s,l)=>s+(l.beneficios||0),0);
+    const alimentacao = linhasClt.reduce((s,l)=>s+(l.alimentacao||0),0);
+    const treinamentos = linhasClt.reduce((s,l)=>s+(l.treinamentosExames||0),0);
+    const provisionamentos = linhasClt.reduce((s,l)=>s+(l.provisoes||0),0);
     const fabrica = g.linhas.reduce((s,l)=>s+(l.fabricaValor||0),0);
     const indireto = g.linhas.reduce((s,l)=>s+(l.totalIndireto||0),0);
     totSalarios+=salarios; totEncargos+=encargos; totBeneficios+=beneficios; totAlimentacao+=alimentacao;
     totTreinamentos+=treinamentos; totProvisionamentos+=provisionamentos; totFabrica+=fabrica; totIndireto+=indireto;
-    const funcionarios = g.linhas.filter(l=>l.funcionario!=='Rateio da Fábrica').length;
+    const funcionarios = linhasClt.length;
     const temFabrica = g.linhas.some(l=>l.funcionario==='Rateio da Fábrica');
     return `<tr>
       <td>${esc(g.obra ? g.obra.nome : 'Obra removida')}${temFabrica?' <span class="step-note">(inclui Fábrica)</span>':''}</td>
@@ -6788,7 +6794,7 @@ function gerarRelatorioRateioResumo(){
       ${obraSelecionada ? `Obra: <strong>${esc(obraSelecionada.nome)}</strong><br>` : ''}
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
-      Encargos = GPS(45%)+FGTS(12%)+SECONCI(1,5%)+Seguro de vida+PCMSO (seguro e PCMSO são valores fixos do cadastro do funcionário). Benefícios = Vale alimentação+Plano de saúde (fixos do cadastro)+Vale transporte+Passagem de hora extra (lançados no mês). Alimentação = Café da manhã+Almoço+Lanche, só o que foi lançado neste mês. Provisionamentos = 13º+Férias+Aviso prévio+GPS sobre provisões+FGTS rescisório. Rateio Fábrica = custo da Fábrica redistribuído pra obra conforme % de Kg produzido (não é provisionamento). Indireto = soma do custo dos profissionais PJ alocados na obra.
+      Encargos = GPS(45%)+FGTS(12%)+SECONCI(1,5%)+Seguro de vida+PCMSO (seguro e PCMSO são valores fixos do cadastro do funcionário). Benefícios = Vale alimentação+Plano de saúde (fixos do cadastro)+Vale transporte+Passagem de hora extra (lançados no mês). Alimentação = Café da manhã+Almoço+Lanche, só o que foi lançado neste mês. Provisionamentos = 13º+Férias+Aviso prévio+GPS sobre provisões+FGTS rescisório. Rateio Fábrica = custo da Fábrica redistribuído pra obra conforme % de Kg produzido (não é provisionamento). <strong>Indireto = todo o custo dos profissionais PJ alocados na obra (salário/pró-labore, alimentação lançada, etc.) — PJ não entra em nenhuma outra coluna de detalhamento nem na contagem de Funcionários, pra não misturar com a mão de obra CLT.</strong>
     </div>
     <table>
       <thead><tr>
