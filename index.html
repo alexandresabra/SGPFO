@@ -226,12 +226,22 @@
      envolvem o conteúdo numa div com essa classe, que força página paisagem
      (via "named page" do CSS Paged Media) e reduz fonte/padding da tabela pra
      caber todas as colunas sem cortar. */
-  @page rdo-landscape{ size: landscape; margin: 12mm; }
+  @page rdo-landscape{ size: landscape; margin: 9mm; }
   #rdoPrintArea .rdo-landscape-wrap{ page: rdo-landscape; }
-  #rdoPrintArea .rdo-landscape-wrap table{ font-size:10px; table-layout:fixed; word-wrap:break-word; }
-  #rdoPrintArea .rdo-landscape-wrap th{ padding:4px 5px; font-size:8.5px; }
-  #rdoPrintArea .rdo-landscape-wrap td{ padding:4px 5px; }
-  #rdoPrintArea .rdo-landscape-wrap h2{ page-break-before:always; margin-top:0; padding-top:14px; }
+  #rdoPrintArea .rdo-landscape-wrap h1{ font-size:17px; }
+  #rdoPrintArea .rdo-landscape-wrap .meta{ font-size:10px; line-height:1.4; padding-bottom:8px; margin-bottom:6px; }
+  #rdoPrintArea .rdo-landscape-wrap table{ font-size:9.5px; table-layout:fixed; width:100%; margin:6px 0 14px; }
+  #rdoPrintArea .rdo-landscape-wrap th{ padding:3px 4px; font-size:7.8px; line-height:1.15; vertical-align:bottom; overflow-wrap:break-word; word-break:break-word; hyphens:auto; }
+  #rdoPrintArea .rdo-landscape-wrap td{ padding:3px 4px; line-height:1.3; overflow-wrap:break-word; word-break:break-word; }
+  /* Nome do funcionário/obra (1ª coluna) numa linha só: coluna mais larga
+     que as demais e sem quebra, com reticências só no caso raro de não
+     caber mesmo assim — em vez de deixar nome/cargo/"Direta" quebrarem em
+     3 linhas e empurrarem a tabela pra baixo. */
+  #rdoPrintArea .rdo-landscape-wrap th:first-child,
+  #rdoPrintArea .rdo-landscape-wrap td:first-child{ width:17%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #rdoPrintArea .rdo-landscape-wrap .tag{ font-size:7.3px; padding:1px 4px; white-space:nowrap; }
+  #rdoPrintArea .rdo-landscape-wrap .step-note{ font-size:8px; }
+  #rdoPrintArea .rdo-landscape-wrap h2{ page-break-before:always; margin-top:0; padding-top:10px; font-size:13px; }
   #rdoPrintArea .rdo-landscape-wrap h2:first-of-type{ page-break-before:avoid; }
   #rdoPrintArea .rdo-landscape-wrap table{ page-break-inside:auto; }
   #rdoPrintArea .rdo-landscape-wrap tr{ page-break-inside:avoid; }
@@ -4262,9 +4272,25 @@ async function pullFromSupabase(){
     if(error) throw error;
     (data || []).forEach(row => {
       const local = localStorage.getItem(row.key);
-      const localMaior = tamanhoAproximado(local) > tamanhoAproximado(row.value);
-      if(localMaior){
-        // Mantém o dado local (mais completo) e reenvia pro Supabase depois.
+      // ATENÇÃO — isto já causou itens excluídos "voltarem sozinhos":
+      // a regra antiga comparava só a QUANTIDADE de itens (tamanhoAproximado)
+      // e, se o local tivesse mais itens que o Supabase, assumia que o local
+      // era "mais completo" e reenviava ele por cima, desfazendo exclusões.
+      // Isso disparava toda vez que alguém abria o sistema num navegador com
+      // cópia desatualizada (ex.: aba antiga, outro computador que não
+      // sincronizou depois da exclusão) — o login/recarregamento chama
+      // pullFromSupabase() e, com dados locais obsoletos mas "maiores",
+      // ressuscitava o registro já excluído por outra pessoa.
+      //
+      // Correção: o Supabase só perde pro local quando realmente não tem
+      // NADA gravado ainda pra essa chave (tabela vazia/zerada — primeira
+      // sincronização deste navegador, ou reset do banco). Em qualquer outro
+      // caso — mesmo com menos itens — o Supabase é a fonte da verdade,
+      // porque "menos itens" é exatamente como fica depois de uma exclusão
+      // legítima feita por outra pessoa.
+      const supabaseVazio = tamanhoAproximado(row.value) === 0;
+      const localTemDados = tamanhoAproximado(local) > 0;
+      if(supabaseVazio && localTemDados){
         setTimeout(()=> pushToSupabase(row.key, local), 0);
         return;
       }
