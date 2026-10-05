@@ -6505,15 +6505,43 @@ function pliLerCronograma(wb, nomeArquivo){
   };
 }
 
-/* ---------- motor do Planejamento Integrado ---------- */
+/* ---------- vínculo cronograma financeiro ↔ obra do plano ---------- */
+function pliNorm(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\bARTE\b/g,'').replace(/[^A-Z0-9]+/g,' ').trim(); }
+function pliCronDaObra(nomeObra, crons){
+  const n = pliNorm(nomeObra);
+  return crons.find(c=>c.vinculo===nomeObra)
+      || crons.find(c=>{ if(c.vinculo!==undefined) return false; const m = pliNorm(c.nome); return m && n && (m===n || m.includes(n) || n.includes(m)); })
+      || null;
+}
+
+/* ---------- motor do Planejamento Integrado ----------
+   Obra com cronograma financeiro importado: a curva de produção (fábrica) e de
+   instalação dela passam a vir do cronograma (lotes de pagamento → fábrica →
+   instalação) a partir da data base; antes dela fica o executado do plano.
+   As compras da obra também passam a ser os lotes do cronograma. */
 function pliCalc(P){
   const M = P.meses, cen = P.cenario;
-  const inst = {}, prod = {};
+  const inst = {}, prod = {}, prodBase = {}, fontes = {}, lotesCron = [], obrasComCron = {};
+  const crons = plcLoad().obras;
+  const dbYM0 = pliYM(P.dataBase);
   P.obras.forEach(o=>{
     const bi = (P.base[cen].INST[o.nome]||[]), bp = (P.base[cen].PROD[o.nome]||[]);
-    inst[o.nome] = M.map((_,i)=> o.ton*(bi[i]||0));
+    let iArr = M.map((_,i)=> o.ton*(bi[i]||0));
+    let pArr = M.map((_,i)=> o.ton*(bp[i]||0));
+    fontes[o.nome] = { fonte:'plano', ton:o.ton };
+    const cr = pliCronDaObra(o.nome, crons);
+    if(cr){
+      const CR = plcCalc(cr), mi = {}; CR.meses.forEach((m,k)=>mi[m]=k);
+      iArr = M.map((ym,i)=> ym<dbYM0 ? iArr[i] : (mi[ym]!==undefined ? CR.instalado[mi[ym]]/1000 : 0));
+      pArr = M.map((ym,i)=> ym<dbYM0 ? pArr[i] : (mi[ym]!==undefined ? CR.fabricado[mi[ym]]/1000 : 0));
+      fontes[o.nome] = { fonte:'cronograma', cron:cr.nome, ton:iArr.reduce((s,v)=>s+v,0), tonCron:CR.totKg/1000, fim:CR.maxInst };
+      obrasComCron[o.nome] = true;
+      CR.lotes.forEach(l=> lotesCron.push({ obra:o.nome, bloco:'Fase '+l.fase+' · parc. '+l.parcela, frente:l.desc, lote:String(l.n), abr:'',
+        ini:l.iniInst, fim:l.fimInst, t:l.kg/1000, passa:'S', comprado:false, key:'cron:'+cr.id+':'+l.n }));
+    }
+    inst[o.nome] = iArr; prodBase[o.nome] = pArr;
     const aj = (P.ajusteProd||{})[o.nome]||{};
-    prod[o.nome] = M.map((ym,i)=> aj[ym]!==undefined ? aj[ym] : o.ton*(bp[i]||0));
+    prod[o.nome] = M.map((ym,i)=> aj[ym]!==undefined ? aj[ym] : pArr[i]);
   });
   const soma = mapa => M.map((_,i)=> P.obras.reduce((s,o)=>s+mapa[o.nome][i],0));
   const demanda = soma(prod), tInst = soma(inst);
@@ -6549,7 +6577,10 @@ function pliCalc(P){
              instA:S(iA), instB:S(iB), projA:S(fab)+S(iA), projB:S(fab)+S(iB), proj:S(fab)+S(iU) };
   });
 
-  const compras = P.compras.map((c,idx)=>{
+  const baseCompras = P.compras.map((c,idx)=>Object.assign({}, c, { key:String(idx) }))
+    .filter(c=> !obrasComCron[c.obra] || c.ini < P.dataBase)
+    .concat(lotesCron);
+  const compras = baseCompras.map((c,idx)=>{
     const k = M.indexOf(pliYM(c.ini));
     const sim = k>=0 ? simult[k] : 0;
     const meses = c.passa==='N' ? 0 : (sim<=2 ? P.prazos.fab2 : (sim===3 ? P.prazos.fab3 : P.prazos.fab4));
@@ -6557,7 +6588,7 @@ function pliCalc(P){
     const Mc = pliAddDias(L, -P.prazos.cons), N = pliAddDias(L, -P.prazos.otim);
     const O = pliAddDias(Mc, -P.prazos.cotacao), Pp = pliAddDias(O, -P.prazos.lista);
     const folga = pliDiffDias(Pp, P.dataBase);
-    const comprado = (P.comprados && P.comprados[idx] !== undefined) ? P.comprados[idx] : c.comprado;
+    const comprado = (P.comprados && P.comprados[c.key] !== undefined) ? P.comprados[c.key] : c.comprado;
     let status;
     if(comprado) status = 'COMPRADO';
     else if(c.ini < P.dataBase) status = 'EM EXECUÇÃO';
@@ -6569,7 +6600,7 @@ function pliCalc(P){
     return Object.assign({}, c, { idx, sim, mesesFab:meses, fabAte:L, pedidoCons:Mc, pedidoOtim:N, lista:O, iniciarLista:Pp, folga, comprado, status });
   });
 
-  return { M, inst, prod, demanda, tInst, cap, saldo, estoque, ocup, simult, efFabCap, efFabDem,
+  return { M, inst, prod, prodBase, fontes, demanda, tInst, cap, saldo, estoque, ocup, simult, efFabCap, efFabDem,
            prodFab, prodA, efInstA, efInstB, efInst, custoInst, duo, porObra, compras };
 }
 
@@ -6720,7 +6751,7 @@ function pliImportarArquivo(ev){
         const ob = pliLerCronograma(wb, f.name);
         const c = plcLoad();
         const ja = c.obras.findIndex(o=>o.nome.toLowerCase()===ob.nome.toLowerCase());
-        if(ja>=0){ ob.id = c.obras[ja].id; c.obras[ja] = ob; PLI_UI.cronObra = ja; }
+        if(ja>=0){ ob.id = c.obras[ja].id; if(c.obras[ja].vinculo!==undefined) ob.vinculo = c.obras[ja].vinculo; c.obras[ja] = ob; PLI_UI.cronObra = ja; }
         else { c.obras.push(ob); PLI_UI.cronObra = c.obras.length-1; }
         plcSave(c);
         PLI_UI.tab = 'cronfin';
@@ -6775,11 +6806,11 @@ function pliEditarDuo(ym, valor){
   if(isFinite(v) && v>0) P.duo[ym] = v; else delete P.duo[ym];
   pliSave(P); renderPlanejInt();
 }
-function pliToggleComprado(idx){
+function pliToggleComprado(key){
   const P = pliLoad(); if(!P) return;
   P.comprados = P.comprados||{};
-  const atual = (P.comprados[idx]!==undefined) ? P.comprados[idx] : P.compras[idx].comprado;
-  P.comprados[idx] = !atual;
+  const c = pliCalc(P).compras.find(x=>x.key===key); if(!c) return;
+  P.comprados[key] = !c.comprado;
   pliSave(P); renderPlanejInt();
 }
 
@@ -6815,7 +6846,13 @@ function pliHtmlResumo(P, R){
   const mesesSobre = fut.filter(i=>R.ocup[i]>1.0001).length;
   const ultFab = R.M.filter((m,i)=>R.demanda[i]>0.05).slice(-1)[0];
   const ultInst = R.M.filter((m,i)=>R.tInst[i]>0.05).slice(-1)[0];
-  return `
+  const fontesCard = `<div class="pli-card"><h3>De onde vem cada obra</h3>
+    <table class="pli-t"><thead><tr><th>Obra</th><th>Fonte da fábrica, instalação e compras</th><th>Tonelagem usada</th><th>Término da instalação</th></tr></thead><tbody>
+    ${P.obras.map(o=>{ const f = R.fontes[o.nome]; const ult = R.M.filter((m,i)=>R.inst[o.nome][i]>0.05).slice(-1)[0];
+      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>'}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'&&Math.abs(f.ton-o.ton)>0.5?` <span class="pli-note">(plano: ${pliFmtT(o.ton,0)} t)</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
+    </tbody></table>
+    <div class="pli-note">Cada cronograma financeiro importado (aba "Cronograma financeiro") substitui, a partir da data base, a curva de fábrica e de instalação da obra correspondente e gera os lotes de compra dela. O vínculo é automático pelo nome (ou escolhido no cronograma). Importar de novo o mesmo cronograma atualiza tudo.</div></div>`;
+  return fontesCard + `
   <div class="pli-kpis">
     ${pliKpi('Carga de fábrica (a partir da data base)', pliFmtT(dem,0)+' t', 'Capacidade planejada no período: '+pliFmtT(capTot,0)+' t')}
     ${pliKpi('Pico de ocupação da fábrica', pliFmtPct(pico), dashMesCurto(mesPico), pico>1.0001?'var(--danger)':'var(--ok)')}
@@ -6828,9 +6865,24 @@ function pliHtmlResumo(P, R){
     ${pliBarras(R.M, P.obras.map((o,k)=>({nome:o.nome, cor:PLI_CORES[k%PLI_CORES.length], valores:R.prod[o.nome]})), {linha:R.cap, linhaNome:'Capacidade'})}
     <div class="pli-note">Cenário <b>${P.cenario}</b>. Produção necessária = curva de instalação antecipada em 30 dias. Capacidade ${P.cap.atual} t/mês até ${dashMesCurto(P.cap.de)} e ${P.cap.nova} t/mês depois. Fábrica produz até ${ultFab?dashMesCurto(ultFab):'—'}; instalação até ${ultInst?dashMesCurto(ultInst):'—'}.</div></div>
   <div class="pli-card"><h3>Efetivo necessário na instalação (pessoas)</h3>
-    ${pliBarras(R.M, [{nome:'Efetivo necessário (produtividade '+(P.prodModo==='B'?'B – referência':'A – observada')+')', cor:'#232323', valores:R.efInst}], {linha:R.M.map(()=>P.efetivoAtualInst), linhaNome:'Efetivo atual nas obras do plano', fmt:v=>String(Math.round(v))})}</div>`;
+    ${pliBarras(R.M, [{nome:'Efetivo necessário (produtividade '+(P.prodModo==='B'?'B – referência':'A – observada')+')', cor:'#232323', valores:R.efInst}], {linha:R.M.map(()=>P.efetivoAtualInst), linhaNome:'Efetivo atual nas obras do plano', fmt:v=>String(Math.round(v))})}</div>
+  ${pliHtmlFluxoConsolidado()}`;
 }
 
+function pliHtmlFluxoConsolidado(){
+  const crons = plcLoad().obras; if(!crons.length) return '';
+  const calc = crons.map(c=>({c, R:plcCalc(c)}));
+  const ks = []; calc.forEach(x=>x.R.meses.forEach(m=>ks.push(m)));
+  const meses = pliMesesEntre(ks.slice().sort()[0], ks.slice().sort().slice(-1)[0]);
+  const val = (x,m,campo)=>{ const i = x.R.meses.indexOf(m); return i>=0 ? x.R[campo][i] : 0; };
+  const series = calc.map((x,k)=>({nome:x.c.nome, cor:PLI_CORES[k%PLI_CORES.length], valores:meses.map(m=>val(x,m,'pagto')+val(x,m,'comp'))}));
+  const tot = meses.map((m,i)=>series.reduce((s,x)=>s+x.valores[i],0));
+  return `<div class="pli-card"><h3>Fluxo financeiro consolidado — pagamentos de alumínio + componentes (R$/mês)</h3>
+    ${pliBarras(meses, series, {fmt:dashMilhar})}
+    <div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot">Obra</th>${meses.map(m=>`<th>${dashMesCurto(m)}</th>`).join('')}<th>Total</th></tr></thead><tbody>
+    ${series.map(s=>`<tr><th class="rot">${esc(s.nome)}</th>${s.valores.map(v=>`<td>${v>0?pliFmtR(v):''}</td>`).join('')}<td><b>${pliFmtR(s.valores.reduce((a,b)=>a+b,0))}</b></td></tr>`).join('')}
+    <tr class="tot"><th class="rot">TOTAL</th>${tot.map(v=>`<td>${v>0?pliFmtR(v):''}</td>`).join('')}<td>${pliFmtR(tot.reduce((a,b)=>a+b,0))}</td></tr></tbody></table></div></div>`;
+}
 function pliInput(campo, valor, sub){
   return `<input type="number" step="any" value="${valor}" onchange="pliEditarPrem('${campo}',this.value${sub?`,'${sub}'`:''})" style="width:100px;">`;
 }
@@ -6861,7 +6913,7 @@ function pliHtmlPremissas(P, R){
     </tbody></table>
     <h3 style="margin-top:14px;">Tonelagem por obra</h3>
     <table class="pli-t"><thead><tr><th>Obra</th><th>Tonelagem (t)</th></tr></thead><tbody>
-     ${P.obras.map((o,i)=>`<tr><td>${esc(o.nome)}</td><td><input type="number" value="${o.ton}" style="width:90px;" onchange="pliEditarTonObra(${i},this.value)"></td></tr>`).join('')}
+     ${P.obras.map((o,i)=>`<tr><td>${esc(o.nome)}</td><td><input type="number" value="${o.ton}" style="width:90px;" onchange="pliEditarTonObra(${i},this.value)">${R.fontes[o.nome].fonte==='cronograma'?` <span class="pli-note">usando o cronograma (${pliFmtT(R.fontes[o.nome].ton,1)} t)</span>`:''}</td></tr>`).join('')}
     </tbody></table></div>
   </div>
   <div class="pli-note">Qualquer alteração recalcula tudo na hora. Cenário <b>META × OFICIAL</b> e produtividade <b>A × B</b> ficam nos controles do topo.</div>`;
@@ -6899,7 +6951,7 @@ function pliHtmlFabrica(P, R){
     <div class="pli-note" style="margin:0 0 8px;">Altere a tonelagem a produzir em cada mês (a partir da data base). Células em vermelho foram ajustadas por você; a tabela, o gráfico, o estoque/backlog, os custos e as compras já recalculam. Deixe em branco ou use "restaurar" para voltar ao cronograma importado. A instalação não muda.</div>
     <div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot">Obra</th>${futM.map(x=>`<th>${dashMesCurto(x.m)}</th>`).join('')}<th>Total</th><th></th></tr></thead><tbody>
     ${P.obras.map(o=>{ const aj=(P.ajusteProd||{})[o.nome]||{}; const orig=(P.base[P.cenario].PROD[o.nome]||[]);
-      return `<tr><th class="rot">${esc(o.nome)} <span class="pli-note">(${pliFmtT(o.ton,0)} t)</span></th>${futM.map(x=>{ const ajd = aj[x.m]!==undefined; return `<td><input type="number" step="0.1" min="0" class="pli-cg ${ajd?'aj':''}" value="${(Math.round(R.prod[o.nome][x.i]*10)/10)}" title="Original: ${pliFmtT(o.ton*(orig[x.i]||0),1)} t" onchange="pliEditarCarga('${esc(o.nome).replace(/'/g,"\\'")}','${x.m}',this.value)"></td>`; }).join('')}
+      return `<tr><th class="rot">${esc(o.nome)} <span class="pli-note">(${pliFmtT(o.ton,0)} t)</span></th>${futM.map(x=>{ const ajd = aj[x.m]!==undefined; return `<td><input type="number" step="0.1" min="0" class="pli-cg ${ajd?'aj':''}" value="${(Math.round(R.prod[o.nome][x.i]*10)/10)}" title="Original: ${pliFmtT(R.prodBase[o.nome][x.i],1)} t" onchange="pliEditarCarga('${esc(o.nome).replace(/'/g,"\\'")}','${x.m}',this.value)"></td>`; }).join('')}
       <td class="n"><b>${pliFmtT(R.prod[o.nome].reduce((s,v,i)=>s+(R.M[i]>=dbYM?v:0),0),1)}</b></td><td>${Object.keys(aj).length?`<button class="btn small secondary" onclick="pliResetCarga('${esc(o.nome).replace(/'/g,"\\'")}')">restaurar</button>`:''}</td></tr>`; }).join('')}
     <tr class="tot"><th class="rot">Capacidade (t/mês)</th>${futM.map(x=>`<td>${pliFmtT(R.cap[x.i],0)}</td>`).join('')}<td></td><td>${temAj?`<button class="btn small secondary" onclick="pliResetCarga(null)">restaurar tudo</button>`:''}</td></tr>
     <tr class="tot"><th class="rot">Ocupação</th>${futM.map(x=>`<td class="${R.ocup[x.i]>1.0001?'neg':''}">${pliFmtPct(R.ocup[x.i])}</td>`).join('')}<td></td><td></td></tr>
@@ -6971,7 +7023,7 @@ function pliHtmlCompras(P, R){
      <span class="pli-note" style="margin:0;">${lista.length} lotes</span>
      <button class="btn small secondary" onclick="pliExportarComprasCSV()">Exportar CSV</button></div>
    <div class="pli-scroll" style="max-height:520px;"><table class="pli-t"><thead><tr><th>Obra</th><th>Bloco/Setor</th><th>Frente</th><th>Início inst.</th><th>t</th><th>Simult.</th><th>Fab. (m)</th><th>Material na fábrica até</th><th>Pedido (cons. ${P.prazos.cons}d)</th><th>Lista a Suprimentos</th><th>Iniciar emissão</th><th>Folga (d)</th><th>Status</th><th>Comprado</th></tr></thead>
-   <tbody>${lista.map(c=>`<tr><td>${esc(c.obra)}</td><td>${esc(c.bloco)}</td><td>${esc(c.frente)}</td><td>${pliFmtData(c.ini)}</td><td class="n">${pliFmtT(c.t,1)}</td><td class="n">${c.sim}</td><td class="n">${c.mesesFab}</td><td>${pliFmtData(c.fabAte)}</td><td>${pliFmtData(c.pedidoCons)}</td><td>${pliFmtData(c.lista)}</td><td>${pliFmtData(c.iniciarLista)}</td><td class="n ${c.folga<0?'neg':''}">${c.folga}</td><td><span class="pli-tag" style="background:${PLI_STATUS_COR[c.status]}">${PLI_STATUS_TXT[c.status]}</span></td><td style="text-align:center;"><input type="checkbox" ${c.comprado?'checked':''} onchange="pliToggleComprado(${c.idx})"></td></tr>`).join('')}</tbody></table></div></div>`;
+   <tbody>${lista.map(c=>`<tr><td>${esc(c.obra)}</td><td>${esc(c.bloco)}</td><td>${esc(c.frente)}</td><td>${pliFmtData(c.ini)}</td><td class="n">${pliFmtT(c.t,1)}</td><td class="n">${c.sim}</td><td class="n">${c.mesesFab}</td><td>${pliFmtData(c.fabAte)}</td><td>${pliFmtData(c.pedidoCons)}</td><td>${pliFmtData(c.lista)}</td><td>${pliFmtData(c.iniciarLista)}</td><td class="n ${c.folga<0?'neg':''}">${c.folga}</td><td><span class="pli-tag" style="background:${PLI_STATUS_COR[c.status]}">${PLI_STATUS_TXT[c.status]}</span></td><td style="text-align:center;"><input type="checkbox" ${c.comprado?'checked':''} onchange="pliToggleComprado('${c.key}')"></td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function pliExportarComprasCSV(){
   const P = pliLoad(); if(!P) return; const R = pliCalc(P);
@@ -6991,6 +7043,9 @@ function pliHtmlCronFin(){
   if(!c.obras.length) return barra+`<div class="empty-state"><div class="big">▤</div>Nenhum cronograma financeiro importado.<br><div class="step-note" style="margin-top:6px;">Importe uma planilha no modelo "Cronograma Arte Jardim" (abas PREMISSAS, LOTES e CURVA MENSAL). Cada obra fica salva separadamente.</div></div>`;
   if(PLI_UI.cronObra >= c.obras.length) PLI_UI.cronObra = 0;
   const k = PLI_UI.cronObra, ob = c.obras[k], p = ob.prem, R = plcCalc(ob);
+  const Pl = pliLoad();
+  const obSemVinc = Object.assign({}, ob); delete obSemVinc.vinculo;
+  const auto = Pl ? (Pl.obras.find(o=>pliCronDaObra(o.nome,[obSemVinc]))||{}).nome : '';
   const sFab = R.custoFab.reduce((s,v)=>s+v,0), sInst = R.custoInst.reduce((s,v)=>s+v,0);
   const ed = (campo, v, w)=>`<input type="number" step="any" value="${v}" style="width:${w||80}px;" onchange="plcEditar(${k},'${campo}',this.value)">`;
   const kpi = `<div class="pli-kpis">
@@ -7004,6 +7059,7 @@ function pliHtmlCronFin(){
   const prem = `<div class="pli-card"><h3>Premissas — ${esc(ob.nome)} <span class="pli-note" style="font-weight:400">(importado de ${esc(ob.arquivo||'')})</span></h3>
     <div class="pli-prem">
      <label>Nome da obra <input type="text" value="${esc(ob.nome)}" style="width:150px;" onchange="plcRenomear(${k},this.value)"></label>
+     ${Pl?`<label>Alimenta a obra do plano <select onchange="plcVincular(${k},this.value)"><option value="" ${ob.vinculo===undefined?'selected':''}>Automático${auto?' ('+esc(auto)+')':' (nenhuma encontrada)'}</option>${Pl.obras.map(o=>`<option value="${esc(o.nome)}" ${ob.vinculo===o.nome?'selected':''}>${esc(o.nome)}</option>`).join('')}<option value="-" ${ob.vinculo==='-'?'selected':''}>Nenhuma (só consulta)</option></select></label>`:''}
      <label>Entrega após pagamento (dias) ${ed('entregaDias',p.entregaDias,60)}</label>
      <label>Início fab. após chegada (dias) ${ed('iniFabDias',p.iniFabDias,60)}</label>
      <label>Capacidade fábrica p/ a obra (t/mês) ${ed('capFab',p.capFab,60)}</label>
@@ -7108,6 +7164,7 @@ function plcEditar(i, campo, valor){
   c.obras[i].prem[campo] = v; plcSave(c); renderPlanejInt();
 }
 function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; plcSave(c); renderPlanejInt(); }
+function plcVincular(i, v){ const c = plcLoad(); if(!c.obras[i]) return; if(v==='') delete c.obras[i].vinculo; else c.obras[i].vinculo = v; plcSave(c); renderPlanejInt(); }
 function plcRenomear(i, nome){ const c = plcLoad(); if(!c.obras[i] || !nome.trim()) return; c.obras[i].nome = nome.trim(); plcSave(c); renderPlanejInt(); }
 function plcExcluir(i){
   if(!confirm('Excluir este cronograma financeiro?')) return;
