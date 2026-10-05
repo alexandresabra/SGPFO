@@ -246,6 +246,87 @@
   #rdoPrintArea .rdo-landscape-wrap table{ page-break-inside:auto; }
   #rdoPrintArea .rdo-landscape-wrap tr{ page-break-inside:avoid; }
 
+
+  /* ---- Dashboards de Materiais (Vidro / Alumínio e Componentes) — usados na tela e na impressão ---- */
+  .dsh{font-family:var(--sans);color:#1c1d21;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .dsh *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .dsh .dsh-eyebrow{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e75;font-weight:700;}
+  .dsh h1{font-family:var(--sans);font-size:24px;margin:2px 0 4px;color:#14161a;}
+  .dsh .dsh-sub{font-size:11px;color:#5a5d64;padding-bottom:10px;border-bottom:2px solid #14161a;margin-bottom:12px;}
+  .dsh .dsh-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px;}
+  .dsh .dsh-card{background:#fff;border:1px solid #dfe1e5;border-radius:8px;padding:10px 12px;}
+  .dsh .dsh-card .k{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6b6e75;font-weight:700;display:flex;align-items:center;gap:5px;}
+  .dsh .dsh-card .v{font-size:19px;font-weight:800;margin:3px 0 1px;color:#14161a;}
+  .dsh .dsh-card .s{font-size:10px;color:#6b6e75;line-height:1.35;}
+  .dsh .dsh-dot{display:inline-block;width:8px;height:8px;border-radius:2px;flex:none;}
+  .dsh .dsh-progress{height:5px;background:#e8eaed;border-radius:3px;margin-top:5px;overflow:hidden;}
+  .dsh .dsh-progress > i{display:block;height:100%;background:#2b6fd6;}
+  .dsh .dsh-panel{background:#fff;border:1px solid #dfe1e5;border-radius:8px;padding:14px 16px;margin-bottom:12px;}
+  .dsh .dsh-panel h2{font-family:var(--sans);font-size:15px;margin:0 0 2px;border:none;padding:0;color:#14161a;}
+  .dsh .dsh-panel .note{font-size:10.5px;color:#6b6e75;margin-bottom:8px;line-height:1.4;}
+  .dsh .dsh-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:#5a5d64;margin:6px 0 4px;}
+  .dsh .dsh-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dsh .dsh-axis{display:grid;grid-template-columns:200px 1fr 150px;gap:12px;font-size:9.5px;color:#8b8e95;}
+  .dsh .dsh-axis .ticks{position:relative;height:12px;}
+  .dsh .dsh-axis .ticks b{position:absolute;transform:translateX(-50%);font-weight:400;}
+  .dsh .dsh-row{display:grid;grid-template-columns:200px 1fr 150px;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #eceef1;}
+  .dsh .dsh-row .nm{font-weight:700;font-size:12px;}
+  .dsh .dsh-row .nm small{display:block;font-weight:400;font-size:10px;color:#6b6e75;margin-top:1px;}
+  .dsh .dsh-track{position:relative;height:12px;background:#eceeef;border-radius:3px;overflow:hidden;display:flex;}
+  .dsh .dsh-track i{display:block;height:100%;}
+  .dsh .dsh-trackwrap{position:relative;}
+  .dsh .dsh-mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:#14161a;}
+  .dsh .dsh-st{text-align:right;font-size:10.5px;color:#5a5d64;line-height:1.4;}
+  .dsh .dsh-st b{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;color:#14161a;}
+  .dsh .dsh-over{display:inline-block;color:#b3261e;border:1px solid #e9a7a2;background:#fdecea;border-radius:10px;padding:0 7px;font-weight:700;font-size:10px;margin-bottom:2px;}
+  .dsh .dsh-foot{font-size:10px;color:#6b6e75;margin-top:8px;line-height:1.4;}
+  .dsh .dsh-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  .dsh .dsh-two .dsh-panel{margin-bottom:0;border-top-width:3px;}
+  .dsh .dsh-badge{float:right;font-size:9.5px;font-weight:700;color:#4a4d54;border:1px solid #d3d6db;border-radius:10px;padding:1px 8px;}
+  .dsh .dsh-big{font-size:22px;font-weight:800;}
+  .dsh .dsh-big small{font-size:10.5px;font-weight:400;color:#6b6e75;margin-left:6px;}
+  .dsh .dsh-h3{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6e75;font-weight:700;margin:12px 0 4px;}
+  .dsh .dsh-bar{display:grid;grid-template-columns:1fr 1.1fr 78px;gap:8px;align-items:center;font-size:11px;padding:3px 0;}
+  .dsh .dsh-bar .t{height:9px;background:#eceeef;border-radius:3px;overflow:hidden;}
+  .dsh .dsh-bar .t i{display:block;height:100%;}
+  .dsh .dsh-bar .vl{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;}
+  .dsh .dsh-lote{display:grid;grid-template-columns:26px 1fr auto;gap:8px;padding:5px 0;border-top:1px solid #eceef1;font-size:11px;}
+  .dsh .dsh-lote .id{color:#8b8e95;font-size:10px;}
+  .dsh .dsh-lote small{display:block;color:#6b6e75;font-size:9.5px;}
+  .dsh .dsh-lote .vl{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;text-align:right;}
+  .dsh .dsh-months{display:flex;align-items:flex-end;gap:10px;height:150px;padding:18px 6px 0;border-bottom:1px solid #cfd2d7;margin-top:8px;}
+  .dsh .dsh-months .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:9.5px;color:#4a4d54;}
+  .dsh .dsh-months .stack{width:60%;max-width:46px;display:flex;flex-direction:column;justify-content:flex-end;}
+  .dsh .dsh-monthlbl{display:flex;gap:10px;padding:3px 6px;font-size:10px;color:#6b6e75;}
+  .dsh .dsh-monthlbl span{flex:1;text-align:center;}
+  .dsh table.dsh-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin:6px 0 0;}
+  .dsh table.dsh-tbl th{background:none;text-align:left;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:#6b6e75;padding:4px 6px;border-bottom:2px solid #14161a;}
+  .dsh table.dsh-tbl td{padding:5px 6px;border-bottom:1px solid #eceef1;vertical-align:top;}
+  .dsh table.dsh-tbl .r{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap;}
+  .dsh table.dsh-tbl tfoot td{border-top:2px solid #14161a;border-bottom:none;font-weight:700;}
+  .dsh .dsh-empty{padding:16px;text-align:center;color:#8b8e95;font-size:12px;}
+  .dsh .dsh-warn{background:#fff7e6;border:1px solid #f1d28b;color:#7a5200;border-radius:6px;padding:7px 10px;font-size:10.5px;margin-bottom:10px;}
+  /* A área de impressão (#rdoPrintArea) tem estilos próprios de h1/h2/table com
+     seletor por ID — estas regras (também por ID) garantem que o dashboard
+     imprima com o mesmo visual da tela. */
+  #rdoPrintArea .dsh h1{font-family:var(--sans);font-size:24px;color:#14161a;margin:2px 0 4px;}
+  #rdoPrintArea .dsh .dsh-panel h2{font-family:var(--sans);font-size:15px;margin:0 0 2px;padding:0;border:none;color:#14161a;}
+  #rdoPrintArea .dsh table.dsh-tbl{margin:6px 0 0;font-size:10.5px;}
+  #rdoPrintArea .dsh table.dsh-tbl th{background:none;border-bottom:2px solid #14161a;font-size:8.5px;padding:4px 6px;}
+  #rdoPrintArea .dsh table.dsh-tbl td{padding:5px 6px;border-bottom:1px solid #eceef1;}
+  #rdoPrintArea .dsh table.dsh-tbl tfoot td{border-top:2px solid #14161a;border-bottom:none;}
+  @media (max-width:760px){
+    .dsh .dsh-cards{grid-template-columns:repeat(2,1fr);}
+    .dsh .dsh-two{grid-template-columns:1fr;}
+    .dsh .dsh-axis,.dsh .dsh-row{grid-template-columns:1fr;}
+  }
+  @media print{
+    #rdoPrintArea .dsh .dsh-pb{page-break-before:always;}
+    #rdoPrintArea .dsh .dsh-panel,#rdoPrintArea .dsh .dsh-row,#rdoPrintArea .dsh .dsh-lote{page-break-inside:avoid;}
+    #rdoPrintArea .dsh{font-size:11px;}
+    html,body{background:#fff !important;}
+  }
+
   /* Pré-visualização em tela dos documentos de memória de cálculo — mesmo
      estilo do documento impresso (#rdoPrintArea), mas exibida dentro de um
      modal para permitir revisão, edição e impressão explícitas. */
@@ -260,6 +341,94 @@
   .memoria-doc td{padding:5px 8px;border-bottom:1px solid #eee;}
   .memoria-doc[contenteditable="true"]{outline:2px dashed var(--red-2);outline-offset:6px;background:#fffdf6;}
 
+  /* ---- Planejamento Integrado ---- */
+  .pli-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  .pli-controles{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 12px;font-size:12px;color:var(--ink-soft);}
+  .pli-controles select{margin-left:6px;}
+  .pli-note{font-size:12px;color:var(--ink-soft);margin:8px 0 0;line-height:1.45;}
+  .pli-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px;}
+  .pli-kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+  .pli-kpi .r{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px;}
+  .pli-kpi .v{font-size:20px;font-weight:700;margin-top:3px;}
+  .pli-kpi .s{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .pli-card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px;}
+  .pli-card h3{margin:0 0 10px;font-size:14px;font-family:var(--sans);}
+  .pli-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;}
+  .pli-filtros{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:12px;}
+  .pli-prem{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px 16px;font-size:12px;}
+  .pli-prem label{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .pli-scroll{overflow:auto;max-width:100%;}
+  .pli-t{border-collapse:collapse;font-size:11.5px;width:100%;}
+  .pli-t th,.pli-t td{border-bottom:1px solid var(--line);padding:4px 7px;text-align:left;white-space:nowrap;}
+  .pli-t thead th{background:#f6f6f4;position:sticky;top:0;z-index:1;}
+  .pli-t td.n{text-align:right;}
+  .pli-t tr.tot td,.pli-t tr.tot th{font-weight:700;background:#f6f6f4;}
+  .pli-t .neg{color:var(--danger);font-weight:700;}
+  .pli-t .pos{color:var(--ok);}
+  .pli-t .warn{color:var(--warn);font-weight:700;}
+  .pli-m td{text-align:right;min-width:52px;}
+  .pli-m th.rot{position:sticky;left:0;background:#fff;z-index:2;min-width:230px;max-width:230px;overflow:hidden;text-overflow:ellipsis;}
+  .pli-m thead th.rot{background:#f6f6f4;}
+  .pli-m tr.tot th.rot{background:#f6f6f4;}
+  .pli-m .pas{background:#f0f0ee;color:#8a8d91;}
+  .pli-cg{width:52px;padding:2px 3px;font-size:11px;text-align:right;}
+  .pli-cg.aj{border-color:var(--danger);background:#fff1f1;color:var(--danger);font-weight:700;}
+  .pli-gantt{overflow:auto;}
+  .pli-g-head,.pli-g-row{display:flex;align-items:center;min-width:900px;}
+  .pli-g-lbl{width:230px;flex-shrink:0;font-size:11px;padding-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pli-g-lbl span{color:var(--ink-soft);}
+  .pli-g-bar{position:relative;flex:1;height:18px;border-bottom:1px solid #eee;}
+  .pli-g-bar.hd{height:18px;font-size:9px;color:var(--ink-soft);}
+  .pli-g-bar.hd span{position:absolute;top:2px;transform:translateX(2px);}
+  .pli-g-bar i{position:absolute;top:0;bottom:0;width:1px;background:#ececec;}
+  .pli-g-bar b{position:absolute;top:4px;height:10px;border-radius:2px;}
+  .pli-g-bar b.fab{background:#c9cacc;}
+  .pli-g-bar u{position:absolute;top:2px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:7px solid #232323;text-decoration:none;transform:translateX(-4px);}
+  .pli-g-bar em{position:absolute;top:0;bottom:0;width:2px;background:#2f7fb8;}
+  .pli-sw{display:inline-block;width:12px;height:8px;margin-right:4px;border-radius:2px;vertical-align:middle;}
+  .pli-sw.tri{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:7px solid #232323;border-radius:0;}
+  @media print{
+    #rdoPrintArea .pli-print{ page: rdo-landscape; font-family:Arial,Helvetica,sans-serif; color:#232323; }
+    #rdoPrintArea .pli-print h1{ font-size:17px; margin:0 0 2px; }
+    #rdoPrintArea .pli-print h2{ font-size:14px; margin:0 0 8px; border:0; padding:0; color:#bd0c1d; page-break-before:auto; }
+    #rdoPrintArea .pli-print .pli-pb{ page-break-before:always; }
+    #rdoPrintArea .pli-print .pli-pb.first{ page-break-before:auto; }
+    #rdoPrintArea .pli-print .meta{ font-size:10px; color:#55585c; margin-bottom:10px; }
+    #rdoPrintArea .pli-print .pli-card{ border:1px solid #ccc; padding:8px 10px; margin-bottom:10px; page-break-inside:auto; }
+    #rdoPrintArea .pli-print .pli-card h3{ font-size:11px; margin:0 0 6px; background:none; color:#232323; }
+    #rdoPrintArea .pli-print .pli-scroll,#rdoPrintArea .pli-print .pli-gantt{ overflow:visible !important; max-height:none !important; }
+    #rdoPrintArea .pli-print table{ table-layout:auto; width:100%; font-size:6.5px; margin:0; }
+    #rdoPrintArea .pli-print th,#rdoPrintArea .pli-print td{ padding:1.5px 3px; font-size:6.5px; border-bottom:1px solid #ddd; background:none; color:inherit; text-align:left; }
+    #rdoPrintArea .pli-print .pli-m td{ text-align:right; min-width:0; }
+    #rdoPrintArea .pli-print th.rot{ position:static; min-width:0; max-width:none; width:auto; white-space:nowrap; }
+    #rdoPrintArea .pli-print thead th{ position:static; background:#f1f1ef; }
+    #rdoPrintArea .pli-print tr{ page-break-inside:avoid; }
+    #rdoPrintArea .pli-print .pli-kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    #rdoPrintArea .pli-print .pli-kpi{ border:1px solid #ccc; padding:5px 7px; }
+    #rdoPrintArea .pli-print .pli-kpi .v{ font-size:13px; }
+    #rdoPrintArea .pli-print .pli-note,#rdoPrintArea .pli-print .pli-kpi .s,#rdoPrintArea .pli-print .pli-kpi .r{ font-size:7.5px; }
+    #rdoPrintArea .pli-print .pli-filtros,#rdoPrintArea .pli-print button,#rdoPrintArea .pli-print .pli-duo{ display:none !important; }
+    #rdoPrintArea .pli-print input,#rdoPrintArea .pli-print select{ border:0; background:none; padding:0; font-size:inherit; width:auto; color:inherit; }
+    #rdoPrintArea .pli-print .pli-bars .tt,#rdoPrintArea .pli-print .pli-lbl,#rdoPrintArea .pli-print .pli-leg{ font-size:6px; }
+    #rdoPrintArea .pli-print *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #rdoPrintArea .pli-print .pli-g-head,#rdoPrintArea .pli-print .pli-g-row{ min-width:0; }
+    #rdoPrintArea .pli-print .pli-g-lbl{ width:170px; font-size:6.5px; }
+    #rdoPrintArea .pli-print .pli-g-bar{ height:11px; }
+    #rdoPrintArea .pli-print .pli-g-bar b{ top:2px; height:7px; }
+  }
+  .pli-tag{color:#fff;border-radius:10px;padding:2px 8px;font-size:10.5px;white-space:nowrap;}
+  .pli-duo{display:inline-flex;flex-direction:column;align-items:center;font-size:10.5px;margin:4px 6px 0 0;}
+  .pli-duo input{width:44px;}
+  .pli-chart{margin:4px 0 8px;}
+  .pli-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;margin-bottom:6px;}
+  .pli-leg i{display:inline-block;width:10px;height:10px;margin-right:5px;border-radius:2px;vertical-align:middle;}
+  .pli-bars{display:grid;grid-template-columns:repeat(var(--n),minmax(18px,1fr));gap:3px;align-items:end;}
+  .pli-bars .c{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;}
+  .pli-bars .tt{font-size:9px;color:var(--ink-soft);height:12px;}
+  .pli-bars .st{position:relative;width:100%;display:flex;flex-direction:column-reverse;border-bottom:1px solid var(--line);}
+  .pli-bars .ln{position:absolute;left:-2px;right:-2px;height:2px;}
+  .pli-lbl{display:grid;grid-template-columns:repeat(var(--n),minmax(18px,1fr));gap:3px;font-size:8.5px;color:var(--ink-soft);text-align:center;margin-top:3px;}
+  .pli-lbl span{overflow:hidden;white-space:nowrap;}
   .empty-state{text-align:center;padding:40px 20px;color:var(--ink-soft);}
   .empty-state .big{font-size:32px;margin-bottom:8px;}
 
@@ -789,6 +958,9 @@
       <div class="nav-group-label">Financeiro / RH</div>
       <div class="nav-item" data-section="rateiomdo"><span class="ico">💰</span><span class="label">Rateio de Mão de Obra</span></div>
 
+      <div class="nav-group-label" id="navGrpPlanej" style="display:none;">Planejamento (Gerência)</div>
+      <div class="nav-item" id="navPlanejInt" data-section="planejint" style="display:none;"><span class="ico">📈</span><span class="label">Planejamento Integrado de Alumínio</span></div>
+
       <div class="nav-group-label">Suprimentos</div>
       <div class="nav-item" data-section="materiaisgeral"><span class="ico">▧</span><span class="label">Materiais — Visão Geral</span></div>
 
@@ -1220,7 +1392,10 @@
                     <option value="atrasado">Atrasado</option>
                   </select>
                 </div>
-                <div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="btn secondary" onclick="openContratoVidroModal()">Contrato de vidro</button>
+                  <button class="btn secondary" onclick="abrirDashboardMateriais('vidro')">Dashboard de vidro</button>
+                  <button class="btn secondary" onclick="abrirDashboardMateriais('aluminio')">Dashboard alumínio e componentes</button>
                   <button class="btn secondary" onclick="gerarRelatorioPendenciasMateriais()">Relatório de pendências</button>
                   <button class="btn" onclick="openMaterialModal()">+ Novo pedido</button>
                 </div>
@@ -2000,6 +2175,31 @@
       </section>
 
       <!-- ============ MATERIAIS — VISÃO GERAL (TODAS AS OBRAS) ============ -->
+      <!-- ============ PLANEJAMENTO INTEGRADO DE ALUMÍNIO (somente Gerência) ============ -->
+      <section class="section" id="sec-planejint">
+        <div id="pliSemAcesso" class="empty-state" style="display:none;">
+          <div class="big">🔒</div>Acesso restrito à Gerência.<br>
+          <div class="step-note" style="margin-top:6px;">O Planejamento Integrado de Alumínio é visível apenas para o perfil Gerente, selecionado em "Perfil ativo" no Dashboard.</div>
+        </div>
+        <div id="pliConteudo" class="pli">
+          <div class="toolbar">
+            <div id="pliStatus" class="pli-note" style="margin:0;"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <label class="btn small" style="cursor:pointer;margin:0;">Importar planilha (.xlsx)<input type="file" accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label>
+              <button class="btn small secondary" onclick="pliExportarPDF(false)">PDF da aba</button>
+              <button class="btn small secondary" onclick="pliExportarPDF(true)">PDF completo</button>
+              <button class="btn small secondary" onclick="pliLimpar()">Remover planejamento</button>
+            </div>
+          </div>
+          <div id="pliControles" class="pli-controles" style="display:none;">
+            <label>Cenário Murano <select id="pliCenario" onchange="pliMudarControle()"><option value="META">META (B3 até 30/10/26, B1 até 18/12/26)</option><option value="OFICIAL">OFICIAL (cronograma oficial)</option></select></label>
+            <label>Produtividade da instalação <select id="pliProdModo" onchange="pliMudarControle()"><option value="A">A – observada hoje</option><option value="B">B – referência (meta)</option></select></label>
+          </div>
+          <div id="pliTabs" class="pli-tabs"></div>
+          <div id="pliArea"></div>
+        </div>
+      </section>
+
       <!-- ============ RATEIO DE MÃO DE OBRA (acesso restrito) ============ -->
       <section class="section" id="sec-rateiomdo">
         <div id="rateioSemAcesso" class="empty-state" style="display:none;">
@@ -3750,12 +3950,30 @@
         <div class="field"><label>Nº do pedido</label><input type="text" id="matNumPedido"></div>
         <div class="field"><label>Data do pedido</label><input type="date" id="matDataPedido"></div>
         <div class="field"><label>Data prevista de chegada</label><input type="date" id="matDataPrevista"></div>
+        <div class="field">
+          <label>Tipo do pedido</label>
+          <select id="matTipoPedido" onchange="onMatTipoPedidoChange()">
+            <option value="novo">Pedido novo</option>
+            <option value="reposicao">Reposição</option>
+            <option value="aditivo">Aditivo</option>
+          </select>
+        </div>
+        <div class="field" id="matMotivoWrap" style="display:none;">
+          <label>Motivo (Reposição / Aditivo)</label>
+          <select id="matMotivoQuebra">
+            <option value="">— Selecione —</option>
+            <option value="quebraFabrica">Quebra/Erro (Fábrica/Instalação)</option>
+            <option value="quebraObra">Quebra/Dano (Obra)</option>
+          </select>
+        </div>
         <div class="field full"><label>Observações do pedido</label><textarea id="matObs"></textarea></div>
       </div>
+      <div class="step-note" id="matTipoPedidoNota" style="display:none;margin:-4px 0 8px;">Reposição e Aditivo entram no <strong>prejuízo</strong> do Dashboard (valor informado em cada entrada recebida, ou área × R$/m² nos itens de vidro). Os itens de vidro têm tipo e motivo próprios, definidos linha a linha abaixo.</div>
 
       <hr class="divider">
       <h4 style="font-family:var(--serif);margin:0 0 6px;">Itens do pedido</h4>
       <div class="step-note" style="margin-bottom:10px;">Um mesmo pedido pode ter vários itens/materiais — cada um com sua própria quantidade e acompanhamento de entregas. Você pode preencher manualmente ou importar de uma planilha (Excel ou CSV) com as colunas Item, Quantidade e Unidade.</div>
+      <datalist id="vidroFamiliasList"><option value="Janelas/Fixos"><option value="Gradil/Guarda-corpo"><option value="PUC/Térreo"><option value="Portas"><option value="Pele de vidro"></datalist>
       <div id="itensPedidoBody"></div>
       <div class="form-actions" style="margin-top:8px;justify-content:flex-start;">
         <button type="button" class="btn small secondary" onclick="adicionarLinhaItemPedido()">+ Adicionar item</button>
@@ -3768,6 +3986,45 @@
         <button class="btn" onclick="saveMaterial()">Salvar pedido</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalContratoVidro">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-head"><h3>Contrato de vidro desta obra</h3><button class="modal-close" onclick="closeModal('modalContratoVidro')">&times;</button></div>
+    <div class="modal-body">
+      <div class="step-note" style="margin-bottom:10px;">Cadastre o contrato firmado com o fornecedor de vidro: valor total e os tipos de vidro contratados (m² e R$/m²). Nos pedidos, cada linha de vidro pode apontar para um desses itens — é isso que alimenta o consumo do contrato no Dashboard de Vidro.</div>
+      <div class="form-grid cols-3">
+        <div class="field"><label>Nº do contrato</label><input type="text" id="contNumero" placeholder="Ex.: MUR-060-2025"></div>
+        <div class="field"><label>Fornecedor</label><input type="text" id="contFornecedor"></div>
+        <div class="field"><label>Valor contratado (R$)</label><input type="number" step="0.01" id="contValor"></div>
+      </div>
+      <h4 style="font-family:var(--serif);margin:14px 0 6px;">Itens contratados</h4>
+      <div id="contItensBody"></div>
+      <div class="form-actions" style="justify-content:flex-start;margin-top:6px;border-top:none;padding-top:0;">
+        <button type="button" class="btn small secondary" onclick="adicionarItemContratoVidro()">+ Adicionar tipo de vidro</button>
+      </div>
+      <div class="form-actions">
+        <button class="btn danger" id="contExcluirBtn" onclick="excluirContratoVidro()" style="margin-right:auto;">Excluir contrato</button>
+        <button class="btn secondary" onclick="closeModal('modalContratoVidro')">Cancelar</button>
+        <button class="btn" onclick="saveContratoVidro()">Salvar contrato</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalDashMateriais">
+  <div class="modal" style="max-width:1080px;width:96%;">
+    <div class="modal-head">
+      <h3 id="dashMatTitulo">Dashboard</h3>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn small secondary" id="dashMatContratoBtn" onclick="closeModal('modalDashMateriais');openContratoVidroModal()" style="display:none;">Editar contrato</button>
+        <button class="btn small secondary" onclick="exportarDashboardCSV()">Exportar Excel (CSV)</button>
+        <button class="btn small" onclick="exportarDashboardPDF()">Exportar relatório (PDF)</button>
+        <button class="modal-close" onclick="closeModal('modalDashMateriais')">&times;</button>
+      </div>
+    </div>
+    <div class="modal-body" id="dashMatConteudo" style="background:#f3f4f5;"></div>
   </div>
 </div>
 
@@ -3792,6 +4049,7 @@
         <div class="field"><label>Data de chegada</label><input type="date" id="entradaData"></div>
         <div class="field"><label>Quantidade recebida</label><input type="number" id="entradaQtd" step="0.01"></div>
         <div class="field"><label>Nº da NF</label><input type="text" id="entradaNF"></div>
+        <div class="field" id="entradaValorWrap"><label>Valor desta entrada (R$) <small class="hint">— alumínio/componentes, p/ dashboard</small></label><input type="number" id="entradaValor" step="0.01"></div>
         <div class="field full"><label>Observações</label><input type="text" id="entradaObs" placeholder="Ex.: entrega parcial, avaria em 2 peças..."></div>
       </div>
       <div class="form-actions">
@@ -4473,6 +4731,7 @@ const sectionTitles = {
   tarefas: ['Tarefas por Setor','Controle de tarefas por setor'],
   metas: ['Metas por Setor','Acompanhamento de metas por setor'],
   materiaisgeral: ['Materiais — Visão Geral','Todos os pedidos de material, agrupados por obra'],
+  planejint: ['Planejamento Integrado de Alumínio','Fábrica, instalação, compras e cronograma financeiro por obra (somente Gerência)'],
   rateiomdo: ['Rateio de Mão de Obra','Rateio mensal do custo de funcionários por obra (acesso restrito)'],
   chamados: ['Revisão de Esquadrias','Sistema de chamados de assistência técnica'],
   almoxarifado: ['Almoxarifado','Estoque, EPIs, ferramentas, transferências e pedidos de compra']
@@ -4535,6 +4794,7 @@ function showSection(id){
     if(id==='metas'){ refreshMetaFiltroSetor(); refreshMetaSetorSelect(); renderMetas(); }
     if(id==='materiaisgeral') renderMateriaisGeral();
     if(id==='rateiomdo') renderRateioMaoDeObra();
+    if(id==='planejint') renderPlanejInt();
     if(id==='chamados') carregarChamadosFrame();
     if(id==='almoxarifado') carregarAlmoxarifadoFrame();
   }catch(e){
@@ -5630,7 +5890,7 @@ function gerarRelatorioCustoVidro(){
     return;
   }
 
-  const ORDEM_CATEGORIAS = ['primeiroPedido:', 'reposicao:quebraFabrica', 'reposicao:quebraObra', 'outros'];
+  const ORDEM_CATEGORIAS = ['primeiroPedido:', 'reposicao:quebraFabrica', 'reposicao:quebraObra', 'aditivo:quebraFabrica', 'aditivo:quebraObra', 'outros'];
   const porCategoria = {};
   let totalGeral = 0;
   despesasVidro.forEach(l=>{
@@ -5674,6 +5934,1183 @@ function gerarRelatorioCustoVidro(){
     </table>`;
   window.print();
 }
+
+/* ============================================================
+   CONTRATO DE VIDRO + DASHBOARDS DE MATERIAIS
+   (Vidro e Alumínio/Componentes) com exportação em PDF e CSV
+   ============================================================ */
+let tempContratoItens = [];
+
+function openContratoVidroModal(){
+  const c = contratoVidroDaObra(currentObraId);
+  document.getElementById('contNumero').value = c ? (c.numero||'') : '';
+  document.getElementById('contFornecedor').value = c ? (c.fornecedor||'') : '';
+  document.getElementById('contValor').value = c ? (c.valorContratado||'') : '';
+  tempContratoItens = c ? (c.itens||[]).map(x=>({...x})) : [];
+  if(!tempContratoItens.length) tempContratoItens.push({ id: uid(), nome:'', m2:'', precoM2:'' });
+  document.getElementById('contExcluirBtn').style.display = c ? '' : 'none';
+  renderTempContratoItens();
+  openModal('modalContratoVidro');
+}
+function renderTempContratoItens(){
+  document.getElementById('contItensBody').innerHTML = tempContratoItens.map((it,i)=>`
+    <div class="form-grid cols-3" style="align-items:end;margin-bottom:6px;grid-template-columns:2fr 1fr 1fr auto;">
+      <div class="field"><label>${i===0?'Tipo de vidro':''}</label><input type="text" value="${esc(it.nome||'')}" placeholder="Ex.: Lam. fumê 8mm" oninput="tempContratoItens[${i}].nome=this.value"></div>
+      <div class="field"><label>${i===0?'m² contratado':''}</label><input type="number" step="0.01" value="${it.m2||''}" oninput="tempContratoItens[${i}].m2=this.value"></div>
+      <div class="field"><label>${i===0?'R$/m²':''}</label><input type="number" step="0.01" value="${it.precoM2||''}" oninput="tempContratoItens[${i}].precoM2=this.value"></div>
+      <div class="field"><button type="button" class="btn small danger" onclick="removerItemContratoVidro(${i})">×</button></div>
+    </div>`).join('');
+}
+function adicionarItemContratoVidro(){ tempContratoItens.push({ id: uid(), nome:'', m2:'', precoM2:'' }); renderTempContratoItens(); }
+function removerItemContratoVidro(i){ tempContratoItens.splice(i,1); renderTempContratoItens(); }
+function saveContratoVidro(){
+  const itens = tempContratoItens
+    .filter(it=>(it.nome||'').trim())
+    .map(it=>({ id: it.id||uid(), nome: it.nome.trim(), m2: parseFloat(it.m2)||0, precoM2: parseFloat(it.precoM2)||0 }));
+  if(!itens.length){ toast('Adicione ao menos um tipo de vidro contratado.'); return; }
+  const valorContratado = parseFloat(document.getElementById('contValor').value) || 0;
+  const record = {
+    id: (contratoVidroDaObra(currentObraId)||{}).id || uid(),
+    obraId: currentObraId,
+    numero: document.getElementById('contNumero').value.trim(),
+    fornecedor: document.getElementById('contFornecedor').value.trim(),
+    valorContratado,
+    itens
+  };
+  let lista = load('contratosVidro').filter(c=>c.obraId!==currentObraId);
+  lista.push(record);
+  save('contratosVidro', lista);
+  closeModal('modalContratoVidro');
+  renderMateriais();
+  toast('Contrato de vidro salvo.');
+}
+function excluirContratoVidro(){
+  if(!confirm('Excluir o contrato de vidro desta obra? Os pedidos continuam cadastrados, mas as linhas deixam de estar vinculadas a itens do contrato.')) return;
+  save('contratosVidro', load('contratosVidro').filter(c=>c.obraId!==currentObraId));
+  closeModal('modalContratoVidro');
+  toast('Contrato excluído.');
+}
+
+/* ---------------- Helpers de formatação dos dashboards ---------------- */
+const DASH_COR = { pedido:'#2b6fd6', alum:'#ee6a36', obra:'#1fa97a', adit:'#e0a21b' };
+function dashR0(v){ return 'R$ ' + Math.round(v||0).toLocaleString('pt-BR'); }
+function dashNum(v,d){ return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:(d===undefined?0:d)}); }
+function dashPed(n){ return n+' pedido'+(n===1?'':'s'); }
+function dashPct(v){ return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%'; }
+function dashMesCurto(ym){
+  const nomes=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const [y,m]=ym.split('-'); return nomes[parseInt(m,10)-1]+'/'+y.slice(2);
+}
+function dashMilhar(v){ return v>=1000 ? Math.round(v/1000)+' mil' : (v>0?Math.round(v).toString():''); }
+function dashMesesEntre(minYm, maxYm){
+  const out=[]; let [y,m]=minYm.split('-').map(Number); const [y2,m2]=maxYm.split('-').map(Number);
+  while(y<y2 || (y===y2 && m<=m2)){ out.push(`${y}-${String(m).padStart(2,'0')}`); m++; if(m>12){m=1;y++;} }
+  return out;
+}
+function dashGraficoMeses(porMes, series){
+  // porMes: { 'YYYY-MM': { chave: valor } } ; series: [{chave, cor, nome}]
+  const meses = Object.keys(porMes).filter(k=>k!=='sem-data').sort();
+  if(!meses.length) return '<div class="dsh-empty">Sem datas de pedido para montar o gráfico mensal.</div>';
+  const todos = dashMesesEntre(meses[0], meses[meses.length-1]);
+  const total = ym => series.reduce((s,x)=>s+((porMes[ym]||{})[x.chave]||0),0);
+  const max = Math.max(...todos.map(total), 1);
+  const cols = todos.map(ym=>{
+    const t = total(ym);
+    const h = t/max*100;
+    const segs = series.map(x=>{
+      const v = (porMes[ym]||{})[x.chave]||0;
+      return v>0 ? `<div style="height:${(v/t*100).toFixed(2)}%;background:${x.cor};"></div>` : '';
+    }).join('');
+    return `<div class="col">${t>0?`<span>${dashMilhar(t)}</span>`:''}<div class="stack" style="height:${h.toFixed(1)}%;">${segs}</div></div>`;
+  }).join('');
+  const lbls = todos.map(ym=>`<span>${dashMesCurto(ym)}</span>`).join('');
+  return `<div class="dsh-months">${cols}</div><div class="dsh-monthlbl">${lbls}</div>`;
+}
+
+/* ---------------- Dashboard de VIDRO ---------------- */
+function classificarVidroLinha(it){
+  if(it.vidroTipo==='reposicao' || it.vidroTipo==='aditivo') return it.vidroSubcategoria==='quebraObra' ? 'obra' : 'alum';
+  return 'pedido';
+}
+function calcularDadosDashboardVidro(obraId){
+  const contrato = contratoVidroDaObra(obraId);
+  const pedidos = load('materiais').filter(p=>p.obraId===obraId);
+  const linhas = [];
+  pedidos.forEach(p=>(p.itens||[]).forEach(it=>{
+    if(!it.isVidro) return;
+    const qtd = parseFloat(it.qtdPedida)||0;
+    const m2 = calcularAreaVidroM2(it.vidroLargura, it.vidroAltura) * qtd;
+    const valor = m2 * (parseFloat(it.vidroPrecoM2)||0);
+    linhas.push({
+      nome: it.item, cat: classificarVidroLinha(it), tipo: it.vidroTipo||'primeiroPedido',
+      pecas: qtd, m2, valor, data: p.dataPedido||'', bloco: it.vidroBloco||'', familia: it.vidroFamilia||'',
+      origem: it.vidroOrigem||'', contratoItemId: it.vidroContratoItemId||'', numPedido: p.numPedido||'', fornecedor: p.fornecedor||''
+    });
+  }));
+
+  const soma = (arr, f)=>arr.reduce((s,x)=>s+f(x),0);
+  const consumido = soma(linhas, l=>l.valor);
+  const prej = { alum: linhas.filter(l=>l.cat==='alum'), obra: linhas.filter(l=>l.cat==='obra') };
+  const prejTotal = soma(prej.alum,l=>l.valor) + soma(prej.obra,l=>l.valor);
+
+  // Consumo por item do contrato
+  const itensContrato = contrato ? (contrato.itens||[]).map((ci,idx)=>{
+    const dele = linhas.filter(l=>l.contratoItemId===ci.id);
+    const m2Cat = { pedido: soma(dele.filter(l=>l.cat==='pedido'),l=>l.m2), alum: soma(dele.filter(l=>l.cat==='alum'),l=>l.m2), obra: soma(dele.filter(l=>l.cat==='obra'),l=>l.m2) };
+    const usado = m2Cat.pedido + m2Cat.alum + m2Cat.obra;
+    const pct = ci.m2>0 ? usado/ci.m2*100 : 0;
+    const saldoM2 = ci.m2 - usado;
+    return { ...ci, idx: idx+1, m2Cat, usado, pct, saldoM2, saldoValor: saldoM2*ci.precoM2 };
+  }) : [];
+  const foraContrato = linhas.filter(l=>!l.contratoItemId || !itensContrato.some(ci=>ci.id===l.contratoItemId));
+
+  // Lotes (reposição / aditivo), numerados em ordem cronológica: R# e A#
+  const lotesBase = linhas.filter(l=>l.cat!=='pedido')
+    .map((l,i)=>({...l, ordem:i}))
+    .sort((a,b)=> (a.data||'9999').localeCompare(b.data||'9999') || a.ordem-b.ordem);
+  let nR=0, nA=0;
+  const lotes = lotesBase.map(l=>{ const id = l.tipo==='aditivo' ? 'A'+(++nA) : 'R'+(++nR); return {...l, id}; });
+
+  const porBlocoFamilia = cat => {
+    const mapa = {};
+    lotes.filter(l=>l.cat===cat).forEach(l=>{
+      const k = `${l.bloco||'Sem bloco'} · ${l.familia||'Sem família'}`;
+      mapa[k] = (mapa[k]||0) + l.valor;
+    });
+    return Object.entries(mapa).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
+  };
+
+  const porMes = {};
+  lotes.forEach(l=>{
+    const ym = l.data ? l.data.slice(0,7) : 'sem-data';
+    if(!porMes[ym]) porMes[ym] = { alum:0, obra:0 };
+    porMes[ym][l.cat] += l.valor;
+  });
+
+  return { contrato, linhas, consumido, prej, prejTotal, itensContrato, foraContrato, lotes, porBlocoFamilia, porMes,
+           valorPedidos: soma(linhas.filter(l=>l.cat==='pedido'),l=>l.valor) };
+}
+
+function montarHtmlDashboardVidro(obraId){
+  const obra = load('obras').find(o=>o.id===obraId) || {};
+  const d = calcularDadosDashboardVidro(obraId);
+  const c = d.contrato;
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const m2Contratado = c ? d.itensContrato.reduce((s,x)=>s+x.m2,0) : 0;
+  const saldoValor = c ? c.valorContratado - d.consumido : 0;
+  const itensAcima = d.itensContrato.filter(x=>x.pct>100).length;
+  const saldoM2Liquido = d.itensContrato.reduce((s,x)=>s+x.saldoM2,0);
+  const pc = cat => ({ valor: d.prej[cat].reduce((s,l)=>s+l.valor,0), pecas: d.prej[cat].reduce((s,l)=>s+l.pecas,0), m2: d.prej[cat].reduce((s,l)=>s+l.m2,0) });
+  const pa = pc('alum'), po = pc('obra');
+  const pctValorPedido = v => d.consumido>0 ? v/d.consumido*100 : 0;
+
+  const cards = `
+    <div class="dsh-cards">
+      <div class="dsh-card"><div class="k">Valor contratado</div><div class="v">${c?dashR0(c.valorContratado):'—'}</div><div class="s">${c?`${d.itensContrato.length} itens · ${dashNum(m2Contratado)} m²`:'Sem contrato cadastrado'}</div></div>
+      <div class="dsh-card"><div class="k">Consumido</div><div class="v">${dashR0(d.consumido)}</div><div class="s">${c&&c.valorContratado>0?`${dashPct(d.consumido/c.valorContratado*100)} do contrato`:'Pedidos + reposições + aditivos'}</div>${c&&c.valorContratado>0?`<div class="dsh-progress"><i style="width:${Math.min(100,d.consumido/c.valorContratado*100).toFixed(1)}%"></i></div>`:''}</div>
+      <div class="dsh-card"><div class="k">Saldo do contrato</div><div class="v">${c?dashR0(saldoValor):'—'}</div><div class="s">${c?`${dashNum(saldoM2Liquido)} m² · ${itensAcima} ite${itensAcima===1?'m':'ns'} acima do contratado`:'—'}</div></div>
+      <div class="dsh-card"><div class="k"><span class="dsh-dot" style="background:${DASH_COR.alum}"></span>Prejuízo quebra alumínio</div><div class="v">${dashR0(pa.valor)}</div><div class="s">${dashNum(pa.pecas)} pç · ${dashNum(pa.m2)} m²</div></div>
+      <div class="dsh-card"><div class="k"><span class="dsh-dot" style="background:${DASH_COR.obra}"></span>Prejuízo quebra obra</div><div class="v">${dashR0(po.valor)}</div><div class="s">${dashNum(po.pecas)} pç · ${dashNum(po.m2)} m²</div></div>
+    </div>`;
+
+  // Consumo por tipo de vidro
+  let consumoHtml;
+  if(!c){
+    consumoHtml = `<div class="dsh-empty">Cadastre o contrato de vidro (botão “Contrato de vidro”) para ver o consumo por tipo comparado ao contratado.</div>`;
+  } else {
+    const maxPct = Math.max(125, ...d.itensContrato.map(x=>x.pct));
+    const axisMax = Math.ceil(maxPct/25)*25;
+    const ticks = []; for(let t=0;t<=axisMax;t+=25) ticks.push(`<b style="left:${(t/axisMax*100).toFixed(2)}%">${t}%</b>`);
+    const rows = d.itensContrato.map(x=>{
+      const w = v => x.m2>0 ? (v/x.m2*100/axisMax*100).toFixed(2) : 0;
+      const status = x.pct>100
+        ? `<span class="dsh-over">▲ Acima ${dashNum(-x.saldoM2)} m²</span><br><b>-${dashR0(-x.saldoValor)}</b>`
+        : `${dashPct(x.pct)} usado<br>Saldo <b>${dashNum(x.saldoM2)} m² · ${dashR0(x.saldoValor)}</b>`;
+      return `<div class="dsh-row">
+        <div class="nm">${esc(x.nome)}<small>Item ${x.idx} · ${dashNum(x.m2)} m² · ${fmtMoeda(x.precoM2)}/m²</small></div>
+        <div class="dsh-trackwrap"><div class="dsh-track">
+          <i style="width:${w(x.m2Cat.pedido)}%;background:${DASH_COR.pedido}"></i>
+          <i style="width:${w(x.m2Cat.alum)}%;background:${DASH_COR.alum}"></i>
+          <i style="width:${w(x.m2Cat.obra)}%;background:${DASH_COR.obra}"></i>
+        </div><div class="dsh-mark" style="left:${(100/axisMax*100).toFixed(2)}%"></div></div>
+        <div class="dsh-st">${status}</div>
+      </div>`;
+    }).join('');
+    const fora = d.foraContrato;
+    const foraM2 = fora.reduce((s,l)=>s+l.m2,0);
+    const foraNomes = [...new Set(fora.map(l=>l.nome))].join('; ');
+    consumoHtml = `
+      <div class="dsh-legend"><span><i class="dsh-dot" style="background:${DASH_COR.pedido}"></i>Pedidos</span><span><i class="dsh-dot" style="background:${DASH_COR.alum}"></i>Quebra alumínio</span><span><i class="dsh-dot" style="background:${DASH_COR.obra}"></i>Quebra obra</span><span><i style="display:inline-block;width:2px;height:11px;background:#14161a"></i>Contratado</span></div>
+      <div class="dsh-axis"><div></div><div class="ticks">${ticks.join('')}</div><div></div></div>
+      ${rows}
+      ${fora.length?`<div class="dsh-foot">Fora do contrato (não vinculado a item): ${esc(foraNomes)} — ${dashNum(foraM2,1)} m², ${dashR0(fora.reduce((s,l)=>s+l.valor,0))} (já somado ao consumido).</div>`:''}`;
+  }
+
+  const painelPrej = (cat, titulo, cor, dados, pctTotal)=>{
+    const bf = d.porBlocoFamilia(cat); const maxBf = Math.max(...bf.map(x=>x.v),1);
+    const lotes = d.lotes.filter(l=>l.cat===cat).sort((a,b)=>b.valor-a.valor);
+    return `<div class="dsh-panel" style="border-top-color:${cor};">
+      <h2>${titulo}<span class="dsh-badge">${dashNum(pctTotal)}% do prejuízo total</span></h2>
+      <div class="dsh-big">${dashR0(dados.valor)}<small>${dashNum(dados.pecas)} peças · ${dashNum(dados.m2,1)} m² · ${dashPct(pctValorPedido(dados.valor))} do valor pedido</small></div>
+      <div class="dsh-h3">Por bloco e família</div>
+      ${bf.length?bf.map(x=>`<div class="dsh-bar"><span>${esc(x.k)}</span><span class="t"><i style="width:${(x.v/maxBf*100).toFixed(1)}%;background:${cor}"></i></span><span class="vl">${dashR0(x.v)}</span></div>`).join(''):'<div class="dsh-empty">Nenhum lançamento.</div>'}
+      <div class="dsh-h3">Por lote</div>
+      ${lotes.map(l=>`<div class="dsh-lote"><span class="id">${l.id}</span><span>${esc(l.origem || (l.tipo==='aditivo'?'Aditivo':'Reposição'))}<small>${esc(l.bloco||'Sem bloco')} · ${esc(l.familia||'Sem família')} · ${fmtDate(l.data)} · ${dashNum(l.pecas)} pç</small></span><span class="vl">${dashR0(l.valor)}</span></div>`).join('') || ''}
+    </div>`;
+  };
+  const pctAlum = d.prejTotal>0 ? pa.valor/d.prejTotal*100 : 0;
+
+  const tabelaLotes = d.lotes.length ? `
+    <table class="dsh-tbl"><thead><tr><th>Lote</th><th>Data</th><th>Bloco</th><th>Família</th><th>Categoria</th><th>Origem</th><th class="r">Peças</th><th class="r">m²</th><th class="r">Prejuízo</th></tr></thead>
+    <tbody>${d.lotes.map(l=>`<tr><td>${l.id}</td><td>${fmtDate(l.data)}</td><td>${esc(l.bloco||'—')}</td><td>${esc(l.familia||'—')}</td><td><i class="dsh-dot" style="background:${l.cat==='alum'?DASH_COR.alum:DASH_COR.obra}"></i> ${l.cat==='alum'?'Quebra alumínio':'Quebra obra'}</td><td>${esc(l.origem||(l.tipo==='aditivo'?'Aditivo':'Reposição'))}</td><td class="r">${dashNum(l.pecas)}</td><td class="r">${dashNum(l.m2,1)}</td><td class="r">${dashR0(l.valor)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="6">Total</td><td class="r">${dashNum(pa.pecas+po.pecas)}</td><td class="r">${dashNum(pa.m2+po.m2,1)}</td><td class="r">${dashR0(d.prejTotal)}</td></tr></tfoot></table>`
+    : '<div class="dsh-empty">Nenhum pedido de reposição ou aditivo de vidro nesta obra.</div>';
+
+  return `<div class="dsh">
+    <div class="dsh-eyebrow">Divisão de Alumínio · Calper · Obra ${esc(obra.nome||'—')}</div>
+    <h1>Vidros ${esc(obra.nome||'')} — contrato, consumo e prejuízo</h1>
+    <div class="dsh-sub">${c?`Contrato <b>${esc(c.numero||'—')}</b> &nbsp; Fornecedor <b>${esc(c.fornecedor||'—')}</b> &nbsp; `:''}Dados até <b>${hoje}</b></div>
+    ${cards}
+    <div class="dsh-panel"><h2>Consumo do contrato por tipo de vidro</h2>
+      <div class="note">m² pedido (medidas arredondadas a 5 cm) sobre o m² contratado de cada item. A linha preta marca 100% do contratado.</div>
+      ${consumoHtml}
+      <div class="dsh-foot">Valores sem reajuste e sem abatimento de adiantamento. Base: quantidade pedida (não só a recebida).</div>
+    </div>
+    <div class="dsh-two dsh-pb">
+      ${painelPrej('alum','Quebra alumínio',DASH_COR.alum,pa,pctAlum)}
+      ${painelPrej('obra','Quebra obra',DASH_COR.obra,po,d.prejTotal>0?100-pctAlum:0)}
+    </div>
+    <div class="dsh-panel" style="margin-top:12px;">
+      <h2>Prejuízo por mês do registro<span class="dsh-badge" style="border:none;">
+        <span class="dsh-dot" style="background:${DASH_COR.alum}"></span> Quebra alumínio &nbsp; <span class="dsh-dot" style="background:${DASH_COR.obra}"></span> Quebra obra</span></h2>
+      <div class="note">Mês da data do pedido de reposição/aditivo.</div>
+      ${dashGraficoMeses(d.porMes, [{chave:'alum',cor:DASH_COR.alum},{chave:'obra',cor:DASH_COR.obra}])}
+    </div>
+    <div class="dsh-panel dsh-pb"><h2>Lotes de quebra</h2><div class="note">Cada linha é um pedido de aditivo ou de reposição enviado ao fornecedor.</div>${tabelaLotes}</div>
+    <div class="dsh-foot" style="text-align:center;">Vidros ${esc(obra.nome||'')} · ${c?'Contrato '+esc(c.numero||'—')+' · ':''}dados até ${hoje}</div>
+  </div>`;
+}
+
+/* ---------------- Dashboard de ALUMÍNIO E COMPONENTES ---------------- */
+function calcularDadosDashboardAluminio(obraId){
+  const pedidos = load('materiais').filter(p=>p.obraId===obraId);
+  const linhas = [];
+  let semValor = 0;
+  pedidos.forEach(p=>{
+    const itens = (p.itens||[]).filter(it=>!it.isVidro);
+    if(!itens.length) return;
+    const tipo = p.tipoPedido || 'novo';
+    const motivo = p.motivoQuebra || '';
+    itens.forEach(it=>{
+      const valor = (it.entregas||[]).reduce((s,e)=>s+(parseFloat(e.valor)||0),0);
+      const entregas = (it.entregas||[]).length;
+      const semV = entregas>0 && (it.entregas||[]).some(e=>!(parseFloat(e.valor)>0));
+      if(tipo!=='novo' && (semV || entregas===0)) semValor++;
+      linhas.push({ pedidoId:p.id, numPedido:p.numPedido||'', fornecedor:p.fornecedor||'—', data:p.dataPedido||'', tipo, motivo,
+        categoria: it.categoriaMaterial==='componentes' ? 'componentes' : 'aluminio', item: it.item, qtd: parseFloat(it.qtdPedida)||0, unidade: it.unidade||'', valor });
+    });
+  });
+  const soma = (arr,f)=>arr.reduce((s,x)=>s+f(x),0);
+  const porTipo = t => linhas.filter(l=>l.tipo===t);
+  const prejLinhas = linhas.filter(l=>l.tipo==='reposicao' || l.tipo==='aditivo');
+  const totalValor = soma(linhas,l=>l.valor);
+  const pedidosPorTipo = t => new Set(porTipo(t).map(l=>l.pedidoId)).size;
+
+  // Lotes = um por pedido de reposição/aditivo
+  const mapaPed = {};
+  prejLinhas.forEach(l=>{
+    if(!mapaPed[l.pedidoId]) mapaPed[l.pedidoId] = { ...l, itens:[], valor:0, categorias:new Set() };
+    mapaPed[l.pedidoId].itens.push(l.item); mapaPed[l.pedidoId].valor += l.valor; mapaPed[l.pedidoId].categorias.add(l.categoria);
+  });
+  const lotesBase = Object.values(mapaPed).sort((a,b)=>(a.data||'9999').localeCompare(b.data||'9999'));
+  let nR=0,nA=0;
+  const lotes = lotesBase.map(l=>({ ...l, id: l.tipo==='aditivo' ? 'A'+(++nA) : 'R'+(++nR) }));
+
+  const porMes = {};
+  lotes.forEach(l=>{
+    const ym = l.data ? l.data.slice(0,7) : 'sem-data';
+    if(!porMes[ym]) porMes[ym] = { reposicao:0, aditivo:0 };
+    porMes[ym][l.tipo] += l.valor;
+  });
+  const porFornecedor = {};
+  prejLinhas.forEach(l=>{ porFornecedor[l.fornecedor] = (porFornecedor[l.fornecedor]||0) + l.valor; });
+
+  return { linhas, totalValor, prejLinhas, semValor, lotes, porMes,
+    novo: { valor: soma(porTipo('novo'),l=>l.valor), pedidos: pedidosPorTipo('novo') },
+    reposicao: { valor: soma(porTipo('reposicao'),l=>l.valor), pedidos: pedidosPorTipo('reposicao') },
+    aditivo: { valor: soma(porTipo('aditivo'),l=>l.valor), pedidos: pedidosPorTipo('aditivo') },
+    porFornecedor: Object.entries(porFornecedor).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v) };
+}
+
+function montarHtmlDashboardAluminio(obraId){
+  const obra = load('obras').find(o=>o.id===obraId) || {};
+  const d = calcularDadosDashboardAluminio(obraId);
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const prejTotal = d.reposicao.valor + d.aditivo.valor;
+  const pctTotal = d.totalValor>0 ? prejTotal/d.totalValor*100 : 0;
+  const somaMotivo = m => d.prejLinhas.filter(l=>l.motivo===m).reduce((s,l)=>s+l.valor,0);
+  const motivoFab = somaMotivo('quebraFabrica'), motivoObra = somaMotivo('quebraObra');
+  const semMotivo = prejTotal - motivoFab - motivoObra;
+  const cat = (c,t)=> d.linhas.filter(l=>l.categoria===c && l.tipo===t).reduce((s,l)=>s+l.valor,0);
+  const CATS = [['aluminio','Alumínio'],['componentes','Componentes']];
+  const TIPO_LABEL = { novo:'Pedido novo', reposicao:'Reposição', aditivo:'Aditivo' };
+  const MOTIVO_LABEL = { quebraFabrica:'Fábrica/Instalação', quebraObra:'Obra', '':'—' };
+
+  const cards = `<div class="dsh-cards">
+    <div class="dsh-card"><div class="k">Valor total pedido</div><div class="v">${dashR0(d.totalValor)}</div><div class="s">${dashPed(new Set(d.linhas.map(l=>l.pedidoId)).size)}</div></div>
+    <div class="dsh-card"><div class="k"><span class="dsh-dot" style="background:${DASH_COR.pedido}"></span>Pedido novo</div><div class="v">${dashR0(d.novo.valor)}</div><div class="s">${dashPed(d.novo.pedidos)}</div></div>
+    <div class="dsh-card"><div class="k"><span class="dsh-dot" style="background:${DASH_COR.alum}"></span>Reposição</div><div class="v">${dashR0(d.reposicao.valor)}</div><div class="s">${dashPed(d.reposicao.pedidos)}</div></div>
+    <div class="dsh-card"><div class="k"><span class="dsh-dot" style="background:${DASH_COR.adit}"></span>Aditivo</div><div class="v">${dashR0(d.aditivo.valor)}</div><div class="s">${dashPed(d.aditivo.pedidos)}</div></div>
+    <div class="dsh-card"><div class="k">Prejuízo (reposição + aditivo)</div><div class="v">${dashR0(prejTotal)}</div><div class="s">${dashPct(pctTotal)} do valor total pedido</div></div>
+  </div>`;
+
+  const aviso = d.semValor>0 ? `<div class="dsh-warn">⚠ ${d.semValor} linha(s) de reposição/aditivo ainda sem valor informado (sem entrada recebida ou entrada sem valor). O prejuízo só soma o valor informado em cada entrada — preencha “Valor desta entrada” ao registrar o recebimento.</div>` : '';
+
+  const catRows = CATS.map(([k,nm])=>{
+    const n=cat(k,'novo'), r=cat(k,'reposicao'), a=cat(k,'aditivo'), tot=n+r+a, pj=r+a;
+    return `<tr><td>${nm}</td><td class="r">${dashR0(n)}</td><td class="r">${dashR0(r)}</td><td class="r">${dashR0(a)}</td><td class="r"><b>${dashR0(pj)}</b></td><td class="r">${tot>0?dashPct(pj/tot*100):'—'}</td></tr>`;
+  }).join('');
+
+  const maxF = Math.max(...d.porFornecedor.map(x=>x.v),1);
+  const painelMotivo = (titulo, cor, valor, tipoMotivo)=>{
+    const lt = d.lotes.filter(l=>l.motivo===tipoMotivo).sort((a,b)=>b.valor-a.valor);
+    return `<div class="dsh-panel" style="border-top-color:${cor};">
+      <h2>${titulo}<span class="dsh-badge">${prejTotal>0?dashNum(valor/prejTotal*100):0}% do prejuízo total</span></h2>
+      <div class="dsh-big">${dashR0(valor)}<small>${lt.length} pedido(s)</small></div>
+      <div class="dsh-h3">Por lote</div>
+      ${lt.map(l=>`<div class="dsh-lote"><span class="id">${l.id}</span><span>${esc(l.itens.slice(0,2).join('; '))}${l.itens.length>2?' …':''}<small>${esc(l.fornecedor)} · ${l.numPedido?'Pedido '+esc(l.numPedido)+' · ':''}${fmtDate(l.data)} · ${TIPO_LABEL[l.tipo]}</small></span><span class="vl">${dashR0(l.valor)}</span></div>`).join('') || '<div class="dsh-empty">Nenhum lançamento.</div>'}
+    </div>`;
+  };
+
+  const tabela = d.lotes.length ? `<table class="dsh-tbl"><thead><tr><th>Lote</th><th>Data</th><th>Pedido</th><th>Fornecedor</th><th>Tipo</th><th>Motivo</th><th>Categoria</th><th>Itens</th><th class="r">Valor</th></tr></thead>
+    <tbody>${d.lotes.map(l=>`<tr><td>${l.id}</td><td>${fmtDate(l.data)}</td><td>${esc(l.numPedido||'—')}</td><td>${esc(l.fornecedor)}</td><td>${TIPO_LABEL[l.tipo]}</td><td>${MOTIVO_LABEL[l.motivo]||'—'}</td><td>${[...l.categorias].map(c=>c==='componentes'?'Componentes':'Alumínio').join(' / ')}</td><td>${esc(l.itens.join('; '))}</td><td class="r">${dashR0(l.valor)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="8">Total</td><td class="r">${dashR0(prejTotal)}</td></tr></tfoot></table>`
+    : '<div class="dsh-empty">Nenhum pedido de reposição ou aditivo de alumínio/componentes nesta obra.</div>';
+
+  return `<div class="dsh">
+    <div class="dsh-eyebrow">Divisão de Alumínio · Calper · Obra ${esc(obra.nome||'—')}</div>
+    <h1>Alumínio e componentes ${esc(obra.nome||'')} — pedidos, reposição e prejuízo</h1>
+    <div class="dsh-sub">Dados até <b>${hoje}</b></div>
+    ${cards}${aviso}
+    <div class="dsh-panel"><h2>Por categoria</h2><div class="note">Valor informado nas entradas recebidas, por tipo de pedido.</div>
+      <table class="dsh-tbl"><thead><tr><th>Categoria</th><th class="r">Pedido novo</th><th class="r">Reposição</th><th class="r">Aditivo</th><th class="r">Prejuízo</th><th class="r">% prejuízo</th></tr></thead><tbody>${catRows}</tbody></table></div>
+    <div class="dsh-two dsh-pb">
+      ${painelMotivo('Fábrica / Instalação',DASH_COR.alum,motivoFab,'quebraFabrica')}
+      ${painelMotivo('Obra',DASH_COR.obra,motivoObra,'quebraObra')}
+    </div>
+    ${semMotivo>0?`<div class="dsh-foot">Prejuízo sem motivo informado: ${dashR0(semMotivo)}.</div>`:''}
+    <div class="dsh-panel" style="margin-top:12px;"><h2>Prejuízo por fornecedor</h2>
+      ${d.porFornecedor.length?d.porFornecedor.map(x=>`<div class="dsh-bar"><span>${esc(x.k)}</span><span class="t"><i style="width:${(x.v/maxF*100).toFixed(1)}%;background:${DASH_COR.alum}"></i></span><span class="vl">${dashR0(x.v)}</span></div>`).join(''):'<div class="dsh-empty">Sem prejuízo registrado.</div>'}
+    </div>
+    <div class="dsh-panel"><h2>Prejuízo por mês do registro<span class="dsh-badge" style="border:none;"><span class="dsh-dot" style="background:${DASH_COR.alum}"></span> Reposição &nbsp; <span class="dsh-dot" style="background:${DASH_COR.adit}"></span> Aditivo</span></h2>
+      <div class="note">Mês da data do pedido de reposição/aditivo.</div>
+      ${dashGraficoMeses(d.porMes, [{chave:'reposicao',cor:DASH_COR.alum},{chave:'aditivo',cor:DASH_COR.adit}])}
+    </div>
+    <div class="dsh-panel dsh-pb"><h2>Pedidos de reposição e aditivo</h2><div class="note">Cada linha é um pedido de reposição ou aditivo.</div>${tabela}</div>
+    <div class="dsh-foot" style="text-align:center;">Alumínio e componentes ${esc(obra.nome||'')} · dados até ${hoje}</div>
+  </div>`;
+}
+
+/* ---------------- Abrir / exportar ---------------- */
+let dashMateriaisAtual = 'vidro';
+function abrirDashboardMateriais(tipo){
+  dashMateriaisAtual = tipo;
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  document.getElementById('dashMatTitulo').textContent = tipo==='vidro' ? `Dashboard de vidro — ${obra.nome||''}` : `Dashboard de alumínio e componentes — ${obra.nome||''}`;
+  document.getElementById('dashMatContratoBtn').style.display = tipo==='vidro' ? '' : 'none';
+  document.getElementById('dashMatConteudo').innerHTML = tipo==='vidro' ? montarHtmlDashboardVidro(currentObraId) : montarHtmlDashboardAluminio(currentObraId);
+  openModal('modalDashMateriais');
+}
+function exportarDashboardPDF(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('dashMatConteudo').innerHTML;
+  window.print();
+}
+function exportarDashboardCSV(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const csvCel = v => { const t = (v===undefined||v===null) ? '' : String(v); return /[;"\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
+  const num = v => (Math.round((v||0)*100)/100).toString().replace('.',',');
+  let linhas;
+  if(dashMateriaisAtual==='vidro'){
+    const d = calcularDadosDashboardVidro(currentObraId);
+    linhas = [['Lote','Data','Bloco','Família','Categoria','Origem','Peças','m²','Prejuízo (R$)']]
+      .concat(d.lotes.map(l=>[l.id, fmtDate(l.data), l.bloco, l.familia, l.cat==='alum'?'Quebra alumínio':'Quebra obra', l.origem||(l.tipo==='aditivo'?'Aditivo':'Reposição'), num(l.pecas), num(l.m2), num(l.valor)]));
+  } else {
+    const d = calcularDadosDashboardAluminio(currentObraId);
+    linhas = [['Lote','Data','Pedido','Fornecedor','Tipo','Motivo','Itens','Valor (R$)']]
+      .concat(d.lotes.map(l=>[l.id, fmtDate(l.data), l.numPedido, l.fornecedor, l.tipo==='aditivo'?'Aditivo':'Reposição', l.motivo==='quebraObra'?'Obra':(l.motivo==='quebraFabrica'?'Fábrica/Instalação':''), l.itens.join(' / '), num(l.valor)]));
+  }
+  const csv = '﻿' + linhas.map(r=>r.map(csvCel).join(';')).join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${dashMateriaisAtual==='vidro'?'Vidros':'Aluminio_Componentes'}_${(obra.nome||'obra').replace(/\s+/g,'_')}_${todayISO()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 500);
+}
+
+/* =====================================================================
+   PLANEJAMENTO INTEGRADO DE ALUMÍNIO — somente Gerência
+   Importa a planilha "Planejamento Integrado" (curvas mensais, capacidade da
+   fábrica, efetivo, compras) e a planilha de "Cronograma financeiro" por obra
+   (pagamento → entrega → fábrica → instalação) e recalcula tudo aqui dentro.
+   Dados: localStorage 'sgpt_planejIntegrado' e 'sgpt_planejCronFin'
+   (sincronizam via Supabase como qualquer outra chave sgpt_).
+   ===================================================================== */
+const PLI_KEY = 'planejIntegrado';
+const PLC_KEY = 'planejCronFin';
+const PLI_UI = { tab:'resumo', cronObra:0, filtroCompras:'', filtroObraCompras:'' };
+
+function pliLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLI_KEY)); return (o && o.obras) ? o : null; }catch(e){ return null; } }
+function pliSave(p){ localStorage.setItem(DB_PREFIX+PLI_KEY, JSON.stringify(p)); }
+function plcLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLC_KEY)); return (o && o.obras) ? o : {obras:[]}; }catch(e){ return {obras:[]}; } }
+function plcSave(c){ localStorage.setItem(DB_PREFIX+PLC_KEY, JSON.stringify(c)); }
+
+/* ---------- datas (sempre ISO 'YYYY-MM-DD', em UTC pra não sofrer com fuso) ---------- */
+function pliD(iso){ const [y,m,d] = iso.slice(0,10).split('-').map(Number); return Date.UTC(y, m-1, d); }
+function pliISO(ms){ return new Date(ms).toISOString().slice(0,10); }
+function pliAddDias(iso, n){ return pliISO(pliD(iso) + Math.round(n)*86400000); }
+function pliDiffDias(a, b){ return Math.round((pliD(a)-pliD(b))/86400000); }
+function pliAddMeses(iso, n){
+  const [y,m,d] = iso.slice(0,10).split('-').map(Number);
+  const t = (y*12 + (m-1)) + n; const ny = Math.floor(t/12), nm = ((t%12)+12)%12;
+  const ult = new Date(Date.UTC(ny, nm+1, 0)).getUTCDate();
+  return pliISO(Date.UTC(ny, nm, Math.min(d, ult)));
+}
+function pliYM(iso){ return iso.slice(0,7); }
+function pliFmtData(iso){ if(!iso) return '—'; const [y,m,d]=iso.slice(0,10).split('-'); return d+'/'+m+'/'+y.slice(2); }
+function pliFmtT(v, c){ const k = c===undefined?1:c; return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:k,maximumFractionDigits:k}); }
+function pliFmtR(v){ return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}); }
+function pliFmtPct(v){ return ((v||0)*100).toLocaleString('pt-BR',{maximumFractionDigits:0})+'%'; }
+function pliMesesEntre(a, b){ // 'YYYY-MM'..'YYYY-MM'
+  const out = []; let [y,m] = a.split('-').map(Number); const [y2,m2] = b.split('-').map(Number);
+  while(y<y2 || (y===y2 && m<=m2)){ out.push(y+'-'+String(m).padStart(2,'0')); m++; if(m>12){ m=1; y++; } }
+  return out;
+}
+
+/* ---------- leitura de células do Excel ---------- */
+function pliSerialParaISO(n){ return pliISO(Math.round((n-25569)*86400000)); }
+function pliCel(ws, addr){ const c = ws[addr]; return c ? c.v : undefined; }
+function pliNum(ws, addr, def){ const v = pliCel(ws, addr); const n = (typeof v === 'number') ? v : parseFloat(v); return isFinite(n) ? n : (def===undefined?0:def); }
+function pliDataCel(ws, addr){
+  const v = pliCel(ws, addr);
+  if(v instanceof Date) return pliISO(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+  if(typeof v === 'number' && v > 20000) return pliSerialParaISO(v);
+  if(typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0,10);
+  return '';
+}
+function pliColLetra(i){ let s=''; i++; while(i>0){ const r=(i-1)%26; s=String.fromCharCode(65+r)+s; i=Math.floor((i-1)/26); } return s; }
+
+/* ---------- importação: planilha do Planejamento Integrado ---------- */
+function pliLerIntegrado(wb, nomeArquivo){
+  const S = n => wb.Sheets[n];
+  const pr = S('PREMISSAS'), bm = S('BASE MENSAL'), op = S('ORÇADO x PROJETADO'), cp = S('COMPRAS');
+  if(!pr || !bm) throw new Error('Não encontrei as abas PREMISSAS e BASE MENSAL.');
+
+  const obras = [];
+  for(let r=5; r<=20; r++){
+    const nome = pliCel(pr, 'A'+r);
+    if(!nome || String(nome).toUpperCase()==='TOTAL') break;
+    obras.push({ nome:String(nome).trim(), ton:pliNum(pr,'B'+r), estoque:pliNum(pr,'C'+r) });
+  }
+  const meses = [];
+  for(let c=3; c<80; c++){
+    const iso = pliDataCel(bm, pliColLetra(c)+'3');
+    if(!iso) break;
+    meses.push(pliYM(iso));
+  }
+  const base = { META:{INST:{},PROD:{},FRENTES:{}}, OFICIAL:{INST:{},PROD:{},FRENTES:{}} };
+  for(let r=4; r<=80; r++){
+    const cen = pliCel(bm,'A'+r), tipo = pliCel(bm,'B'+r), ob = pliCel(bm,'C'+r);
+    if(!cen || !tipo || !ob) continue;
+    if(!base[cen] || !base[cen][tipo]) continue;
+    base[cen][tipo][String(ob).trim()] = meses.map((_,i)=> pliNum(bm, pliColLetra(3+i)+r));
+  }
+  const frentes = [];
+  for(let r=36; r<=60; r++){
+    const nome = pliCel(pr,'A'+r);
+    if(!nome) break;
+    frentes.push({ nome:String(nome), peso:pliNum(pr,'B'+r), equipe:pliNum(pr,'C'+r) });
+  }
+  const orcado = [];
+  if(op) for(let r=5; r<=20; r++){
+    const emp = pliCel(op,'A'+r);
+    if(!emp || String(emp).toUpperCase()==='TOTAL') break;
+    orcado.push({ emp:String(emp), obra:String(pliCel(op,'B'+r)||'').trim(), orcado:pliNum(op,'C'+r) });
+  }
+  const compras = [];
+  if(cp) for(let r=9; r<=700; r++){
+    const ini = pliDataCel(cp,'F'+r);
+    const obra = pliCel(cp,'A'+r);
+    if(!obra || !ini) continue;
+    compras.push({
+      obra:String(obra).trim(), bloco:String(pliCel(cp,'B'+r)||''), frente:String(pliCel(cp,'C'+r)||''),
+      lote:String(pliCel(cp,'D'+r)||''), abr:String(pliCel(cp,'E'+r)||''),
+      ini, fim:pliDataCel(cp,'G'+r), t:pliNum(cp,'H'+r),
+      passa:(String(pliCel(cp,'I'+r)||'S').toUpperCase()==='N')?'N':'S',
+      comprado:String(pliCel(cp,'S'+r)||'').toUpperCase()==='S'
+    });
+  }
+  return {
+    importadoEm:new Date().toISOString(), arquivo:nomeArquivo,
+    dataBase:pliDataCel(pr,'C12') || '2026-10-01',
+    cenario:(String(pliCel(pr,'C13')||'META').toUpperCase()==='OFICIAL')?'OFICIAL':'META',
+    prodModo:(String(pliCel(pr,'G22')||'A').toUpperCase()==='B')?'B':'A',
+    meses, obras, base, frentes, orcado, compras,
+    estoqueInicial:obras.reduce((s,o)=>s+o.estoque,0),
+    cap:{ atual:pliNum(pr,'C14',13), nova:pliNum(pr,'G15',30), de:pliYM(pliDataCel(pr,'G16')||'2027-01-01') },
+    efetivoAtualInst:pliNum(pr,'C15',49), efetivoFab:pliNum(pr,'G9',24),
+    folhaInst:pliNum(pr,'C16',280000), pessoasFolha:pliNum(pr,'C20',30),
+    custoPessoa:pliNum(pr,'C16',280000)/pliNum(pr,'C20',30),
+    prodB:pliNum(pr,'C21',0.433),
+    custoTFab:pliNum(pr,'G17',745000)/pliNum(pr,'G15',30),
+    limiar:pliNum(pr,'C19',1),
+    prazos:{ lista:pliNum(pr,'C23',15), cotacao:pliNum(pr,'C24',30), otim:pliNum(pr,'C25',60), cons:pliNum(pr,'C26',75),
+             fab2:pliNum(pr,'C27',2), fab3:pliNum(pr,'C28',3), fab4:pliNum(pr,'C29',4) },
+    duo:{}, comprados:{}
+  };
+}
+
+/* ---------- importação: planilha do Cronograma financeiro de uma obra ---------- */
+function pliLerCronograma(wb, nomeArquivo){
+  const pr = wb.Sheets['PREMISSAS'];
+  if(!pr) throw new Error('Não encontrei a aba PREMISSAS.');
+  const titulo = String(pliCel(pr,'A1')||'');
+  const nome = (titulo.split('—')[1] || '').split(',')[0].trim() || nomeArquivo.replace(/\.xlsx?$/i,'');
+  const fases = [];
+  for(let r=18; r<=60; r++){
+    const cod = pliCel(pr,'A'+r);
+    if(cod===undefined || String(cod).toUpperCase()==='TOTAL') break;
+    fases.push({ cod:String(cod), desc:String(pliCel(pr,'B'+r)||''), kg:pliNum(pr,'C'+r), grupo:String(pliCel(pr,'E'+r)||''),
+                 iniLB:pliDataCel(pr,'F'+r), fimLB:pliDataCel(pr,'G'+r), ref:String(pliCel(pr,'H'+r)||'') });
+  }
+  const fluxo = [];
+  for(let r=32; r<=80; r++){
+    const g = pliCel(pr,'A'+r);
+    if(!g || String(g).toUpperCase()==='TOTAL') break;
+    fluxo.push({ grupo:String(g), parcela:String(pliCel(pr,'B'+r)||''), venc:pliDataCel(pr,'C'+r), valor:pliNum(pr,'D'+r) });
+  }
+  if(!fases.length || !fluxo.length) throw new Error('Não encontrei as fases e o fluxo de pagamentos na aba PREMISSAS.');
+  return {
+    id:uid(), nome, arquivo:nomeArquivo, importadoEm:new Date().toISOString(),
+    prem:{
+      entregaDias:pliNum(pr,'B4',15), iniFabDias:pliNum(pr,'B5',20), capFab:pliNum(pr,'B6',30), iniInstDias:pliNum(pr,'B7',20),
+      diasMes:pliNum(pr,'B9',30.4), prodInst:pliNum(pr,'B11',0.433), custoPessoa:pliNum(pr,'B12',9333.33),
+      preco:pliNum(pr,'B13',43.5), folhaFab:pliNum(pr,'B14',740000), prodRef:pliNum(pr,'B15',30),
+      efetivo:pliNum(pr,'K4',30), alvo:pliDataCel(pr,'K5'), compPct:pliNum(pr,'K6',0.3), comp1:pliNum(pr,'K7',28), comp2:pliNum(pr,'K8',56)
+    },
+    fases, fluxo
+  };
+}
+
+/* ---------- motor do Planejamento Integrado ---------- */
+function pliCalc(P){
+  const M = P.meses, cen = P.cenario;
+  const inst = {}, prod = {};
+  P.obras.forEach(o=>{
+    const bi = (P.base[cen].INST[o.nome]||[]), bp = (P.base[cen].PROD[o.nome]||[]);
+    inst[o.nome] = M.map((_,i)=> o.ton*(bi[i]||0));
+    const aj = (P.ajusteProd||{})[o.nome]||{};
+    prod[o.nome] = M.map((ym,i)=> aj[ym]!==undefined ? aj[ym] : o.ton*(bp[i]||0));
+  });
+  const soma = mapa => M.map((_,i)=> P.obras.reduce((s,o)=>s+mapa[o.nome][i],0));
+  const demanda = soma(prod), tInst = soma(inst);
+  const cap = M.map(ym=> ym < P.cap.de ? P.cap.atual : P.cap.nova);
+  const prodFab = P.cap.atual / P.efetivoFab;
+  const prodA = P.cap.atual / P.efetivoAtualInst;
+  const ceil = x => Math.ceil(x - 1e-9);
+  const dbYM = pliYM(P.dataBase);
+
+  let acum = P.estoqueInicial||0;
+  const saldo = [], estoque = [], ocup = [], simult = [], efFabCap = [], efFabDem = [];
+  M.forEach((ym,i)=>{
+    const s = cap[i]-demanda[i];
+    if(ym >= dbYM){ acum += s; saldo.push(s); estoque.push(acum); } else { saldo.push(null); estoque.push(null); }
+    ocup.push(cap[i]>0 ? demanda[i]/cap[i] : 0);
+    simult.push(P.obras.filter(o=>prod[o.nome][i] > P.limiar).length);
+    efFabCap.push(ceil(cap[i]/prodFab)); efFabDem.push(ceil(demanda[i]/prodFab));
+  });
+  const duo = M.map(ym=> (P.duo||{})[ym]||0);
+  const efInstA = tInst.map((t,i)=> ceil(t/prodA) + duo[i]);
+  const efInstB = tInst.map((t,i)=> ceil(t/P.prodB) + duo[i]);
+  const efInst = P.prodModo==='B' ? efInstB : efInstA;
+  const custoInst = efInst.map(e=> e*P.custoPessoa);
+
+  const S = a => a.reduce((s,v)=>s+v,0);
+  const porObra = P.obras.map(o=>{
+    const fab = prod[o.nome].map(t=> t*P.custoTFab);
+    const iA = inst[o.nome].map(t=> ceil(t/prodA)*P.custoPessoa);
+    const iB = inst[o.nome].map(t=> ceil(t/P.prodB)*P.custoPessoa);
+    const iU = P.prodModo==='B' ? iB : iA;
+    const ref = P.orcado.find(x=>x.obra===o.nome) || {};
+    return { nome:o.nome, emp:ref.emp||o.nome, ton:o.ton, orcado:ref.orcado||0, fab, inst:iU, fabTotal:S(fab),
+             instA:S(iA), instB:S(iB), projA:S(fab)+S(iA), projB:S(fab)+S(iB), proj:S(fab)+S(iU) };
+  });
+
+  const compras = P.compras.map((c,idx)=>{
+    const k = M.indexOf(pliYM(c.ini));
+    const sim = k>=0 ? simult[k] : 0;
+    const meses = c.passa==='N' ? 0 : (sim<=2 ? P.prazos.fab2 : (sim===3 ? P.prazos.fab3 : P.prazos.fab4));
+    const L = pliAddMeses(c.ini, -meses);
+    const Mc = pliAddDias(L, -P.prazos.cons), N = pliAddDias(L, -P.prazos.otim);
+    const O = pliAddDias(Mc, -P.prazos.cotacao), Pp = pliAddDias(O, -P.prazos.lista);
+    const folga = pliDiffDias(Pp, P.dataBase);
+    const comprado = (P.comprados && P.comprados[idx] !== undefined) ? P.comprados[idx] : c.comprado;
+    let status;
+    if(comprado) status = 'COMPRADO';
+    else if(c.ini < P.dataBase) status = 'EM EXECUÇÃO';
+    else if(N < P.dataBase) status = 'CRÍTICO';
+    else if(Pp < P.dataBase) status = 'ATRASADO';
+    else if(folga <= 30) status = 'URGENTE';
+    else if(folga <= 90) status = 'PROGRAMAR';
+    else status = 'PLANEJADO';
+    return Object.assign({}, c, { idx, sim, mesesFab:meses, fabAte:L, pedidoCons:Mc, pedidoOtim:N, lista:O, iniciarLista:Pp, folga, comprado, status });
+  });
+
+  return { M, inst, prod, demanda, tInst, cap, saldo, estoque, ocup, simult, efFabCap, efFabDem,
+           prodFab, prodA, efInstA, efInstB, efInst, custoInst, duo, porObra, compras };
+}
+
+/* ---------- motor do Cronograma financeiro (por obra) ---------- */
+function plcCalc(ob){
+  const p = ob.prem, fases = ob.fases;
+  const precoFase = f => f.kg * p.preco;
+  const totalGrupo = g => fases.filter(f=>f.grupo===g).reduce((s,f)=>s+precoFase(f),0);
+  const capInst = Math.max(0.0001, p.efetivo * p.prodInst);
+  const lotes = [];
+  let fimFabAnt = null, fimInstAnt = null;
+  ob.fluxo.forEach(par=>{
+    const fs = fases.filter(f=>f.grupo===par.grupo);
+    const tg = totalGrupo(par.grupo);
+    fs.forEach(f=>{
+      const frac = tg>0 ? par.valor/tg : 0;
+      const kg = f.kg*frac, valor = precoFase(f)*frac;
+      const chegada = pliAddDias(par.venc, p.entregaDias);
+      const liberado = pliAddDias(chegada, p.iniFabDias);
+      const iniFab = (fimFabAnt && fimFabAnt > liberado) ? fimFabAnt : liberado;
+      const diasFab = Math.round(kg/1000/p.capFab*p.diasMes);
+      const fimFab = pliAddDias(iniFab, diasFab);
+      let iniInst = pliAddDias(fimFab, p.iniInstDias);
+      if(fimInstAnt && fimInstAnt > iniInst) iniInst = fimInstAnt;
+      const diasInst = Math.max(1, Math.round(kg/1000/capInst*p.diasMes));
+      const fimInst = pliAddDias(iniInst, diasInst);
+      fimFabAnt = fimFab; fimInstAnt = fimInst;
+      lotes.push({ n:lotes.length+1, grupo:par.grupo, parcela:par.parcela, fase:f.cod, desc:f.desc, venc:par.venc, valor, kg,
+                   chegada, liberado, iniFab, diasFab, fimFab, iniInst, diasInst, fimInst });
+    });
+  });
+  const mn = (ls,k)=> ls.length ? ls.map(l=>l[k]).sort()[0] : '';
+  const mx = (ls,k)=> ls.length ? ls.map(l=>l[k]).sort().slice(-1)[0] : '';
+  const resumo = fases.map(f=>{
+    const ls = lotes.filter(l=>l.fase===f.cod);
+    return { cod:f.cod, desc:f.desc, kg:f.kg, primeiroMaterial:mn(ls,'chegada'), iniFab:mn(ls,'iniFab'), fimFab:mx(ls,'fimFab'),
+             iniInst:mn(ls,'iniInst'), fimInst:mx(ls,'fimInst'), iniLB:f.iniLB, fimLB:f.fimLB,
+             varTermino:(mx(ls,'fimInst') && f.fimLB) ? pliDiffDias(mx(ls,'fimInst'), f.fimLB) : 0 };
+  });
+  const compFat = [], vistos = {};
+  ob.fluxo.forEach(par=>{
+    if(vistos[par.grupo]) return; vistos[par.grupo] = true;
+    const doGrupo = ob.fluxo.filter(x=>x.grupo===par.grupo);
+    const venc1 = doGrupo.map(x=>x.venc).sort()[0];
+    const comp = doGrupo.reduce((s,x)=>s+x.valor,0)*p.compPct;
+    compFat.push({ grupo:par.grupo, data:pliAddDias(venc1,p.comp1), valor:comp/2 }, { grupo:par.grupo, data:pliAddDias(venc1,p.comp2), valor:comp/2 });
+  });
+  const datas = [];
+  ob.fluxo.forEach(x=>datas.push(x.venc));
+  lotes.forEach(l=>datas.push(l.chegada, l.fimInst));
+  compFat.forEach(c=>datas.push(c.data));
+  const ords = datas.filter(Boolean).sort();
+  const meses = ords.length ? pliMesesEntre(pliYM(ords[0]), pliYM(ords[ords.length-1])) : [];
+  const idx = {}; meses.forEach((m,i)=>idx[m]=i);
+  const z = ()=> meses.map(()=>0);
+  const pagto = z(), comp = z(), entregue = z(), fabricado = z(), instalado = z();
+  ob.fluxo.forEach(x=>{ pagto[idx[pliYM(x.venc)]] += x.valor; });
+  compFat.forEach(c=>{ comp[idx[pliYM(c.data)]] += c.valor; });
+  const dist = (arr, ini, fim, kg)=>{
+    const dias = Math.max(1, pliDiffDias(fim, ini));
+    for(let d=0; d<dias; d++){ const k = idx[pliYM(pliAddDias(ini,d))]; if(k!==undefined) arr[k] += kg/dias; }
+  };
+  lotes.forEach(l=>{
+    entregue[idx[pliYM(l.chegada)]] += l.kg;
+    dist(fabricado, l.iniFab, l.fimFab, l.kg);
+    dist(instalado, l.iniInst, l.fimInst, l.kg);
+  });
+  const minInst = mn(lotes,'iniInst'), maxInst = mx(lotes,'fimInst');
+  const efetivo = meses.map(m=> (minInst && pliAddDias(pliAddMeses(m+'-01',1),-1) >= minInst && m+'-01' <= maxInst) ? p.efetivo : 0);
+  const custoInst = efetivo.map(e=>e*p.custoPessoa);
+  const custoFab = fabricado.map(k=> k/1000*(p.folhaFab/p.prodRef));
+  let aE=0, aF=0, aI=0;
+  const acE = entregue.map(v=>aE+=v), acF = fabricado.map(v=>aF+=v), acI = instalado.map(v=>aI+=v);
+  const totKg = fases.reduce((s,f)=>s+f.kg,0);
+  return { lotes, resumo, meses, pagto, comp, entregue, fabricado, instalado, acE, acF, acI, efetivo, custoInst, custoFab,
+           ocup:fabricado.map(k=>k/1000/p.capFab), compFat, totKg, totalPago:ob.fluxo.reduce((s,x)=>s+x.valor,0),
+           capInst, minInst, maxInst, iniFab:mn(lotes,'iniFab'), fimFab:mx(lotes,'fimFab'),
+           atendeAlvo: p.alvo ? maxInst <= p.alvo : null, totalComp:compFat.reduce((s,c)=>s+c.valor,0) };
+}
+
+/* ---------- acesso (apenas Gerência) ---------- */
+function pliTemAcesso(){ return souGerente(); }
+function pliAtualizarMenu(){
+  const it = document.getElementById('navPlanejInt');
+  const lb = document.getElementById('navGrpPlanej');
+  const v = pliTemAcesso() ? '' : 'none';
+  if(it) it.style.display = v;
+  if(lb) lb.style.display = v;
+}
+
+/* ---------- interface ---------- */
+const PLI_TABS = [
+  ['resumo','Resumo'], ['premissas','Premissas'], ['fabrica','Ocupação da fábrica'], ['instalacao','Instalação e efetivo'],
+  ['custo','Custo × Orçado'], ['compras','Compras'], ['gantt','Gantt por obra'], ['cronfin','Cronograma financeiro']
+];
+
+function renderPlanejInt(){
+  const semAcesso = document.getElementById('pliSemAcesso');
+  const conteudo = document.getElementById('pliConteudo');
+  pliAtualizarMenu();
+  if(!pliTemAcesso()){ semAcesso.style.display='block'; conteudo.style.display='none'; return; }
+  semAcesso.style.display='none'; conteudo.style.display='block';
+  const P = pliLoad();
+  document.getElementById('pliTabs').innerHTML = PLI_TABS.map(([k,l])=>`<button class="btn small ${PLI_UI.tab===k?'':'secondary'}" onclick="pliSetTab('${k}')">${l}</button>`).join('');
+  const area = document.getElementById('pliArea');
+  const nCron = plcLoad().obras.length;
+  document.getElementById('pliStatus').innerHTML = P
+    ? `Planejamento importado de <b>${esc(P.arquivo||'planilha')}</b> em ${pliFmtData(P.importadoEm)} · data base <b>${pliFmtData(P.dataBase)}</b> · ${P.obras.length} obras${nCron?` · ${nCron} cronograma(s) financeiro(s)`:''}`
+    : 'Nenhuma planilha importada ainda.';
+  document.getElementById('pliControles').style.display = P ? 'flex' : 'none';
+  if(P){
+    document.getElementById('pliCenario').value = P.cenario;
+    document.getElementById('pliProdModo').value = P.prodModo;
+  }
+  if(PLI_UI.tab==='cronfin'){ area.innerHTML = pliHtmlCronFin(); return; }
+  if(!P){
+    area.innerHTML = `<div class="empty-state"><div class="big">▤</div>Importe a planilha <b>Planejamento Integrado de Alumínio</b> (botão acima) para começar.<br>
+      <div class="step-note" style="margin-top:6px;">O cronograma financeiro por obra (modelo "Cronograma Arte Jardim") pode ser importado a qualquer momento, na aba "Cronograma financeiro".</div></div>`;
+    return;
+  }
+  const R = pliCalc(P);
+  const fn = { resumo:pliHtmlResumo, premissas:pliHtmlPremissas, fabrica:pliHtmlFabrica, instalacao:pliHtmlInstalacao, custo:pliHtmlCusto, compras:pliHtmlCompras, gantt:pliHtmlGantt }[PLI_UI.tab] || pliHtmlResumo;
+  area.innerHTML = fn(P, R);
+}
+function pliSetTab(t){ PLI_UI.tab = t; renderPlanejInt(); }
+
+function pliImportarArquivo(ev){
+  if(!pliTemAcesso()){ toast('Apenas a Gerência pode importar o planejamento.'); return; }
+  const f = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!f) return;
+  if(typeof XLSX === 'undefined'){ toast('A biblioteca de leitura de Excel não carregou. Verifique a conexão e recarregue.'); return; }
+  const rd = new FileReader();
+  rd.onload = e=>{
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+      const nomes = wb.SheetNames;
+      const ehIntegrado = nomes.includes('BASE MENSAL') && nomes.includes('PREMISSAS');
+      const ehCron = nomes.includes('LOTES') && nomes.includes('CURVA MENSAL');
+      if(ehIntegrado){
+        const anterior = pliLoad();
+        const novo = pliLerIntegrado(wb, f.name);
+        if(anterior){ novo.duo = anterior.duo||{}; novo.comprados = anterior.comprados||{}; }
+        pliSave(novo);
+        PLI_UI.tab = 'resumo';
+        toast('Planejamento integrado importado: '+novo.obras.length+' obras, '+novo.compras.length+' lotes de compra.');
+      } else if(ehCron){
+        const ob = pliLerCronograma(wb, f.name);
+        const c = plcLoad();
+        const ja = c.obras.findIndex(o=>o.nome.toLowerCase()===ob.nome.toLowerCase());
+        if(ja>=0){ ob.id = c.obras[ja].id; c.obras[ja] = ob; PLI_UI.cronObra = ja; }
+        else { c.obras.push(ob); PLI_UI.cronObra = c.obras.length-1; }
+        plcSave(c);
+        PLI_UI.tab = 'cronfin';
+        toast('Cronograma financeiro importado: '+ob.nome+'.');
+      } else {
+        toast('Planilha não reconhecida. Use o "Planejamento Integrado" (aba BASE MENSAL) ou o "Cronograma" (abas LOTES e CURVA MENSAL).');
+        return;
+      }
+      renderPlanejInt();
+    }catch(err){
+      console.error(err);
+      toast('Não consegui ler a planilha: '+(err.message||err));
+    }
+  };
+  rd.readAsArrayBuffer(f);
+}
+
+function pliMudarControle(){
+  const P = pliLoad(); if(!P) return;
+  P.cenario = document.getElementById('pliCenario').value;
+  P.prodModo = document.getElementById('pliProdModo').value;
+  pliSave(P); renderPlanejInt();
+}
+function pliLimpar(){
+  if(!pliTemAcesso()) return;
+  if(!confirm('Remover o planejamento integrado importado? (Os cronogramas financeiros por obra não são afetados.)')) return;
+  localStorage.setItem(DB_PREFIX+PLI_KEY, 'null');
+  renderPlanejInt();
+}
+function pliEditarPrem(campo, valor, sub){
+  const P = pliLoad(); if(!P) return;
+  const v = parseFloat(String(valor).replace(',','.'));
+  if(!isFinite(v)){ renderPlanejInt(); return; }
+  if(sub) P[campo][sub] = v; else P[campo] = v;
+  if(campo==='folhaInst' || campo==='pessoasFolha') P.custoPessoa = P.folhaInst/(P.pessoasFolha||1);
+  pliSave(P); renderPlanejInt();
+}
+function pliEditarTonObra(i, valor){
+  const P = pliLoad(); const v = parseFloat(String(valor).replace(',','.'));
+  if(!P || !isFinite(v)) return;
+  P.obras[i].ton = v; pliSave(P); renderPlanejInt();
+}
+function pliEditarData(campo, valor){
+  const P = pliLoad(); if(!P || !valor) return;
+  if(campo==='dataBase') P.dataBase = valor;
+  if(campo==='capDe') P.cap.de = valor.slice(0,7);
+  pliSave(P); renderPlanejInt();
+}
+function pliEditarDuo(ym, valor){
+  const P = pliLoad(); if(!P) return;
+  const v = parseInt(valor,10); P.duo = P.duo||{};
+  if(isFinite(v) && v>0) P.duo[ym] = v; else delete P.duo[ym];
+  pliSave(P); renderPlanejInt();
+}
+function pliToggleComprado(idx){
+  const P = pliLoad(); if(!P) return;
+  P.comprados = P.comprados||{};
+  const atual = (P.comprados[idx]!==undefined) ? P.comprados[idx] : P.compras[idx].comprado;
+  P.comprados[idx] = !atual;
+  pliSave(P); renderPlanejInt();
+}
+
+/* ---- blocos de HTML reutilizáveis ---- */
+function pliKpi(rot, val, sub, cor){
+  return `<div class="pli-kpi"><div class="r">${rot}</div><div class="v" ${cor?`style="color:${cor}"`:''}>${val}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`;
+}
+function pliBarras(meses, series, opts){
+  opts = opts||{}; const alt = opts.altura||150; const fmt = opts.fmt||pliFmtT;
+  const max = Math.max(1, ...meses.map((_,i)=> series.reduce((s,x)=>s+(x.valores[i]||0),0)), ...(opts.linha||[0]));
+  const cols = meses.map((m,i)=>{
+    const tot = series.reduce((s,x)=>s+(x.valores[i]||0),0);
+    const segs = series.map(x=>{ const v=x.valores[i]||0; return v>0?`<div style="height:${(v/max*alt).toFixed(1)}px;background:${x.cor};" title="${esc(x.nome)}: ${fmt(v)}"></div>`:''; }).join('');
+    const ln = opts.linha ? `<div class="ln" style="bottom:${((opts.linha[i]||0)/max*alt).toFixed(1)}px;background:${opts.linhaCor||'#bd0c1d'}"></div>` : '';
+    return `<div class="c"><div class="tt">${tot>0.05?fmt(tot):''}</div><div class="st" style="height:${alt}px;">${segs}${ln}</div></div>`;
+  }).join('');
+  const lb = meses.map(m=>`<span>${dashMesCurto(m)}</span>`).join('');
+  const lg = series.map(x=>`<span><i style="background:${x.cor}"></i>${esc(x.nome)}</span>`).join('') + (opts.linha?`<span><i style="background:${opts.linhaCor||'#bd0c1d'}"></i>${esc(opts.linhaNome||'Capacidade')}</span>`:'');
+  return `<div class="pli-chart"><div class="pli-leg">${lg}</div><div class="pli-bars" style="--n:${meses.length}">${cols}</div><div class="pli-lbl" style="--n:${meses.length}">${lb}</div></div>`;
+}
+const PLI_CORES = ['#bd0c1d','#232323','#7a7d82','#d9822b','#2f7fb8','#1c7c3e','#8e5ea2','#b8860b'];
+
+function pliHtmlResumo(P, R){
+  const dbYM = pliYM(P.dataBase);
+  const fut = R.M.map((m,i)=> m>=dbYM ? i : -1).filter(i=>i>=0);
+  const dem = fut.reduce((s,i)=>s+R.demanda[i],0), capTot = fut.reduce((s,i)=>s+R.cap[i],0);
+  const pico = Math.max(...fut.map(i=>R.ocup[i])), mesPico = R.M[fut.find(i=>R.ocup[i]===pico)];
+  const picoEf = Math.max(...fut.map(i=>R.efInst[i])), mesPicoEf = R.M[fut.find(i=>R.efInst[i]===picoEf)];
+  const comOrc = R.porObra.filter(o=>o.orcado>0);
+  const projTot = comOrc.reduce((s,o)=>s+o.proj,0), orcTot = comOrc.reduce((s,o)=>s+o.orcado,0);
+  const cont = {}; R.compras.forEach(c=>cont[c.status]=(cont[c.status]||0)+1);
+  const nCrit = (cont['CRÍTICO']||0)+(cont['ATRASADO']||0);
+  const mesesSobre = fut.filter(i=>R.ocup[i]>1.0001).length;
+  const ultFab = R.M.filter((m,i)=>R.demanda[i]>0.05).slice(-1)[0];
+  const ultInst = R.M.filter((m,i)=>R.tInst[i]>0.05).slice(-1)[0];
+  return `
+  <div class="pli-kpis">
+    ${pliKpi('Carga de fábrica (a partir da data base)', pliFmtT(dem,0)+' t', 'Capacidade planejada no período: '+pliFmtT(capTot,0)+' t')}
+    ${pliKpi('Pico de ocupação da fábrica', pliFmtPct(pico), dashMesCurto(mesPico), pico>1.0001?'var(--danger)':'var(--ok)')}
+    ${pliKpi('Meses acima da capacidade', String(mesesSobre), 'após a data base', mesesSobre?'var(--danger)':'var(--ok)')}
+    ${pliKpi('Pico de efetivo na instalação', picoEf+' pessoas', dashMesCurto(mesPicoEf)+' · hoje '+P.efetivoAtualInst+' em obra', picoEf>P.efetivoAtualInst?'var(--warn)':'')}
+    ${pliKpi('Custo projetado × orçado (MOF+MOI)', pliFmtR(projTot), 'Orçado '+pliFmtR(orcTot)+' · desvio '+pliFmtR(projTot-orcTot)+(comOrc.length<R.porObra.length?' · só obras com orçado':''), projTot>orcTot?'var(--danger)':'var(--ok)')}
+    ${pliKpi('Compras críticas/atrasadas', String(nCrit), (cont['URGENTE']||0)+' urgentes (≤30 dias)', nCrit?'var(--danger)':'var(--ok)')}
+  </div>
+  <div class="pli-card"><h3>Ocupação da fábrica — carga × capacidade (t/mês)</h3>
+    ${pliBarras(R.M, P.obras.map((o,k)=>({nome:o.nome, cor:PLI_CORES[k%PLI_CORES.length], valores:R.prod[o.nome]})), {linha:R.cap, linhaNome:'Capacidade'})}
+    <div class="pli-note">Cenário <b>${P.cenario}</b>. Produção necessária = curva de instalação antecipada em 30 dias. Capacidade ${P.cap.atual} t/mês até ${dashMesCurto(P.cap.de)} e ${P.cap.nova} t/mês depois. Fábrica produz até ${ultFab?dashMesCurto(ultFab):'—'}; instalação até ${ultInst?dashMesCurto(ultInst):'—'}.</div></div>
+  <div class="pli-card"><h3>Efetivo necessário na instalação (pessoas)</h3>
+    ${pliBarras(R.M, [{nome:'Efetivo necessário (produtividade '+(P.prodModo==='B'?'B – referência':'A – observada')+')', cor:'#232323', valores:R.efInst}], {linha:R.M.map(()=>P.efetivoAtualInst), linhaNome:'Efetivo atual nas obras do plano', fmt:v=>String(Math.round(v))})}</div>`;
+}
+
+function pliInput(campo, valor, sub){
+  return `<input type="number" step="any" value="${valor}" onchange="pliEditarPrem('${campo}',this.value${sub?`,'${sub}'`:''})" style="width:100px;">`;
+}
+function pliHtmlPremissas(P, R){
+  return `
+  <div class="pli-grid2">
+   <div class="pli-card"><h3>Geral</h3>
+    <table class="pli-t"><tbody>
+     <tr><td>Data base</td><td><input type="date" value="${P.dataBase}" onchange="pliEditarData('dataBase',this.value)"></td><td>Atividades antes dela = executado</td></tr>
+     <tr><td>Capacidade atual da fábrica (t/mês)</td><td>${pliInput('cap',P.cap.atual,'atual')}</td><td>Produção média atual</td></tr>
+     <tr><td>Nova capacidade (t/mês)</td><td>${pliInput('cap',P.cap.nova,'nova')}</td><td>A partir de <input type="month" value="${P.cap.de}" onchange="pliEditarData('capDe',this.value)"></td></tr>
+     <tr><td>Efetivo atual na fábrica</td><td>${pliInput('efetivoFab',P.efetivoFab)}</td><td>${pliFmtT(R.prodFab,3)} t/pessoa/mês</td></tr>
+     <tr><td>Efetivo atual em instalação (plano)</td><td>${pliInput('efetivoAtualInst',P.efetivoAtualInst)}</td><td>Produtividade A (observada) ${pliFmtT(R.prodA,3)} t/pessoa/mês</td></tr>
+     <tr><td>Produtividade B – referência (t/pessoa/mês)</td><td>${pliInput('prodB',P.prodB)}</td><td>Meta</td></tr>
+     <tr><td>Folha de instalação (R$/mês)</td><td>${pliInput('folhaInst',P.folhaInst)}</td><td>para <input type="number" value="${P.pessoasFolha}" style="width:60px;" onchange="pliEditarPrem('pessoasFolha',this.value)"> pessoas = ${pliFmtR(P.custoPessoa)}/pessoa</td></tr>
+     <tr><td>Custo da fábrica (R$/t)</td><td>${pliInput('custoTFab',Math.round(P.custoTFab*100)/100)}</td><td>Padrão R$ 745 mil ÷ 30 t</td></tr>
+     <tr><td>Limiar de obra "ativa" (t/mês)</td><td>${pliInput('limiar',P.limiar)}</td><td>Conta obras simultâneas na fábrica</td></tr>
+    </tbody></table></div>
+   <div class="pli-card"><h3>Prazos de compra</h3>
+    <table class="pli-t"><tbody>
+     <tr><td>Emissão da lista p/ Suprimentos (dias)</td><td>${pliInput('prazos',P.prazos.lista,'lista')}</td></tr>
+     <tr><td>Suprimentos – cotação/pedido (dias)</td><td>${pliInput('prazos',P.prazos.cotacao,'cotacao')}</td></tr>
+     <tr><td>Entrega fornecedor – otimista (dias)</td><td>${pliInput('prazos',P.prazos.otim,'otim')}</td></tr>
+     <tr><td>Entrega fornecedor – conservador (dias)</td><td>${pliInput('prazos',P.prazos.cons,'cons')}</td></tr>
+     <tr><td>Fabricação: até 2 obras simultâneas (meses)</td><td>${pliInput('prazos',P.prazos.fab2,'fab2')}</td></tr>
+     <tr><td>Fabricação: 3 obras simultâneas (meses)</td><td>${pliInput('prazos',P.prazos.fab3,'fab3')}</td></tr>
+     <tr><td>Fabricação: 4+ obras simultâneas (meses)</td><td>${pliInput('prazos',P.prazos.fab4,'fab4')}</td></tr>
+    </tbody></table>
+    <h3 style="margin-top:14px;">Tonelagem por obra</h3>
+    <table class="pli-t"><thead><tr><th>Obra</th><th>Tonelagem (t)</th></tr></thead><tbody>
+     ${P.obras.map((o,i)=>`<tr><td>${esc(o.nome)}</td><td><input type="number" value="${o.ton}" style="width:90px;" onchange="pliEditarTonObra(${i},this.value)"></td></tr>`).join('')}
+    </tbody></table></div>
+  </div>
+  <div class="pli-note">Qualquer alteração recalcula tudo na hora. Cenário <b>META × OFICIAL</b> e produtividade <b>A × B</b> ficam nos controles do topo.</div>`;
+}
+
+function pliTabelaMensal(P, linhas){
+  const dbYM = pliYM(P.dataBase), M = P.meses;
+  const head = M.map(m=>`<th class="${m<dbYM?'pas':''}">${dashMesCurto(m)}</th>`).join('');
+  const body = linhas.map(l=>{
+    const cels = M.map((m,i)=>{
+      const v = l.v[i];
+      const txt = (v===null||v===undefined||v==='') ? '' : (l.fmt||pliFmtT)(v);
+      return `<td class="${m<dbYM?'pas':''} ${l.cel?l.cel(v,i):''}">${txt}</td>`;
+    }).join('');
+    return `<tr class="${l.cls||''}"><th class="rot">${l.rot}</th>${cels}</tr>`;
+  }).join('');
+  return `<div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot"></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function pliHtmlFabrica(P, R){
+  const linhas = P.obras.map(o=>({rot:o.nome, v:R.prod[o.nome]}));
+  linhas.push({rot:'DEMANDA TOTAL (t)', v:R.demanda, cls:'tot'});
+  linhas.push({rot:'Capacidade planejada (t/mês)', v:R.cap, fmt:v=>pliFmtT(v,0)});
+  linhas.push({rot:'Saldo do mês (cap. − demanda)', v:R.saldo, cel:v=> v!==null && v<-0.05 ? 'neg':''});
+  linhas.push({rot:'Estoque (+) / backlog (−) acumulado', v:R.estoque, cel:v=> v!==null && v<-0.05 ? 'neg':''});
+  linhas.push({rot:'Ocupação da capacidade', v:R.ocup, fmt:pliFmtPct, cel:v=> v>1.0001?'neg':(v>0.9?'warn':'')});
+  linhas.push({rot:'Obras em produção simultânea', v:R.simult, fmt:v=>String(v)});
+  linhas.push({rot:'Efetivo fábrica p/ capacidade planejada', v:R.efFabCap, fmt:v=>String(v)});
+  linhas.push({rot:'Efetivo fábrica p/ demanda do mês', v:R.efFabDem, fmt:v=>String(v)});
+  linhas.push({rot:'Efetivo fábrica atual', v:R.M.map(()=>P.efetivoFab), fmt:v=>String(v)});
+  const dbYM = pliYM(P.dataBase);
+  const futM = R.M.map((m,i)=>({m,i})).filter(x=>x.m>=dbYM);
+  const temAj = P.obras.some(o=>Object.keys((P.ajusteProd||{})[o.nome]||{}).length);
+  const edit = `<div class="pli-card"><h3>Carga produtiva por obra (t/mês) — editável</h3>
+    <div class="pli-note" style="margin:0 0 8px;">Altere a tonelagem a produzir em cada mês (a partir da data base). Células em vermelho foram ajustadas por você; a tabela, o gráfico, o estoque/backlog, os custos e as compras já recalculam. Deixe em branco ou use "restaurar" para voltar ao cronograma importado. A instalação não muda.</div>
+    <div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot">Obra</th>${futM.map(x=>`<th>${dashMesCurto(x.m)}</th>`).join('')}<th>Total</th><th></th></tr></thead><tbody>
+    ${P.obras.map(o=>{ const aj=(P.ajusteProd||{})[o.nome]||{}; const orig=(P.base[P.cenario].PROD[o.nome]||[]);
+      return `<tr><th class="rot">${esc(o.nome)} <span class="pli-note">(${pliFmtT(o.ton,0)} t)</span></th>${futM.map(x=>{ const ajd = aj[x.m]!==undefined; return `<td><input type="number" step="0.1" min="0" class="pli-cg ${ajd?'aj':''}" value="${(Math.round(R.prod[o.nome][x.i]*10)/10)}" title="Original: ${pliFmtT(o.ton*(orig[x.i]||0),1)} t" onchange="pliEditarCarga('${esc(o.nome).replace(/'/g,"\\'")}','${x.m}',this.value)"></td>`; }).join('')}
+      <td class="n"><b>${pliFmtT(R.prod[o.nome].reduce((s,v,i)=>s+(R.M[i]>=dbYM?v:0),0),1)}</b></td><td>${Object.keys(aj).length?`<button class="btn small secondary" onclick="pliResetCarga('${esc(o.nome).replace(/'/g,"\\'")}')">restaurar</button>`:''}</td></tr>`; }).join('')}
+    <tr class="tot"><th class="rot">Capacidade (t/mês)</th>${futM.map(x=>`<td>${pliFmtT(R.cap[x.i],0)}</td>`).join('')}<td></td><td>${temAj?`<button class="btn small secondary" onclick="pliResetCarga(null)">restaurar tudo</button>`:''}</td></tr>
+    <tr class="tot"><th class="rot">Ocupação</th>${futM.map(x=>`<td class="${R.ocup[x.i]>1.0001?'neg':''}">${pliFmtPct(R.ocup[x.i])}</td>`).join('')}<td></td><td></td></tr>
+    </tbody></table></div></div>`;
+  return edit + `<div class="pli-card"><h3>Fábrica — carga de produção mensal (t) × capacidade</h3>
+    ${pliBarras(R.M, P.obras.map((o,k)=>({nome:o.nome, cor:PLI_CORES[k%PLI_CORES.length], valores:R.prod[o.nome]})), {linha:R.cap})}
+    <div class="pli-note">Meses em cinza = antes da data base (retroativo). Vermelho = acima da capacidade.</div>
+    ${pliTabelaMensal(P, linhas)}</div>`;
+}
+
+function pliHtmlInstalacao(P, R){
+  const dbYM = pliYM(P.dataBase);
+  const linhas = P.obras.map(o=>({rot:o.nome+' (t)', v:R.inst[o.nome]}));
+  linhas.push({rot:'TOTAL INSTALADO (t)', v:R.tInst, cls:'tot'});
+  linhas.push({rot:'Efetivo A – produtividade observada', v:R.efInstA, fmt:v=>String(v)});
+  linhas.push({rot:'Efetivo B – referência', v:R.efInstB, fmt:v=>String(v)});
+  linhas.push({rot:'Efetivo usado ('+P.prodModo+')', v:R.efInst, fmt:v=>String(v), cls:'tot'});
+  linhas.push({rot:'Efetivo atual em obra', v:R.M.map(()=>P.efetivoAtualInst), fmt:v=>String(v)});
+  linhas.push({rot:'Contratar (+) / sobra (−)', v:R.efInst.map(e=>e-P.efetivoAtualInst), fmt:v=>(v>0?'+':'')+v, cel:v=> v>0?'warn':''});
+  linhas.push({rot:'Custo de instalação (R$/mês)', v:R.custoInst, fmt:pliFmtR});
+  const duo = `<div class="pli-note" style="margin-top:10px;">Equipe extra do DUO (revisões/varandas) — pessoas por mês, somadas ao efetivo:<br>${R.M.filter(m=>m>=dbYM).slice(0,24).map(m=>`<label class="pli-duo">${dashMesCurto(m)}<input type="number" min="0" value="${(P.duo||{})[m]||''}" onchange="pliEditarDuo('${m}',this.value)"></label>`).join('')}</div>`;
+  return `<div class="pli-card"><h3>Instalação — tonelagem instalada, efetivo necessário e folha</h3>
+    <div class="pli-note" style="margin:0 0 8px;">Efetivo = t instaladas no mês ÷ produtividade (A: ${pliFmtT(R.prodA,3)} t/pessoa/mês = ${P.cap.atual} t ÷ ${P.efetivoAtualInst} pessoas; B: ${P.prodB} t/pessoa/mês) + equipe DUO. Custo por pessoa ${pliFmtR(P.custoPessoa)}/mês.</div>
+    ${pliBarras(R.M, [{nome:'Efetivo necessário', cor:'#232323', valores:R.efInst}], {linha:R.M.map(()=>P.efetivoAtualInst), linhaNome:'Efetivo atual', fmt:v=>String(Math.round(v))})}
+    ${pliTabelaMensal(P, linhas)}${duo}</div>`;
+}
+
+function pliHtmlCusto(P, R){
+  const T = R.porObra.filter(o=>o.orcado>0).reduce((a,o)=>({orc:a.orc+o.orcado, fab:a.fab+o.fabTotal, iA:a.iA+o.instA, pA:a.pA+o.projA, pB:a.pB+o.projB, ton:a.ton+o.ton}),{orc:0,fab:0,iA:0,pA:0,pB:0,ton:0});
+  const cor = v => v>0 ? 'neg':'pos';
+  const linha = o=>`<tr><td>${esc(o.emp)}</td><td class="n">${pliFmtT(o.ton,0)}</td><td class="n">${pliFmtR(o.orcado)}</td><td class="n">${pliFmtR(o.fabTotal)}</td>
+      <td class="n">${pliFmtR(o.instA)}</td><td class="n"><b>${pliFmtR(o.projA)}</b></td><td class="n ${cor(o.projA-o.orcado)}">${o.orcado>0?pliFmtR(o.projA-o.orcado):'sem orçado'}</td>
+      <td class="n">${pliFmtR(o.projB)}</td><td class="n ${cor(o.projB-o.orcado)}">${o.orcado>0?pliFmtR(o.projB-o.orcado):'sem orçado'}</td></tr>`;
+  const mFab = R.M.map((m,i)=>R.porObra.reduce((s,o)=>s+o.fab[i],0));
+  const mInst = R.M.map((m,i)=>R.porObra.reduce((s,o)=>s+o.inst[i],0));
+  return `<div class="pli-card"><h3>Orçado × projetado — mão de obra de fabricação e instalação</h3>
+   <div class="pli-note" style="margin:0 0 8px;">Orçado = MOF + MOI da tabela de empreendimentos (planilha). Projetado = t produzidas × ${pliFmtR(P.custoTFab)}/t + efetivo da obra × ${pliFmtR(P.custoPessoa)}/pessoa/mês. Desvio positivo (vermelho) = projetado acima do orçado. A = produtividade observada; B = referência ${P.prodB} t/pessoa/mês.</div>
+   <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Empreendimento</th><th>t</th><th>Orçado MOF+MOI</th><th>Fabricação</th><th>Instalação A</th><th>Projetado A</th><th>Desvio A</th><th>Projetado B</th><th>Desvio B</th></tr></thead>
+   <tbody>${R.porObra.map(linha).join('')}
+   <tr class="tot"><td>TOTAL (obras com orçado)</td><td class="n">${pliFmtT(T.ton,0)}</td><td class="n">${pliFmtR(T.orc)}</td><td class="n">${pliFmtR(T.fab)}</td><td class="n">${pliFmtR(T.iA)}</td><td class="n">${pliFmtR(T.pA)}</td><td class="n ${cor(T.pA-T.orc)}">${pliFmtR(T.pA-T.orc)}</td><td class="n">${pliFmtR(T.pB)}</td><td class="n ${cor(T.pB-T.orc)}">${pliFmtR(T.pB-T.orc)}</td></tr></tbody></table></div></div>
+  <div class="pli-card"><h3>Custo mensal projetado (R$)</h3>
+   ${pliBarras(R.M, [{nome:'Fabricação', cor:'#bd0c1d', valores:mFab},{nome:'Instalação', cor:'#232323', valores:mInst}], {fmt:dashMilhar})}
+   ${pliTabelaMensal(P, R.porObra.map(o=>({rot:o.emp, v:o.fab.map((f,i)=>f+o.inst[i]), fmt:v=>v>0?pliFmtR(v):''})))}</div>`;
+}
+
+const PLI_STATUS_COR = { 'CRÍTICO':'#7a0610','ATRASADO':'#bd0c1d','URGENTE':'#d9822b','PROGRAMAR':'#b8860b','PLANEJADO':'#1c7c3e','EM EXECUÇÃO':'#55585c','COMPRADO':'#2f7fb8' };
+const PLI_STATUS_TXT = { 'CRÍTICO':'CRÍTICO – nem o prazo otimista atende','ATRASADO':'ATRASADO – emitir lista já','URGENTE':'URGENTE – emitir em até 30 dias','PROGRAMAR':'Programar – próximos 90 dias','PLANEJADO':'Planejado','EM EXECUÇÃO':'EM EXECUÇÃO','COMPRADO':'COMPRADO' };
+function pliHtmlCompras(P, R){
+  const ordem = ['CRÍTICO','ATRASADO','URGENTE','PROGRAMAR','PLANEJADO','EM EXECUÇÃO','COMPRADO'];
+  const cont = {}, ton = {};
+  R.compras.forEach(c=>{ cont[c.status]=(cont[c.status]||0)+1; ton[c.status]=(ton[c.status]||0)+c.t; });
+  const fs = PLI_UI.filtroCompras, fo = PLI_UI.filtroObraCompras;
+  const lista = R.compras.filter(c=> (!fo||c.obra===fo) && (fs ? c.status===fs : (c.status!=='EM EXECUÇÃO' && c.status!=='COMPRADO')))
+                         .sort((a,b)=>a.iniciarLista<b.iniciarLista?-1:1);
+  const ativos = R.compras.filter(c=>c.status!=='COMPRADO' && c.status!=='EM EXECUÇÃO');
+  const mm = {}, ll = {};
+  ativos.forEach(c=>{ const k=pliYM(c.pedidoCons); mm[k]=(mm[k]||0)+c.t; const k2=pliYM(c.iniciarLista); ll[k2]=(ll[k2]||0)+1; });
+  const ks = Object.keys(mm).concat(Object.keys(ll)).sort();
+  const meses = ks.length ? pliMesesEntre(ks[0], ks[ks.length-1]) : [];
+  return `
+  <div class="pli-kpis">${ordem.filter(s=>cont[s]).map(s=>`<div class="pli-kpi" style="border-top:3px solid ${PLI_STATUS_COR[s]};cursor:pointer;" onclick="PLI_UI.filtroCompras=(PLI_UI.filtroCompras==='${s}'?'':'${s}');renderPlanejInt()"><div class="r">${s}</div><div class="v">${cont[s]}</div><div class="s">${pliFmtT(ton[s],1)} t</div></div>`).join('')}</div>
+  <div class="pli-card"><h3>Curva de compras — t a pedir ao fornecedor por mês (data conservadora)</h3>
+   ${meses.length?pliBarras(meses,[{nome:'t a pedir', cor:'#bd0c1d', valores:meses.map(m=>mm[m]||0)}]):'<div class="pli-note">Sem compras pendentes.</div>'}
+   ${meses.length?`<div class="pli-note">Listas a emitir para Suprimentos (início da emissão) por mês: ${meses.filter(m=>ll[m]).map(m=>dashMesCurto(m)+': <b>'+ll[m]+'</b>').join(' · ')}</div>`:''}</div>
+  <div class="pli-card"><h3>Lotes — contagem regressiva a partir do início da instalação</h3>
+   <div class="pli-note" style="margin:0 0 8px;">Início da instalação − fabricação (${P.prazos.fab2}/${P.prazos.fab3}/${P.prazos.fab4} meses conforme obras simultâneas) − entrega do fornecedor (${P.prazos.cons} d conservador) − cotação (${P.prazos.cotacao} d) − lista (${P.prazos.lista} d). Folga = dias que faltam, a partir da data base, para iniciar a emissão da lista. Clique nos cartões acima para filtrar.</div>
+   <div class="pli-filtros"><label>Obra <select onchange="PLI_UI.filtroObraCompras=this.value;renderPlanejInt()"><option value="">Todas</option>${P.obras.map(o=>`<option ${fo===o.nome?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
+     <label>Status <select onchange="PLI_UI.filtroCompras=this.value;renderPlanejInt()"><option value="">A comprar (pendentes)</option>${ordem.map(s=>`<option value="${s}" ${fs===s?'selected':''}>${s}</option>`).join('')}</select></label>
+     <span class="pli-note" style="margin:0;">${lista.length} lotes</span>
+     <button class="btn small secondary" onclick="pliExportarComprasCSV()">Exportar CSV</button></div>
+   <div class="pli-scroll" style="max-height:520px;"><table class="pli-t"><thead><tr><th>Obra</th><th>Bloco/Setor</th><th>Frente</th><th>Início inst.</th><th>t</th><th>Simult.</th><th>Fab. (m)</th><th>Material na fábrica até</th><th>Pedido (cons. ${P.prazos.cons}d)</th><th>Lista a Suprimentos</th><th>Iniciar emissão</th><th>Folga (d)</th><th>Status</th><th>Comprado</th></tr></thead>
+   <tbody>${lista.map(c=>`<tr><td>${esc(c.obra)}</td><td>${esc(c.bloco)}</td><td>${esc(c.frente)}</td><td>${pliFmtData(c.ini)}</td><td class="n">${pliFmtT(c.t,1)}</td><td class="n">${c.sim}</td><td class="n">${c.mesesFab}</td><td>${pliFmtData(c.fabAte)}</td><td>${pliFmtData(c.pedidoCons)}</td><td>${pliFmtData(c.lista)}</td><td>${pliFmtData(c.iniciarLista)}</td><td class="n ${c.folga<0?'neg':''}">${c.folga}</td><td><span class="pli-tag" style="background:${PLI_STATUS_COR[c.status]}">${PLI_STATUS_TXT[c.status]}</span></td><td style="text-align:center;"><input type="checkbox" ${c.comprado?'checked':''} onchange="pliToggleComprado(${c.idx})"></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function pliExportarComprasCSV(){
+  const P = pliLoad(); if(!P) return; const R = pliCalc(P);
+  const cab = ['Obra','Bloco/Setor','Frente','Inicio instalacao','Fim instalacao','t','Obras simultaneas','Fabricacao (meses)','Material na fabrica ate','Pedido conservador','Pedido otimista','Lista a Suprimentos','Iniciar emissao da lista','Folga (dias)','Status','Comprado'];
+  const lin = R.compras.map(c=>[c.obra,c.bloco,c.frente,c.ini,c.fim,String(c.t).replace('.',','),c.sim,c.mesesFab,c.fabAte,c.pedidoCons,c.pedidoOtim,c.lista,c.iniciarLista,c.folga,PLI_STATUS_TXT[c.status],c.comprado?'S':'N']);
+  const csv = [cab].concat(lin).map(l=>l.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
+  a.download = 'Planejamento_Compras_Aluminio_'+todayISO()+'.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ---- Cronograma financeiro por obra ---- */
+function pliHtmlCronFin(){
+  const c = plcLoad();
+  const barra = `<div class="pli-filtros"><label class="btn small" style="cursor:pointer;">Importar cronograma de uma obra (.xlsx)<input type="file" accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label>${c.obras.length?`<label>Obra <select onchange="PLI_UI.cronObra=parseInt(this.value,10);renderPlanejInt()">${c.obras.map((o,i)=>`<option value="${i}" ${i===PLI_UI.cronObra?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>`:''}</div>`;
+  if(!c.obras.length) return barra+`<div class="empty-state"><div class="big">▤</div>Nenhum cronograma financeiro importado.<br><div class="step-note" style="margin-top:6px;">Importe uma planilha no modelo "Cronograma Arte Jardim" (abas PREMISSAS, LOTES e CURVA MENSAL). Cada obra fica salva separadamente.</div></div>`;
+  if(PLI_UI.cronObra >= c.obras.length) PLI_UI.cronObra = 0;
+  const k = PLI_UI.cronObra, ob = c.obras[k], p = ob.prem, R = plcCalc(ob);
+  const sFab = R.custoFab.reduce((s,v)=>s+v,0), sInst = R.custoInst.reduce((s,v)=>s+v,0);
+  const ed = (campo, v, w)=>`<input type="number" step="any" value="${v}" style="width:${w||80}px;" onchange="plcEditar(${k},'${campo}',this.value)">`;
+  const kpi = `<div class="pli-kpis">
+    ${pliKpi('Alumínio', pliFmtT(R.totKg/1000,1)+' t', pliFmtT(R.totKg,0)+' kg')}
+    ${pliKpi('Total a pagar (alumínio)', pliFmtR(R.totalPago), 'Componentes '+pliFmtR(R.totalComp))}
+    ${pliKpi('Fábrica', pliFmtData(R.iniFab)+' → '+pliFmtData(R.fimFab), p.capFab+' t/mês')}
+    ${pliKpi('Instalação', pliFmtData(R.minInst)+' → '+pliFmtData(R.maxInst), p.efetivo+' pessoas · '+pliFmtT(R.capInst,1)+' t/mês')}
+    ${pliKpi('Término da instalação × alvo', pliFmtData(R.maxInst), p.alvo?('Alvo '+pliFmtData(p.alvo)+(R.atendeAlvo?' ✔ atende':' ✘ não atende')):'', R.atendeAlvo===false?'var(--danger)':'var(--ok)')}
+    ${pliKpi('Mão de obra (fab + inst)', pliFmtR(sFab+sInst), 'Fab '+pliFmtR(sFab)+' · Inst '+pliFmtR(sInst))}
+   </div>`;
+  const prem = `<div class="pli-card"><h3>Premissas — ${esc(ob.nome)} <span class="pli-note" style="font-weight:400">(importado de ${esc(ob.arquivo||'')})</span></h3>
+    <div class="pli-prem">
+     <label>Nome da obra <input type="text" value="${esc(ob.nome)}" style="width:150px;" onchange="plcRenomear(${k},this.value)"></label>
+     <label>Entrega após pagamento (dias) ${ed('entregaDias',p.entregaDias,60)}</label>
+     <label>Início fab. após chegada (dias) ${ed('iniFabDias',p.iniFabDias,60)}</label>
+     <label>Capacidade fábrica p/ a obra (t/mês) ${ed('capFab',p.capFab,60)}</label>
+     <label>Início inst. após fim fab. (dias) ${ed('iniInstDias',p.iniInstDias,60)}</label>
+     <label>Efetivo de instalação (pessoas) ${ed('efetivo',p.efetivo,60)}</label>
+     <label>Produtividade inst. (t/pessoa/mês) ${ed('prodInst',p.prodInst,70)}</label>
+     <label>Custo por pessoa (R$/mês) ${ed('custoPessoa',p.custoPessoa,90)}</label>
+     <label>Preço do alumínio (R$/kg) ${ed('preco',p.preco,70)}</label>
+     <label>Folha da fábrica (R$/mês) ${ed('folhaFab',p.folhaFab,90)}</label>
+     <label>Alvo término instalação <input type="date" value="${p.alvo||''}" onchange="plcEditarData(${k},this.value)"></label>
+     <label>Componentes (fração do alumínio) ${ed('compPct',p.compPct,60)}</label>
+    </div>
+    <div style="margin-top:8px;"><button class="btn small secondary" onclick="plcExcluir(${k})">Excluir este cronograma</button></div></div>`;
+  const dm = R.meses;
+  const lin = [
+    {rot:'Pagamento alumínio (R$)', v:R.pagto, fmt:v=>v>0?pliFmtR(v):''},
+    {rot:'Componentes (R$)', v:R.comp, fmt:v=>v>0?pliFmtR(v):''},
+    {rot:'Material entregue (kg)', v:R.entregue, fmt:v=>v>0?pliFmtT(v,0):''},
+    {rot:'Fabricado (kg)', v:R.fabricado, fmt:v=>v>0?pliFmtT(v,0):''},
+    {rot:'Ocupação da fábrica', v:R.ocup, fmt:pliFmtPct, cel:v=>v>1.0001?'neg':''},
+    {rot:'Instalado (kg)', v:R.instalado, fmt:v=>v>0?pliFmtT(v,0):''},
+    {rot:'Acum. entregue (kg)', v:R.acE, fmt:v=>pliFmtT(v,0)},
+    {rot:'Acum. fabricado (kg)', v:R.acF, fmt:v=>pliFmtT(v,0)},
+    {rot:'Acum. instalado (kg)', v:R.acI, fmt:v=>pliFmtT(v,0)},
+    {rot:'% instalado', v:R.acI.map(v=>v/R.totKg), fmt:pliFmtPct},
+    {rot:'Efetivo de instalação', v:R.efetivo, fmt:v=>v>0?String(v):''},
+    {rot:'Custo instalação (R$)', v:R.custoInst, fmt:v=>v>0?pliFmtR(v):''},
+    {rot:'Custo fabricação (R$)', v:R.custoFab, fmt:v=>v>0?pliFmtR(v):''},
+    {rot:'MO total (fab + inst)', v:R.custoFab.map((f,i)=>f+R.custoInst[i]), fmt:v=>v>0?pliFmtR(v):'', cls:'tot'}
+  ];
+  const head = dm.map(m=>`<th>${dashMesCurto(m)}</th>`).join('');
+  const body = lin.map(l=>`<tr class="${l.cls||''}"><th class="rot">${l.rot}</th>${dm.map((m,i)=>`<td class="${l.cel?l.cel(l.v[i]):''}">${l.fmt(l.v[i])}</td>`).join('')}</tr>`).join('');
+  const resumo = `<div class="pli-card"><h3>Cronograma por fase</h3><div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>Descrição</th><th>kg</th><th>1º material na obra</th><th>Início fab.</th><th>Fim fab.</th><th>Início inst.</th><th>Fim inst.</th><th>Início LB</th><th>Término LB</th><th>Var. término (d)</th></tr></thead><tbody>
+    ${R.resumo.map(f=>`<tr><td>${esc(f.cod)}</td><td>${esc(f.desc)}</td><td class="n">${pliFmtT(f.kg,0)}</td><td>${pliFmtData(f.primeiroMaterial)}</td><td>${pliFmtData(f.iniFab)}</td><td>${pliFmtData(f.fimFab)}</td><td>${pliFmtData(f.iniInst)}</td><td>${pliFmtData(f.fimInst)}</td><td>${pliFmtData(f.iniLB)}</td><td>${pliFmtData(f.fimLB)}</td><td class="n ${f.varTermino>0?'neg':'pos'}">${f.varTermino>0?'+':''}${f.varTermino}</td></tr>`).join('')}
+    </tbody></table></div><div class="pli-note">Variação positiva = término da instalação depois da linha de base (LB).</div></div>`;
+  const lotes = `<div class="pli-card"><h3>Lotes — pagamento → entrega → fábrica (fila única) → instalação</h3><div class="pli-scroll" style="max-height:420px;"><table class="pli-t"><thead><tr><th>Lote</th><th>Grupo</th><th>Parcela</th><th>Fase</th><th>Vencimento</th><th>Valor</th><th>kg</th><th>Chegada</th><th>Início fab.</th><th>Dias</th><th>Fim fab.</th><th>Início inst.</th><th>Dias</th><th>Fim inst.</th></tr></thead><tbody>
+    ${R.lotes.map(l=>`<tr><td>${l.n}</td><td>${esc(l.grupo)}</td><td>${esc(l.parcela)}</td><td>${esc(l.fase)}</td><td>${pliFmtData(l.venc)}</td><td class="n">${pliFmtR(l.valor)}</td><td class="n">${pliFmtT(l.kg,0)}</td><td>${pliFmtData(l.chegada)}</td><td>${pliFmtData(l.iniFab)}</td><td class="n">${l.diasFab}</td><td>${pliFmtData(l.fimFab)}</td><td>${pliFmtData(l.iniInst)}</td><td class="n">${l.diasInst}</td><td>${pliFmtData(l.fimInst)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  const graf = `<div class="pli-card"><h3>Fluxo financeiro mensal (R$)</h3>${pliBarras(dm,[{nome:'Alumínio', cor:'#bd0c1d', valores:R.pagto},{nome:'Componentes', cor:'#7a7d82', valores:R.comp}],{fmt:dashMilhar})}
+    <div class="pli-note">Componentes: ${pliFmtT(p.compPct*100,0)}% do valor do alumínio de cada grupo, faturados em 2 parcelas (${p.comp1} e ${p.comp2} dias após a 1ª parcela do grupo).</div></div>
+   <div class="pli-card"><h3>Curva mensal — material, fábrica, instalação e efetivo</h3><div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot"></th>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+  return barra + kpi + prem + graf + resumo + lotes;
+}
+
+function pliEditarCarga(obra, ym, valor){
+  const P = pliLoad(); if(!P) return;
+  P.ajusteProd = P.ajusteProd||{}; P.ajusteProd[obra] = P.ajusteProd[obra]||{};
+  const v = parseFloat(String(valor).replace(',','.'));
+  if(valor==='' || !isFinite(v) || v<0) delete P.ajusteProd[obra][ym]; else P.ajusteProd[obra][ym] = v;
+  if(!Object.keys(P.ajusteProd[obra]).length) delete P.ajusteProd[obra];
+  pliSave(P); renderPlanejInt();
+}
+function pliResetCarga(obra){
+  const P = pliLoad(); if(!P) return;
+  if(obra===null) P.ajusteProd = {}; else if(P.ajusteProd) delete P.ajusteProd[obra];
+  pliSave(P); renderPlanejInt();
+}
+
+/* ---- Gantt por obra: janela de fabricação (material na fábrica → início da instalação) e instalação, por lote ---- */
+function pliHtmlGantt(P, R){
+  const obra = PLI_UI.ganttObra && P.obras.some(o=>o.nome===PLI_UI.ganttObra) ? PLI_UI.ganttObra : P.obras[0].nome;
+  PLI_UI.ganttObra = obra;
+  const ls = R.compras.filter(c=>c.obra===obra).sort((a,b)=> a.ini<b.ini?-1:(a.ini>b.ini?1:0));
+  if(!ls.length) return '<div class="pli-card">Sem lotes para esta obra.</div>';
+  const mn = ls.map(c=>c.fabAte).concat(ls.map(c=>c.ini)).sort()[0].slice(0,7)+'-01';
+  const mx = ls.map(c=>c.fim||c.ini).sort().slice(-1)[0];
+  const meses = pliMesesEntre(mn.slice(0,7), mx.slice(0,7));
+  const t0 = pliD(mn), t1 = pliD(pliAddMeses(meses[meses.length-1]+'-01',1));
+  const pct = iso => Math.max(0, ((pliD(iso)-t0)/(t1-t0)*100));
+  const larg = (a,b) => Math.max(0.4, pct(b)-pct(a));
+  const hoje = pct(P.dataBase);
+  const head = meses.map(m=>`<span style="left:${pct(m+'-01').toFixed(2)}%">${dashMesCurto(m)}</span>`).join('');
+  const grade = meses.map(m=>`<i style="left:${pct(m+'-01').toFixed(2)}%"></i>`).join('');
+  const linhas = ls.map(c=>`<div class="pli-g-row"><div class="pli-g-lbl" title="${esc(c.bloco+' · '+c.frente)}">${esc(c.bloco)} · ${esc(c.frente)} <span>${pliFmtT(c.t,1)} t</span></div>
+    <div class="pli-g-bar">${grade}
+     ${c.mesesFab>0?`<b class="fab" style="left:${pct(c.fabAte).toFixed(2)}%;width:${larg(c.fabAte,c.ini).toFixed(2)}%" title="Fabricação: ${pliFmtData(c.fabAte)} → ${pliFmtData(c.ini)}"></b>`:''}
+     <b class="ins" style="left:${pct(c.ini).toFixed(2)}%;width:${larg(c.ini,c.fim||c.ini).toFixed(2)}%;background:${PLI_STATUS_COR[c.status]}" title="Instalação: ${pliFmtData(c.ini)} → ${pliFmtData(c.fim)} · ${PLI_STATUS_TXT[c.status]}"></b>
+     <u style="left:${pct(c.iniciarLista).toFixed(2)}%" title="Iniciar emissão da lista: ${pliFmtData(c.iniciarLista)}"></u>
+     <em style="left:${hoje.toFixed(2)}%"></em></div></div>`).join('');
+  return `<div class="pli-card"><h3>Gantt — ${esc(obra)}</h3>
+    <div class="pli-filtros"><label>Obra <select onchange="PLI_UI.ganttObra=this.value;renderPlanejInt()">${P.obras.map(o=>`<option ${o.nome===obra?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
+     <span class="pli-note" style="margin:0;"><i class="pli-sw" style="background:#c9cacc"></i>Fabricação (material na fábrica → início da instalação) &nbsp;<i class="pli-sw" style="background:#bd0c1d"></i>Instalação (cor = status da compra) &nbsp;<i class="pli-sw tri"></i>Início da emissão da lista &nbsp;<i class="pli-sw" style="background:#2f7fb8;width:2px"></i>Data base</span></div>
+    <div class="pli-gantt"><div class="pli-g-head"><div class="pli-g-lbl"></div><div class="pli-g-bar hd">${head}</div></div>${linhas}</div></div>`;
+}
+
+/* ---- PDF (impressão) ---- */
+function pliExportarPDF(completo){
+  const P = pliLoad(); if(!P){ toast('Importe o planejamento antes de exportar.'); return; }
+  const R = pliCalc(P);
+  const abas = completo ? [['resumo',pliHtmlResumo],['fabrica',pliHtmlFabrica],['instalacao',pliHtmlInstalacao],['custo',pliHtmlCusto],['compras',pliHtmlCompras],['gantt',pliHtmlGantt]]
+                        : [[PLI_UI.tab, {resumo:pliHtmlResumo,premissas:pliHtmlPremissas,fabrica:pliHtmlFabrica,instalacao:pliHtmlInstalacao,custo:pliHtmlCusto,compras:pliHtmlCompras,gantt:pliHtmlGantt}[PLI_UI.tab]]];
+  if(!abas[0][1]){ toast('Abra uma das abas do planejamento (não o cronograma financeiro) para exportar.'); return; }
+  const nomes = Object.fromEntries(PLI_TABS);
+  const corpo = abas.map(([k,fn],i)=>`<div class="pli-pb${i===0?' first':''}"><h2>${nomes[k]}</h2>${fn(P,R)}</div>`).join('');
+  document.getElementById('rdoPrintArea').innerHTML = `<div class="pli-print"><h1>Planejamento Integrado de Alumínio</h1>
+    <div class="meta">Cenário ${P.cenario} · produtividade ${P.prodModo==='B'?'B (referência)':'A (observada)'} · data base ${pliFmtData(P.dataBase)} · gerado em ${pliFmtData(todayISO())}</div>${corpo}</div>`;
+  window.print();
+}
+function plcEditar(i, campo, valor){
+  const c = plcLoad(); const v = parseFloat(String(valor).replace(',','.'));
+  if(!c.obras[i] || !isFinite(v)) return;
+  c.obras[i].prem[campo] = v; plcSave(c); renderPlanejInt();
+}
+function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; plcSave(c); renderPlanejInt(); }
+function plcRenomear(i, nome){ const c = plcLoad(); if(!c.obras[i] || !nome.trim()) return; c.obras[i].nome = nome.trim(); plcSave(c); renderPlanejInt(); }
+function plcExcluir(i){
+  if(!confirm('Excluir este cronograma financeiro?')) return;
+  const c = plcLoad(); c.obras.splice(i,1); plcSave(c); PLI_UI.cronObra = 0; renderPlanejInt();
+}
+
 
 // Histórico de R$/Kg pago em compras de Alumínio, em ordem cronológica — pra
 // enxergar a variação do preço por Kg mês a mês e cruzar com a quantidade
@@ -5900,7 +7337,7 @@ function deleteLancamentoFinanceiro(id){
 const FIN_CATEGORIA_LABEL = { material:'Material', aluminio:'Material — Alumínio', acessorios:'Material — Acessórios', maoDeObra:'Mão de obra', vidro:'Vidro', sucata:'Sucata', vendaObra:'Venda/Transferência entre Obras', equipamento:'Equipamentos', administrativo:'Administrativo', custoOperacionalFabrica:'Custo Operacional da Fábrica', outros:'Outros' };
 
 /* ---------------- Vidro (itens de pedido de material do tipo vidro) ---------------- */
-const VIDRO_TIPO_LABEL = { primeiroPedido: '1ª pedido', reposicao: 'Reposição' };
+const VIDRO_TIPO_LABEL = { primeiroPedido: '1ª pedido', reposicao: 'Reposição', aditivo: 'Aditivo' };
 const VIDRO_SUBCATEGORIA_LABEL = { quebraFabrica: 'Quebra/Arranhão (Fábrica/Instalação)', quebraObra: 'Quebra/Arranhão (Obra)' };
 
 // Arredondamento padrão de medida de vidro: sempre para o próximo múltiplo
@@ -5920,7 +7357,10 @@ function calcularAreaVidroM2(larguraMm, alturaMm){
 // Rótulo curto usado na categoria do relatório de custo de vidro — combina
 // tipo (1ª pedido / Reposição) com a subcategoria de reposição quando houver.
 function vidroCategoriaLabel(vidroTipo, vidroSubcategoria){
-  if(vidroTipo==='reposicao') return VIDRO_SUBCATEGORIA_LABEL[vidroSubcategoria] || 'Reposição (subcategoria não informada)';
+  if(vidroTipo==='reposicao' || vidroTipo==='aditivo'){
+    const base = VIDRO_SUBCATEGORIA_LABEL[vidroSubcategoria] || 'Motivo não informado';
+    return vidroTipo==='aditivo' ? `Aditivo — ${base}` : base;
+  }
   if(vidroTipo==='primeiroPedido') return VIDRO_TIPO_LABEL.primeiroPedido;
   return 'Outros lançamentos de vidro';
 }
@@ -9819,6 +11259,13 @@ function renderTempItensPedido(){
         <label>Unidade</label>
         <input type="text" value="${esc(it.unidade||'')}" placeholder="Ex.: un, kg, m, m², barra" oninput="tempItensPedido[${i}].unidade=this.value;">
       </div>
+      <div class="field" style="${it.isVidro?'display:none;':''}">
+        <label>Categoria</label>
+        <select onchange="tempItensPedido[${i}].categoriaMaterial=this.value;">
+          <option value="aluminio" ${(it.categoriaMaterial||'aluminio')==='aluminio'?'selected':''}>Alumínio</option>
+          <option value="componentes" ${it.categoriaMaterial==='componentes'?'selected':''}>Componentes</option>
+        </select>
+      </div>
       <div class="field">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
           <input type="checkbox" ${it.isVidro?'checked':''} style="width:auto;"
@@ -9837,11 +11284,12 @@ function renderTempItensPedido(){
         <select onchange="tempItensPedido[${i}].vidroTipo=this.value; renderTempItensPedido();">
           <option value="primeiroPedido" ${it.vidroTipo==='primeiroPedido'?'selected':''}>1ª pedido</option>
           <option value="reposicao" ${it.vidroTipo==='reposicao'?'selected':''}>Reposição</option>
+          <option value="aditivo" ${it.vidroTipo==='aditivo'?'selected':''}>Aditivo</option>
         </select>
       </div>
-      ${it.vidroTipo==='reposicao' ? `
+      ${(it.vidroTipo==='reposicao' || it.vidroTipo==='aditivo') ? `
       <div class="field full">
-        <label>Motivo da reposição</label>
+        <label>Motivo da reposição / aditivo</label>
         <select onchange="tempItensPedido[${i}].vidroSubcategoria=this.value;">
           <option value="">— Selecione —</option>
           <option value="quebraFabrica" ${it.vidroSubcategoria==='quebraFabrica'?'selected':''}>Quebra/Arranhão (Fábrica/Instalação)</option>
@@ -9861,13 +11309,33 @@ function renderTempItensPedido(){
         <input type="number" step="0.01" value="${it.vidroPrecoM2||''}" oninput="tempItensPedido[${i}].vidroPrecoM2=this.value;">
       </div>
     </div>
+    <div class="form-grid cols-3" style="align-items:end;margin-top:8px;">
+      <div class="field">
+        <label>Item do contrato</label>
+        <select onchange="aoEscolherItemContratoVidro(${i}, this.value)">${opcoesItemContratoVidro(it.vidroContratoItemId)}</select>
+      </div>
+      <div class="field">
+        <label>Bloco</label>
+        <select onchange="tempItensPedido[${i}].vidroBloco=this.value;">${opcoesBlocoVidro(it.vidroBloco)}</select>
+      </div>
+      <div class="field">
+        <label>Família</label>
+        <input type="text" list="vidroFamiliasList" value="${esc(it.vidroFamilia||'')}" placeholder="Ex.: Janelas/Fixos, Gradil/Guarda-corpo"
+          oninput="tempItensPedido[${i}].vidroFamilia=this.value;">
+      </div>
+      <div class="field full">
+        <label>Origem / descrição do lote</label>
+        <input type="text" value="${esc(it.vidroOrigem||'')}" placeholder="Ex.: Quebra de fábrica (ostras, fora de esquadro)"
+          oninput="tempItensPedido[${i}].vidroOrigem=this.value;">
+      </div>
+    </div>
     <div class="step-note" style="margin-top:6px;">Medidas arredondadas para o próximo múltiplo de 50mm antes do cálculo da área. Ao registrar cada entrada (recebimento) deste item, o custo daquela entrega é lançado automaticamente em Despesas, categoria Vidro.</div>
     ` : ''}
     </div>`).join('') || '<div class="step-note">Nenhum item adicionado ainda.</div>';
 }
 
 function adicionarLinhaItemPedido(){
-  tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[], isVidro:false, vidroTipo:'', vidroSubcategoria:'', vidroLargura:'', vidroAltura:'', vidroPrecoM2:'' });
+  tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[], categoriaMaterial:'aluminio', isVidro:false, vidroTipo:'', vidroSubcategoria:'', vidroLargura:'', vidroAltura:'', vidroPrecoM2:'', vidroContratoItemId:'', vidroBloco:'', vidroFamilia:'', vidroOrigem:'' });
   renderTempItensPedido();
 }
 
@@ -9981,6 +11449,7 @@ function renderMateriais(){
     }).join('') || `<tr><td colspan="7" class="step-note" style="padding:10px;">Nenhum item neste pedido.</td></tr>`;
     return `<details class="item-group">
       <summary>${esc(p.fornecedor||'Fornecedor não informado')} ${p.numPedido?'· Pedido nº '+esc(p.numPedido):''}
+        ${(p.tipoPedido==='reposicao'||p.tipoPedido==='aditivo') ? `<span class="tag" style="background:#fdeceb;color:#a3121f;border-color:#f2b8b5;">${p.tipoPedido==='reposicao'?'Reposição':'Aditivo'}</span>` : ''}
         <span class="count">${itens.length} item${itens.length===1?'':'s'}</span>
         ${statusMaterialPill(p.statusCalc)}
         <span style="float:right;">
@@ -10002,6 +11471,8 @@ function openMaterialModal(id){
   document.getElementById('modalMaterialTitle').textContent = id ? 'Editar pedido de material' : 'Novo pedido de material';
   ['matId','matFornecedor','matNumPedido','matDataPedido','matDataPrevista','matObs'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('matObraId').value = currentObraId || '';
+  document.getElementById('matTipoPedido').value = 'novo';
+  document.getElementById('matMotivoQuebra').value = '';
   tempItensPedido = [];
   if(id){
     const p = load('materiais').find(x=>x.id===id);
@@ -10013,12 +11484,57 @@ function openMaterialModal(id){
       document.getElementById('matDataPedido').value = p.dataPedido||'';
       document.getElementById('matDataPrevista').value = p.dataPrevista||'';
       document.getElementById('matObs').value = p.observacoes||'';
+      document.getElementById('matTipoPedido').value = p.tipoPedido || 'novo';
+      document.getElementById('matMotivoQuebra').value = p.motivoQuebra || '';
       tempItensPedido = (p.itens||[]).map(it=>({...it, entregas: (it.entregas||[]).slice()}));
     }
   }
-  if(!tempItensPedido.length) tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[] });
+  if(!tempItensPedido.length) tempItensPedido.push({ id: uid(), item:'', qtdPedida:'', unidade:'', entregas:[], categoriaMaterial:'aluminio' });
+  onMatTipoPedidoChange();
   renderTempItensPedido();
   openModal('modalMaterial');
+}
+
+// Tipo do pedido (Novo / Reposição / Aditivo): Reposição e Aditivo pedem o
+// motivo (quebra de fábrica/instalação ou de obra) e passam a contar como
+// prejuízo nos dashboards.
+function onMatTipoPedidoChange(){
+  const tipo = document.getElementById('matTipoPedido').value;
+  const prejuizo = tipo==='reposicao' || tipo==='aditivo';
+  document.getElementById('matMotivoWrap').style.display = prejuizo ? '' : 'none';
+  document.getElementById('matTipoPedidoNota').style.display = prejuizo ? '' : 'none';
+  if(!prejuizo) document.getElementById('matMotivoQuebra').value = '';
+}
+
+/* ---------------- Contrato de vidro (por obra) ----------------
+   Um contrato por obra: nº, fornecedor, valor contratado e os itens
+   contratados (tipo de vidro, m² e R$/m²). Cada linha de vidro de um pedido
+   pode apontar pra um item do contrato — é isso que alimenta o consumo do
+   contrato no Dashboard de Vidro. */
+function contratoVidroDaObra(obraId){
+  return load('contratosVidro').find(c=>c.obraId===obraId) || null;
+}
+function opcoesItemContratoVidro(selecionadoId){
+  const c = contratoVidroDaObra(currentObraId);
+  const itens = c ? (c.itens||[]) : [];
+  return `<option value="">${itens.length ? '— Fora do contrato —' : '— Sem contrato cadastrado —'}</option>` +
+    itens.map(ci=>`<option value="${ci.id}" ${ci.id===selecionadoId?'selected':''}>${esc(ci.nome)} · ${fmtMoeda(ci.precoM2)}/m²</option>`).join('');
+}
+function opcoesBlocoVidro(selecionado){
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
+  return `<option value="">— Sem bloco —</option>` +
+    blocos.map(b=>`<option value="${esc(b.nome)}" ${b.nome===selecionado?'selected':''}>${esc(b.nome)}</option>`).join('');
+}
+function aoEscolherItemContratoVidro(i, itemId){
+  const linha = tempItensPedido[i];
+  linha.vidroContratoItemId = itemId;
+  const c = contratoVidroDaObra(currentObraId);
+  const ci = c && (c.itens||[]).find(x=>x.id===itemId);
+  if(ci){
+    if(!(parseFloat(linha.vidroPrecoM2)>0)) linha.vidroPrecoM2 = ci.precoM2;
+    if(!(linha.item||'').trim()) linha.item = ci.nome;
+  }
+  renderTempItensPedido();
 }
 
 function saveMaterial(){
@@ -10027,8 +11543,13 @@ function saveMaterial(){
   if(!itensValidos.length){ toast('Adicione ao menos um item com nome e quantidade pedida.'); return; }
   const itemVidroIncompleto = itensValidos.find(it => it.isVidro && (!(parseFloat(it.vidroLargura)>0) || !(parseFloat(it.vidroAltura)>0) || !(parseFloat(it.vidroPrecoM2)>0)));
   if(itemVidroIncompleto){ toast(`Preencha largura, altura e R$/m² do item de vidro "${itemVidroIncompleto.item}".`); return; }
-  const itemVidroSemMotivo = itensValidos.find(it => it.isVidro && it.vidroTipo==='reposicao' && !it.vidroSubcategoria);
-  if(itemVidroSemMotivo){ toast(`Selecione o motivo da reposição do item de vidro "${itemVidroSemMotivo.item}".`); return; }
+  const itemVidroSemMotivo = itensValidos.find(it => it.isVidro && (it.vidroTipo==='reposicao' || it.vidroTipo==='aditivo') && !it.vidroSubcategoria);
+  if(itemVidroSemMotivo){ toast(`Selecione o motivo da reposição/aditivo do item de vidro "${itemVidroSemMotivo.item}".`); return; }
+  const tipoPedido = document.getElementById('matTipoPedido').value || 'novo';
+  const motivoQuebra = (tipoPedido==='reposicao' || tipoPedido==='aditivo') ? document.getElementById('matMotivoQuebra').value : '';
+  if((tipoPedido==='reposicao' || tipoPedido==='aditivo') && !motivoQuebra && itensValidos.some(it=>!it.isVidro)){
+    toast('Selecione o motivo da reposição/aditivo do pedido.'); return;
+  }
   const id = document.getElementById('matId').value || uid();
   let pedidos = load('materiais');
   const record = {
@@ -10039,15 +11560,22 @@ function saveMaterial(){
     dataPedido: document.getElementById('matDataPedido').value,
     dataPrevista: document.getElementById('matDataPrevista').value,
     observacoes: document.getElementById('matObs').value.trim(),
+    tipoPedido,
+    motivoQuebra,
     itens: itensValidos.map(it=>({
       id: it.id || uid(),
       item: it.item.trim(),
       qtdPedida: parseFloat(it.qtdPedida),
       unidade: it.isVidro ? 'un' : (it.unidade||'').trim(),
       entregas: it.entregas || [],
+      categoriaMaterial: it.isVidro ? '' : (it.categoriaMaterial || 'aluminio'),
       isVidro: !!it.isVidro,
       vidroTipo: it.isVidro ? (it.vidroTipo||'primeiroPedido') : '',
-      vidroSubcategoria: (it.isVidro && it.vidroTipo==='reposicao') ? (it.vidroSubcategoria||'') : '',
+      vidroSubcategoria: (it.isVidro && (it.vidroTipo==='reposicao' || it.vidroTipo==='aditivo')) ? (it.vidroSubcategoria||'') : '',
+      vidroContratoItemId: it.isVidro ? (it.vidroContratoItemId||'') : '',
+      vidroBloco: it.isVidro ? (it.vidroBloco||'') : '',
+      vidroFamilia: it.isVidro ? (it.vidroFamilia||'').trim() : '',
+      vidroOrigem: it.isVidro ? (it.vidroOrigem||'').trim() : '',
       vidroLargura: it.isVidro ? parseFloat(it.vidroLargura)||0 : '',
       vidroAltura: it.isVidro ? parseFloat(it.vidroAltura)||0 : '',
       vidroPrecoM2: it.isVidro ? parseFloat(it.vidroPrecoM2)||0 : ''
@@ -10283,7 +11811,11 @@ function openEntradaModal(pedidoId, itemId){
   document.getElementById('entradaQtd').value = '';
   document.getElementById('entradaNF').value = '';
   document.getElementById('entradaObs').value = '';
+  document.getElementById('entradaValor').value = '';
   renderEntradaModalContent(pedidoId, itemId);
+  const pedAtual = load('materiais').find(x=>x.id===pedidoId);
+  const itAtual = pedAtual && (pedAtual.itens||[]).find(x=>x.id===itemId);
+  document.getElementById('entradaValorWrap').style.display = (itAtual && itAtual.isVidro) ? 'none' : '';
   openModal('modalEntradaMaterial');
 }
 
@@ -10313,7 +11845,7 @@ function renderEntradaModalContent(pedidoId, itemId){
     return `
     <tr>
       <td>${fmtDate(e.data)}</td>
-      <td>${e.quantidade} ${esc(it.unidade||'')}${valorTxt}</td>
+      <td>${e.quantidade} ${esc(it.unidade||'')}${valorTxt}${(!it.isVidro && e.valor>0) ? `<div class="step-note">${fmtMoeda(e.valor)} (valor informado)</div>` : ''}</td>
       <td>${esc(e.numNF||'—')}</td>
       <td>${esc(e.observacoes||'—')}</td>
       <td style="text-align:right;"><button class="btn small danger" onclick="deleteEntrada('${p.id}','${it.id}','${e.id}')">Excluir</button></td>
@@ -10342,6 +11874,11 @@ function registrarEntrada(){
     numNF: document.getElementById('entradaNF').value.trim(),
     observacoes: document.getElementById('entradaObs').value.trim()
   };
+  // Alumínio/componentes: valor informado na entrada (opcional) — usado só
+  // no Dashboard de Alumínio e Componentes; não gera lançamento financeiro
+  // automático pra não duplicar o que já é lançado manualmente em Financeiro.
+  const valorEntradaInformado = parseFloat(document.getElementById('entradaValor').value);
+  if(valorEntradaInformado > 0) entrega.valor = valorEntradaInformado;
 
   // Vidro: cada entrada recebida já lança automaticamente a despesa
   // correspondente na categoria Vidro — qtd desta entrega × área
@@ -10387,6 +11924,7 @@ function registrarEntrada(){
   document.getElementById('entradaQtd').value = '';
   document.getElementById('entradaNF').value = '';
   document.getElementById('entradaObs').value = '';
+  document.getElementById('entradaValor').value = '';
 
   renderEntradaModalContent(pedidoId, itemId);
   renderMateriais();
@@ -11819,6 +13357,7 @@ function renderMateriaisGeral(){
       }).join('') || `<tr><td colspan="7" class="step-note" style="padding:10px;">Nenhum item neste pedido.</td></tr>`;
       return `<details class="item-group">
         <summary>${esc(p.fornecedor||'Fornecedor não informado')} ${p.numPedido?'· Pedido nº '+esc(p.numPedido):''}
+        ${(p.tipoPedido==='reposicao'||p.tipoPedido==='aditivo') ? `<span class="tag" style="background:#fdeceb;color:#a3121f;border-color:#f2b8b5;">${p.tipoPedido==='reposicao'?'Reposição':'Aditivo'}</span>` : ''}
           <span class="count">${itens.length} item${itens.length===1?'':'s'}</span>
           ${statusMaterialPill(p.statusCalc)}
         </summary>
@@ -11847,6 +13386,7 @@ function setCurrentUser(){
   const val = document.getElementById('currentUserSelect').value;
   localStorage.setItem(CURRENT_USER_KEY, val);
   renderDashboard();
+  try{ pliAtualizarMenu(); if(document.getElementById('sec-planejint').classList.contains('active')) renderPlanejInt(); }catch(e){}
 }
 
 function getCurrentUserSelection(){
@@ -11951,6 +13491,7 @@ function temAcessoSalarioFuncionario(funcionario){
 }
 
 function renderDashboard(){
+  try{ pliAtualizarMenu(); }catch(e){}
   const obras = load('obras');
   const funcionarios = load('funcionarios');
   const tecnicos = load('tecnicos');
