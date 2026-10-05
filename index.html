@@ -1395,7 +1395,8 @@
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn secondary" onclick="openContratoVidroModal()">Contrato de vidro</button>
                   <button class="btn secondary" onclick="abrirDashboardMateriais('vidro')">Dashboard de vidro</button>
-                  <button class="btn secondary" onclick="abrirDashboardMateriais('aluminio')">Dashboard alumínio e componentes</button>
+                  <button class="btn secondary" onclick="abrirDashboardMateriais('aluminio')">Dashboard de alumínio</button>
+                  <button class="btn secondary" onclick="abrirDashboardMateriais('componentes')">Dashboard de componentes</button>
                   <button class="btn secondary" onclick="gerarRelatorioPendenciasMateriais()">Relatório de pendências</button>
                   <button class="btn" onclick="openMaterialModal()">+ Novo pedido</button>
                 </div>
@@ -6192,12 +6193,12 @@ function montarHtmlDashboardVidro(obraId){
 }
 
 /* ---------------- Dashboard de ALUMÍNIO E COMPONENTES ---------------- */
-function calcularDadosDashboardAluminio(obraId){
+function calcularDadosDashboardAluminio(obraId, catFiltro){
   const pedidos = load('materiais').filter(p=>p.obraId===obraId);
   const linhas = [];
   let semValor = 0;
   pedidos.forEach(p=>{
-    const itens = (p.itens||[]).filter(it=>!it.isVidro);
+    const itens = (p.itens||[]).filter(it=>!it.isVidro && (!catFiltro || (it.categoriaMaterial==='componentes'?'componentes':'aluminio')===catFiltro));
     if(!itens.length) return;
     const tipo = p.tipoPedido || 'novo';
     const motivo = p.motivoQuebra || '';
@@ -6242,9 +6243,10 @@ function calcularDadosDashboardAluminio(obraId){
     porFornecedor: Object.entries(porFornecedor).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v) };
 }
 
-function montarHtmlDashboardAluminio(obraId){
+function montarHtmlDashboardAluminio(obraId, catFiltro){
   const obra = load('obras').find(o=>o.id===obraId) || {};
-  const d = calcularDadosDashboardAluminio(obraId);
+  const d = calcularDadosDashboardAluminio(obraId, catFiltro);
+  const NOME_MAT = catFiltro==='componentes' ? 'Componentes' : (catFiltro==='aluminio' ? 'Alumínio' : 'Alumínio e componentes');
   const hoje = new Date().toLocaleDateString('pt-BR');
   const prejTotal = d.reposicao.valor + d.aditivo.valor;
   const pctTotal = d.totalValor>0 ? prejTotal/d.totalValor*100 : 0;
@@ -6252,7 +6254,7 @@ function montarHtmlDashboardAluminio(obraId){
   const motivoFab = somaMotivo('quebraFabrica'), motivoObra = somaMotivo('quebraObra');
   const semMotivo = prejTotal - motivoFab - motivoObra;
   const cat = (c,t)=> d.linhas.filter(l=>l.categoria===c && l.tipo===t).reduce((s,l)=>s+l.valor,0);
-  const CATS = [['aluminio','Alumínio'],['componentes','Componentes']];
+  const CATS = [['aluminio','Alumínio'],['componentes','Componentes']].filter(c=>!catFiltro || c[0]===catFiltro);
   const TIPO_LABEL = { novo:'Pedido novo', reposicao:'Reposição', aditivo:'Aditivo' };
   const MOTIVO_LABEL = { quebraFabrica:'Fábrica/Instalação', quebraObra:'Obra', '':'—' };
 
@@ -6285,15 +6287,15 @@ function montarHtmlDashboardAluminio(obraId){
   const tabela = d.lotes.length ? `<table class="dsh-tbl"><thead><tr><th>Lote</th><th>Data</th><th>Pedido</th><th>Fornecedor</th><th>Tipo</th><th>Motivo</th><th>Categoria</th><th>Itens</th><th class="r">Valor</th></tr></thead>
     <tbody>${d.lotes.map(l=>`<tr><td>${l.id}</td><td>${fmtDate(l.data)}</td><td>${esc(l.numPedido||'—')}</td><td>${esc(l.fornecedor)}</td><td>${TIPO_LABEL[l.tipo]}</td><td>${MOTIVO_LABEL[l.motivo]||'—'}</td><td>${[...l.categorias].map(c=>c==='componentes'?'Componentes':'Alumínio').join(' / ')}</td><td>${esc(l.itens.join('; '))}</td><td class="r">${dashR0(l.valor)}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="8">Total</td><td class="r">${dashR0(prejTotal)}</td></tr></tfoot></table>`
-    : '<div class="dsh-empty">Nenhum pedido de reposição ou aditivo de alumínio/componentes nesta obra.</div>';
+    : '<div class="dsh-empty">Nenhum pedido de reposição ou aditivo de ${NOME_MAT.toLowerCase()} nesta obra.</div>';
 
   return `<div class="dsh">
     <div class="dsh-eyebrow">Divisão de Alumínio · Calper · Obra ${esc(obra.nome||'—')}</div>
-    <h1>Alumínio e componentes ${esc(obra.nome||'')} — pedidos, reposição e prejuízo</h1>
+    <h1>${NOME_MAT} ${esc(obra.nome||'')} — pedidos, reposição e prejuízo</h1>
     <div class="dsh-sub">Dados até <b>${hoje}</b></div>
     ${cards}${aviso}
-    <div class="dsh-panel"><h2>Por categoria</h2><div class="note">Valor informado nas entradas recebidas, por tipo de pedido.</div>
-      <table class="dsh-tbl"><thead><tr><th>Categoria</th><th class="r">Pedido novo</th><th class="r">Reposição</th><th class="r">Aditivo</th><th class="r">Prejuízo</th><th class="r">% prejuízo</th></tr></thead><tbody>${catRows}</tbody></table></div>
+    ${catFiltro?'':`<div class="dsh-panel"><h2>Por categoria</h2><div class="note">Valor informado nas entradas recebidas, por tipo de pedido.</div>
+      <table class="dsh-tbl"><thead><tr><th>Categoria</th><th class="r">Pedido novo</th><th class="r">Reposição</th><th class="r">Aditivo</th><th class="r">Prejuízo</th><th class="r">% prejuízo</th></tr></thead><tbody>${catRows}</tbody></table></div>`}
     <div class="dsh-two dsh-pb">
       ${painelMotivo('Fábrica / Instalação',DASH_COR.alum,motivoFab,'quebraFabrica')}
       ${painelMotivo('Obra',DASH_COR.obra,motivoObra,'quebraObra')}
@@ -6307,7 +6309,7 @@ function montarHtmlDashboardAluminio(obraId){
       ${dashGraficoMeses(d.porMes, [{chave:'reposicao',cor:DASH_COR.alum},{chave:'aditivo',cor:DASH_COR.adit}])}
     </div>
     <div class="dsh-panel dsh-pb"><h2>Pedidos de reposição e aditivo</h2><div class="note">Cada linha é um pedido de reposição ou aditivo.</div>${tabela}</div>
-    <div class="dsh-foot" style="text-align:center;">Alumínio e componentes ${esc(obra.nome||'')} · dados até ${hoje}</div>
+    <div class="dsh-foot" style="text-align:center;">${NOME_MAT} ${esc(obra.nome||'')} · dados até ${hoje}</div>
   </div>`;
 }
 
@@ -6316,9 +6318,10 @@ let dashMateriaisAtual = 'vidro';
 function abrirDashboardMateriais(tipo){
   dashMateriaisAtual = tipo;
   const obra = load('obras').find(o=>o.id===currentObraId) || {};
-  document.getElementById('dashMatTitulo').textContent = tipo==='vidro' ? `Dashboard de vidro — ${obra.nome||''}` : `Dashboard de alumínio e componentes — ${obra.nome||''}`;
+  const NM = { vidro:'vidro', aluminio:'alumínio', componentes:'componentes' };
+  document.getElementById('dashMatTitulo').textContent = `Dashboard de ${NM[tipo]||tipo} — ${obra.nome||''}`;
   document.getElementById('dashMatContratoBtn').style.display = tipo==='vidro' ? '' : 'none';
-  document.getElementById('dashMatConteudo').innerHTML = tipo==='vidro' ? montarHtmlDashboardVidro(currentObraId) : montarHtmlDashboardAluminio(currentObraId);
+  document.getElementById('dashMatConteudo').innerHTML = tipo==='vidro' ? montarHtmlDashboardVidro(currentObraId) : montarHtmlDashboardAluminio(currentObraId, tipo);
   openModal('modalDashMateriais');
 }
 function exportarDashboardPDF(){
@@ -6335,7 +6338,7 @@ function exportarDashboardCSV(){
     linhas = [['Lote','Data','Bloco','Família','Categoria','Origem','Peças','m²','Prejuízo (R$)']]
       .concat(d.lotes.map(l=>[l.id, fmtDate(l.data), l.bloco, l.familia, l.cat==='alum'?'Quebra alumínio':'Quebra obra', l.origem||(l.tipo==='aditivo'?'Aditivo':'Reposição'), num(l.pecas), num(l.m2), num(l.valor)]));
   } else {
-    const d = calcularDadosDashboardAluminio(currentObraId);
+    const d = calcularDadosDashboardAluminio(currentObraId, dashMateriaisAtual);
     linhas = [['Lote','Data','Pedido','Fornecedor','Tipo','Motivo','Itens','Valor (R$)']]
       .concat(d.lotes.map(l=>[l.id, fmtDate(l.data), l.numPedido, l.fornecedor, l.tipo==='aditivo'?'Aditivo':'Reposição', l.motivo==='quebraObra'?'Obra':(l.motivo==='quebraFabrica'?'Fábrica/Instalação':''), l.itens.join(' / '), num(l.valor)]));
   }
@@ -6343,7 +6346,7 @@ function exportarDashboardCSV(){
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${dashMateriaisAtual==='vidro'?'Vidros':'Aluminio_Componentes'}_${(obra.nome||'obra').replace(/\s+/g,'_')}_${todayISO()}.csv`;
+  a.download = `${dashMateriaisAtual==='vidro'?'Vidros':(dashMateriaisAtual==='componentes'?'Componentes':'Aluminio')}_${(obra.nome||'obra').replace(/\s+/g,'_')}_${todayISO()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 500);
 }
