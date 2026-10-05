@@ -6674,7 +6674,7 @@ function pliCalc(P){
     let pArr = M.map((_,i)=> o.ton*(bp[i]||0));
     fontes[o.nome] = { fonte:'plano', ton:o.ton };
     const cr = pliCronDaObra(o.nome, crons);
-    if(cr){
+    if(cr){ try {
       const CR = plcCalc(cr), mi = {}; CR.meses.forEach((m,k)=>mi[m]=k);
       iArr = M.map((ym,i)=> ym<dbYM0 ? iArr[i] : (mi[ym]!==undefined ? CR.instalado[mi[ym]]/1000 : 0));
       pArr = M.map((ym,i)=> ym<dbYM0 ? pArr[i] : (mi[ym]!==undefined ? CR.fabricado[mi[ym]]/1000 : 0));
@@ -6682,7 +6682,7 @@ function pliCalc(P){
       obrasComCron[o.nome] = true;
       CR.lotes.forEach(l=> lotesCron.push({ obra:o.nome, bloco:'Fase '+l.fase+' · parc. '+l.parcela, frente:l.desc, lote:String(l.n), abr:'',
         ini:l.iniInst, fim:l.fimInst, t:l.kg/1000, passa:'S', comprado:false, key:'cron:'+cr.id+':'+l.n }));
-    }
+    } catch(err){ console.error('Cronograma '+cr.nome, err); fontes[o.nome] = { fonte:'plano', ton:o.ton, erro:cr.nome+': '+(err.message||err) }; iArr = M.map((_,i)=> o.ton*(bi[i]||0)); pArr = M.map((_,i)=> o.ton*(bp[i]||0)); } }
     inst[o.nome] = iArr; prodBase[o.nome] = pArr;
     const aj = (P.ajusteProd||{})[o.nome]||{};
     prod[o.nome] = M.map((ym,i)=> aj[ym]!==undefined ? aj[ym] : pArr[i]);
@@ -6861,15 +6861,16 @@ function renderPlanejInt(){
     document.getElementById('pliProdModo').value = P.prodModo;
   }
   if(PLI_UI.tab==='cronfin'){ area.innerHTML = pliHtmlCronFin(); return; }
-  if(PLI_UI.tab==='cruz'){ area.innerHTML = pliHtmlCruzamento(); return; }
+  if(PLI_UI.tab==='cruz'){ try { area.innerHTML = pliHtmlCruzamento(); } catch(err){ console.error(err); area.innerHTML = `<div class="pli-card"><h3>Erro no cruzamento</h3><div class="pli-note">${esc(err.message||String(err))}</div></div>`; } return; }
   if(!P){
     area.innerHTML = `<div class="empty-state"><div class="big">▤</div>Importe a planilha <b>Planejamento Integrado de Alumínio</b> (botão acima) para começar.<br>
       <div class="step-note" style="margin-top:6px;">O cronograma financeiro por obra (modelo "Cronograma Arte Jardim") pode ser importado a qualquer momento, na aba "Cronograma financeiro".</div></div>`;
     return;
   }
-  const R = pliCalc(P);
+  let R;
+  try { R = pliCalc(P); } catch(err){ console.error(err); area.innerHTML = `<div class="pli-card"><h3>Erro ao calcular o planejamento</h3><div class="pli-note">${esc(err.message||String(err))}<br><small>${esc(String(err.stack||'').split('\n').slice(1,4).join(' | '))}</small></div><div class="pli-note">Tente reimportar o Planejamento Integrado e os cronogramas (botão acima).</div></div>`; return; }
   const fn = { resumo:pliHtmlResumo, premissas:pliHtmlPremissas, fabrica:pliHtmlFabrica, instalacao:pliHtmlInstalacao, custo:pliHtmlCusto, compras:pliHtmlCompras, gantt:pliHtmlGantt }[PLI_UI.tab] || pliHtmlResumo;
-  area.innerHTML = fn(P, R);
+  try { area.innerHTML = fn(P, R); } catch(err){ console.error(err); area.innerHTML = `<div class="pli-card"><h3>Erro ao montar a aba</h3><div class="pli-note">${esc(err.message||String(err))}<br><small>${esc(String(err.stack||'').split('\n').slice(1,4).join(' | '))}</small></div></div>`; }
 }
 function pliSetTab(t){ PLI_UI.tab = t; renderPlanejInt(); }
 
