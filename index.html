@@ -6496,17 +6496,19 @@ function plcToggleInd(i, v){ const c = plcLoad(); if(!c.obras[i]) return; c.obra
 function plcToggleMO(i, v){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].incluirMO = !!v; plcSave(c); renderPlanejInt(); }
 
 /* ---------- datas (sempre ISO 'YYYY-MM-DD', em UTC pra não sofrer com fuso) ---------- */
-function pliD(iso){ const [y,m,d] = iso.slice(0,10).split('-').map(Number); return Date.UTC(y, m-1, d); }
-function pliISO(ms){ return new Date(ms).toISOString().slice(0,10); }
-function pliAddDias(iso, n){ return pliISO(pliD(iso) + Math.round(n)*86400000); }
-function pliDiffDias(a, b){ return Math.round((pliD(a)-pliD(b))/86400000); }
+function pliD(iso){ if(!iso) return NaN; const [y,m,d] = String(iso).slice(0,10).split('-').map(Number); return Date.UTC(y, m-1, d); }
+function pliISO(ms){ return (typeof ms==='number' && isFinite(ms)) ? new Date(ms).toISOString().slice(0,10) : ''; }
+function pliAddDias(iso, n){ return pliISO(pliD(iso) + Math.round(n||0)*86400000); }
+function pliDiffDias(a, b){ const v = Math.round((pliD(a)-pliD(b))/86400000); return isFinite(v) ? v : 0; }
 function pliAddMeses(iso, n){
-  const [y,m,d] = iso.slice(0,10).split('-').map(Number);
+  if(!iso) return '';
+  const [y,m,d] = String(iso).slice(0,10).split('-').map(Number);
+  if(!isFinite(y+m+d)) return '';
   const t = (y*12 + (m-1)) + n; const ny = Math.floor(t/12), nm = ((t%12)+12)%12;
   const ult = new Date(Date.UTC(ny, nm+1, 0)).getUTCDate();
   return pliISO(Date.UTC(ny, nm, Math.min(d, ult)));
 }
-function pliYM(iso){ return iso.slice(0,7); }
+function pliYM(iso){ return iso ? String(iso).slice(0,7) : ''; }
 function pliFmtData(iso){ if(!iso) return '—'; const [y,m,d]=iso.slice(0,10).split('-'); return d+'/'+m+'/'+y.slice(2); }
 function pliFmtT(v, c){ const k = c===undefined?1:c; return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:k,maximumFractionDigits:k}); }
 function pliFmtR(v){ return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}); }
