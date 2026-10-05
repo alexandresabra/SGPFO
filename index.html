@@ -6390,7 +6390,23 @@ const PLI_KEY = 'planejIntegrado';
 const PLC_KEY = 'planejCronFin';
 const PLI_UI = { tab:'resumo', cronObra:0, filtroCompras:'', filtroObraCompras:'' };
 
-function pliLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLI_KEY)); return (o && o.obras) ? o : null; }catch(e){ return null; } }
+function pliNomeObra(n){ const x = String(n==null?'':n).trim().toUpperCase(); const m = x.match(/^ADS\s*\((.+)\)$/); return m ? m[1].trim() : x; }
+function pliMigrarNomes(P){
+  if(!P || !P.obras) return P;
+  const mapa = {}; P.obras.forEach(o=>{ const n = pliNomeObra(o.nome); if(n !== o.nome) mapa[o.nome] = n; });
+  const emp = x=> (x && x.emp!==undefined) ? (x.emp = pliNomeObra(x.emp)) : null;
+  (P.orcado||[]).forEach(emp);
+  if(!Object.keys(mapa).length) return P;
+  const r = n => mapa[n] || n;
+  P.obras.forEach(o=>{ o.nome = r(o.nome); });
+  Object.keys(P.base||{}).forEach(cen=>['INST','PROD','FRENTES'].forEach(t=>{ const b = P.base[cen] && P.base[cen][t]; if(!b) return;
+    Object.keys(mapa).forEach(k=>{ if(b[k]!==undefined){ b[mapa[k]] = b[k]; delete b[k]; } }); }));
+  (P.orcado||[]).forEach(x=>{ x.obra = r(x.obra); });
+  (P.compras||[]).forEach(x=>{ x.obra = r(x.obra); });
+  if(P.ajusteProd) Object.keys(mapa).forEach(k=>{ if(P.ajusteProd[k]!==undefined){ P.ajusteProd[mapa[k]] = P.ajusteProd[k]; delete P.ajusteProd[k]; } });
+  return P;
+}
+function pliLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLI_KEY)); return (o && o.obras) ? pliMigrarNomes(o) : null; }catch(e){ return null; } }
 function pliSave(p){
   localStorage.setItem(DB_PREFIX+PLI_KEY, JSON.stringify(p));
   try{ plcLoad().obras.forEach(plcSincronizarPrevisoes); }catch(e){ console.error('Sincronização de previsões', e); }
@@ -6402,18 +6418,19 @@ function pliLoadX(){
   const crons = plcLoad().obras;
   const usados = {}; P.obras.forEach(o=>{ const c = pliCronDaObra(o.nome, crons); if(c) usados[c.id] = true; });
   const extras = crons.filter(c=>!usados[c.id]);
-  if(!extras.length) return P;
+  if(!crons.length) return P;
   const X = Object.assign({}, P);
   let ult = P.meses[P.meses.length-1];
   const novos = [];
-  extras.forEach(cr=>{ let CR; try{ CR = plcCalc(cr); }catch(e){ console.error(e); return; }
-    novos.push({ nome:cr.nome, ton:Math.round(CR.totKg)/1000, extra:true });
+  crons.forEach(cr=>{ let CR; try{ CR = plcCalc(cr); }catch(e){ console.error(e); return; }
+    if(!usados[cr.id]) novos.push({ nome:cr.nome, ton:Math.round(CR.totKg)/1000, extra:true });
     const fim = CR.meses[CR.meses.length-1]; if(fim && fim>ult) ult = fim; });
   X.obras = P.obras.concat(novos);
   X.meses = pliMesesEntre(P.meses[0], ult);
   return X;
 }
-function plcLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLC_KEY)); return (o && o.obras) ? o : {obras:[]}; }catch(e){ return {obras:[]}; } }
+function plcLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLC_KEY)); if(o && o.obras){ o.obras.forEach(x=>{ x.nome = pliNomeObra(x.nome); if(x.vinculo) x.vinculo = pliNomeObra(x.vinculo);
+    if(!x.alvoDefinido && x.prem){ const n = pliNorm(x.nome); if(n.includes('JARDIM')) x.prem.alvo = '2027-11-30'; else if(n.includes('BOTANICA')) x.prem.alvo = '2028-02-29'; } }); return o; } return {obras:[]}; }catch(e){ return {obras:[]}; } }
 function plcSave(c){
   localStorage.setItem(DB_PREFIX+PLC_KEY, JSON.stringify(c));
   try{ c.obras.forEach(plcSincronizarPrevisoes); }catch(e){ console.error('Sincronização de previsões', e); }
@@ -6625,7 +6642,7 @@ function pliLerCronograma(wb, nomeArquivo){
   const pr = wb.Sheets['PREMISSAS'];
   if(!pr) throw new Error('Não encontrei a aba PREMISSAS.');
   const titulo = String(pliCel(pr,'A1')||'');
-  const nome = (titulo.split('—')[1] || '').split(',')[0].trim() || nomeArquivo.replace(/\.xlsx?$/i,'');
+  const nome = pliNomeObra((titulo.split('—')[1] || '').split(',')[0].trim() || nomeArquivo.replace(/\.xlsx?$/i,''));
   const fases = [];
   for(let r=18; r<=60; r++){
     const cod = pliCel(pr,'A'+r);
@@ -6778,6 +6795,33 @@ function plcCfg(){
   PLC_CFG_CACHE = { raw, cfg }; return cfg;
 }
 function plcEhJardimBotanica(nome){ const n = pliNorm(nome); return n.includes('JARDIM') || n.includes('BOTANICA'); }
+/* Fases compradas juntas (mesmo pedido): ficam no mesmo grupo de pagamento, o do vencimento mais cedo */
+function plcJuntasDe(ob){
+  if(ob.juntas !== undefined) return ob.juntas;
+  const n = pliNorm(ob.nome);
+  if((n.includes('JARDIM') || n.includes('BOTANICA') || n==='WOOD') && ob.fases.some(f=>f.cod==='2A') && ob.fases.some(f=>f.cod==='2C')) return [['2A','2C']];
+  return [];
+}
+function plcJuntas(ob){
+  const lista = plcJuntasDe(ob);
+  if(!lista.length) return { fases:ob.fases, fluxo:ob.fluxo };
+  const p = ob.prem, fases = ob.fases.map(f=>Object.assign({}, f));
+  const venc1 = g => ob.fluxo.filter(x=>x.grupo===g).map(x=>x.venc).filter(Boolean).sort()[0] || '9999';
+  let mexeu = false;
+  lista.forEach(gr=>{
+    const fs = gr.map(c=>fases.find(f=>f.cod===c)).filter(Boolean); if(fs.length < 2) return;
+    const alvo = fs.map(f=>f.grupo).sort((a,b)=> venc1(a)<venc1(b)?-1:(venc1(a)>venc1(b)?1:0))[0];
+    fs.forEach(f=>{ if(f.grupo!==alvo){ f.grupo = alvo; mexeu = true; } });
+  });
+  if(!mexeu) return { fases:ob.fases, fluxo:ob.fluxo };
+  const fluxo = ob.fluxo.map(x=>Object.assign({}, x));
+  [...new Set(fluxo.map(x=>x.grupo))].forEach(g=>{
+    const tot = fases.filter(f=>f.grupo===g).reduce((s,f)=>s+f.kg*p.preco, 0);
+    const ps = fluxo.filter(x=>x.grupo===g), so = ps.reduce((s,x)=>s+x.valor, 0);
+    ps.forEach(x=>{ x.valor = so>0 ? tot*x.valor/so : tot/ps.length; });
+  });
+  return { fases, fluxo };
+}
 function plcAplicaReparcela(ob, cfg){
   cfg = cfg || plcCfg();
   if(!(cfg.parcela > 0)) return false;
@@ -6785,7 +6829,7 @@ function plcAplicaReparcela(ob, cfg){
 }
 function plcFluxoEfetivo(ob, cfg){
   cfg = cfg || plcCfg();
-  if(!plcAplicaReparcela(ob, cfg)) return { fluxo:ob.fluxo, seq:false };
+  if(!plcAplicaReparcela(ob, cfg)) return { fluxo:plcJuntas(ob).fluxo, seq:false };
   const p = ob.prem, total = ob.fases.reduce((s,f)=>s+f.kg*p.preco, 0);
   const venc0 = ob.fluxo.map(x=>x.venc).filter(Boolean).sort()[0];
   if(!(total > 0) || !venc0) return { fluxo:ob.fluxo, seq:false };
@@ -6839,7 +6883,7 @@ function plcSeqCalcular(){
   while((ativos.length || F.some(x=>!x.ini)) && d < lim){
     const obrasAt = new Set(ativos.map(a=>a.oi));
     const cand = F.filter(x=>!x.ini && x.pronto<=d && !obrasAt.has(x.oi) && F.every(y=>y.oi!==x.oi || F.indexOf(y)>=F.indexOf(x) || y.fim))
-                  .sort((a,b)=> a.pronto<b.pronto?-1:(a.pronto>b.pronto?1:a.oi-b.oi));
+                  .sort((a,b)=>{ const pa = a.ob.prem.alvo||'9999', pb = b.ob.prem.alvo||'9999'; return pa<pb?-1:(pa>pb?1:(a.pronto<b.pronto?-1:(a.pronto>b.pronto?1:a.oi-b.oi))); });
     for(const c of cand){ if(obrasAt.size >= cfg.maxObras) break; if(obrasAt.has(c.oi)) continue; c.ini = d; ativos.push(c); obrasAt.add(c.oi); }
     if(ativos.length){
       const ym = d.slice(0,7), dm = new Date(Date.UTC(+ym.slice(0,4), +ym.slice(5,7), 0)).getUTCDate(), q = Math.max(0, capMes(ym) - cargaPlano(ym))/dm/ativos.length;
@@ -6862,10 +6906,39 @@ function plcSeqCalcular(){
   return { cfg, byObra, fases:F.map(x=>({ obra:x.ob.nome, cod:x.cod, desc:x.f.desc, kg:x.kg, pronto:x.pronto, iniFab:x.ini, fimFab:x.fim, iniInst:x.iniInst, fimInst:x.fimInst, com:x.com })) };
 }
 function plcCalc(ob){ const S = plcSeqGet(); return plcCalcBase(ob, S && S.byObra[ob.id]); }
+/* WOOD: mesmo cenário do Jardim, compra começando 6 meses depois da Wave, prazo dez/29 */
+function plcCriarWood(){
+  if(!pliTemAcesso()) return;
+  const c = plcLoad();
+  const jar = c.obras.find(o=>pliNorm(o.nome).includes('JARDIM'));
+  const wave = c.obras.find(o=>pliNorm(o.nome).includes('WAVE'));
+  if(!jar){ toast('Importe o cronograma do Jardim antes: o WOOD usa o mesmo cenário.'); return; }
+  if(c.obras.some(o=>pliNorm(o.nome)==='WOOD')){ toast('O WOOD já existe.'); return; }
+  const primeira = ob => plcFluxoEfetivo(ob).fluxo.map(x=>x.venc).filter(Boolean).sort()[0];
+  const baseWave = wave ? primeira(wave) : null;
+  const inicio = baseWave ? pliAddMeses(baseWave, 6) : null;
+  if(!inicio){ toast('Importe o cronograma da Wave: o WOOD começa a compra 6 meses depois dela.'); return; }
+  const w = JSON.parse(JSON.stringify(jar));
+  const delta = pliDiffDias(inicio, jar.fluxo.map(x=>x.venc).filter(Boolean).sort()[0]);
+  w.id = uid(); w.nome = 'WOOD'; w.arquivo = 'Cenário do Jardim (cópia)'; w.importadoEm = new Date().toISOString();
+  w.fluxo.forEach(x=>{ x.venc = pliAddDias(x.venc, delta); });
+  w.fases.forEach(f=>{ if(f.iniLB) f.iniLB = pliAddDias(f.iniLB, delta); if(f.fimLB) f.fimLB = pliAddDias(f.fimLB, delta); });
+  w.prem.alvo = '2029-12-31'; w.alvoDefinido = true;
+  w.reparcelar = false; w.modoPlanilha = false; delete w.lotesPlan;
+  ['vinculo','obraSgptId','autoExcluidos'].forEach(k=>{ delete w[k]; });
+  c.obras.push(w); plcSave(c); PLI_UI.cronObra = c.obras.length-1;
+  toast('WOOD criado: cenário do Jardim, 1ª compra em '+pliFmtData(inicio)+', prazo dez/29.');
+  renderPlanejInt();
+}
 function plcSetCfg(campo, valor){
   const c = plcLoad(); c.cfgFab = Object.assign({ concentrar:true, maxObras:3, minMat:1, parcela:500000, intervalo:30 }, c.cfgFab||{});
   if(campo==='concentrar') c.cfgFab.concentrar = !!valor;
   else { const v = parseFloat(String(valor).replace(',','.')); if(isFinite(v)) c.cfgFab[campo] = campo==='minMat' ? Math.min(100,Math.max(5,v))/100 : (campo==='maxObras' ? Math.max(1,Math.round(v)) : Math.max(0,v)); }
+  plcSave(c); renderPlanejInt();
+}
+function plcSetJuntas(i, txt){
+  const c = plcLoad(), ob = c.obras[i]; if(!ob) return;
+  ob.juntas = String(txt||'').split(/[;,]/).map(g=>g.split('+').map(x=>x.trim().toUpperCase()).filter(Boolean)).filter(g=>g.length>1);
   plcSave(c); renderPlanejInt();
 }
 function plcSetReparcela(i, modo){
@@ -6875,7 +6948,7 @@ function plcSetReparcela(i, modo){
 }
 
 function plcCalcBase(ob, ovr){
-  const p = ob.prem, fases = ob.fases;
+  const p = ob.prem, fases = plcJuntas(ob).fases;
   const FL = plcFluxoEfetivo(ob), flux = FL.fluxo;
   const precoFase = f => f.kg * p.preco;
   const totalGrupo = g => fases.filter(f=>f.grupo===g).reduce((s,f)=>s+precoFase(f),0);
@@ -7074,7 +7147,7 @@ async function pliImportarArquivo(ev){
         const ob = pliLerCronograma(it.wb, nm);
         const c = plcLoad();
         const ja = c.obras.findIndex(o=>o.nome.toLowerCase()===ob.nome.toLowerCase());
-        if(ja>=0){ ob.id = c.obras[ja].id; ['vinculo','obraSgptId','incluirMO','incluirInd','autoExcluidos'].forEach(k=>{ if(c.obras[ja][k]!==undefined) ob[k] = c.obras[ja][k]; }); c.obras[ja] = ob; PLI_UI.cronObra = ja; }
+        if(ja>=0){ ob.id = c.obras[ja].id; ['vinculo','obraSgptId','incluirMO','incluirInd','autoExcluidos','reparcelar','juntas','alvoDefinido'].forEach(k=>{ if(c.obras[ja][k]!==undefined) ob[k] = c.obras[ja][k]; }); if(c.obras[ja].alvoDefinido) ob.prem.alvo = c.obras[ja].prem.alvo; c.obras[ja] = ob; PLI_UI.cronObra = ja; }
         else { c.obras.push(ob); PLI_UI.cronObra = c.obras.length-1; }
         plcSave(c);
         PLI_UI.tab = 'cronfin';
@@ -7174,7 +7247,7 @@ function pliHtmlResumo(P, R){
   const fontesCard = `<div class="pli-card"><h3>De onde vem cada obra</h3>
     <table class="pli-t"><thead><tr><th>Obra</th><th>Fonte da fábrica, instalação e compras</th><th class="n">Tonelagem usada</th><th>Término da instalação</th></tr></thead><tbody>
     ${P.obras.map(o=>{ const f = R.fontes[o.nome]; const ult = R.M.filter((m,i)=>R.inst[o.nome][i]>0.05).slice(-1)[0];
-      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>'}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'&&Math.abs(f.ton-o.ton)>0.5?` <span class="pli-note">(plano: ${pliFmtT(o.ton,0)} t)</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
+      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>'}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= ${pliFmtT(f.ton-f.tonCron,1)} t realizado até a data base (plano) + ${pliFmtT(f.tonCron,1)} t do cronograma${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
     </tbody></table>
     <div class="pli-note">Cada cronograma financeiro importado (aba "Cronograma financeiro") substitui, a partir da data base, a curva de fábrica e de instalação da obra correspondente e gera os lotes de compra dela. O vínculo é automático pelo nome (ou escolhido no cronograma). Importar de novo o mesmo cronograma atualiza tudo.</div></div>`;
   return fontesCard + `
@@ -7622,13 +7695,16 @@ function pliHtmlCruzamento(){
   const fontes = D.linhas.map(l=>`${esc(l.nome)} (${l.fonte==='cronograma'?'cronograma':'planejamento integrado'})`).join(' · ');
   const cfg = plcCfg(), SQ = plcSeqGet();
   const crAll = plcLoad().obras;
+  const semWood = !crAll.some(o=>pliNorm(o.nome)==='WOOD');
   const ctrl = `<div class="pli-filtros" style="margin:8px 0;">
+      ${semWood?'<button class="btn small" onclick="plcCriarWood()">+ Adicionar WOOD (cenário do Jardim, compra 6 meses após a Wave, prazo dez/29)</button>':''}
       <label><input type="checkbox" ${cfg.concentrar?'checked':''} onchange="plcSetCfg('concentrar',this.checked)"> Concentrar fases (cada fase roda direto na fábrica)</label>
       <label>Obras dividindo a fábrica (máx.) <select onchange="plcSetCfg('maxObras',this.value)">${[1,2,3,4].map(n=>`<option ${cfg.maxObras===n?'selected':''}>${n}</option>`).join('')}</select></label>
       <label>Iniciar fase com <input type="number" min="5" max="100" step="5" value="${Math.round(cfg.minMat*100)}" style="width:60px;" onchange="plcSetCfg('minMat',this.value)">% do material</label>
       <label>Parcela alvo (R$) <input type="number" min="0" step="10000" value="${cfg.parcela}" style="width:100px;" onchange="plcSetCfg('parcela',this.value)"></label>
       <label>Intervalo entre parcelas (dias) <input type="number" min="5" max="60" step="5" value="${cfg.intervalo}" style="width:60px;" onchange="plcSetCfg('intervalo',this.value)"></label>
     </div>
+    <div class="pli-filtros" style="margin:0 0 8px;"><span class="pli-note" style="margin:0;">Fases compradas juntas (ex.: 2A+2C; 1D+1E):</span>${crAll.map((o,i)=>`<label>${esc(o.nome)} <input type="text" value="${esc(plcJuntasDe(o).map(g=>g.join('+')).join('; '))}" style="width:110px;" placeholder="—" onchange="plcSetJuntas(${i},this.value)"></label>`).join('')}</div>
     <div class="pli-filtros" style="margin:0 0 8px;"><span class="pli-note" style="margin:0;">Parcelamento por obra:</span>${crAll.map((o,i)=>`<label>${esc(o.nome)} <select onchange="plcSetReparcela(${i},this.value)"><option value="auto" ${o.reparcelar===undefined?'selected':''}>${plcAplicaReparcela(o,cfg)?'~parcela alvo (padrão)':'conforme planilha (padrão)'}</option><option value="1" ${o.reparcelar===true?'selected':''}>~parcela alvo</option><option value="0" ${o.reparcelar===false?'selected':''}>conforme planilha</option></select></label>`).join('')}</div>`;
   const ordem = SQ ? `<div class="pli-card"><h3>Ordem de produção da fábrica</h3><div class="pli-note" style="margin-top:0;">Cada fase entra na linha e roda direto até terminar; a capacidade do mês é dividida entre as obras em produção (máx. ${cfg.maxObras}). Início = material de ${Math.round(cfg.minMat*100)}% da fase na fábrica.</div>
     <div class="pli-scroll"><table class="pli-t"><thead><tr><th>#</th><th>Obra</th><th>Fase</th><th class="n">Peso (t)</th><th>Material pronto</th><th>Início fábrica</th><th>Fim fábrica</th><th>Fim instalação</th><th>Dividindo com</th></tr></thead><tbody>${SQ.fases.slice().sort((a,b)=>a.iniFab<b.iniFab?-1:(a.iniFab>b.iniFab?1:0)).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.obra)}</td><td>${esc(x.cod)} · ${esc(x.desc)}</td><td class="n">${pliFmtT(x.kg/1000,1)}</td><td>${pliFmtData(x.pronto)}</td><td>${pliFmtData(x.iniFab)}</td><td>${pliFmtData(x.fimFab)}</td><td>${pliFmtData(x.fimInst)}</td><td>${x.com.length?esc(x.com.join(', ')):'—'}</td></tr>`).join('')}</tbody></table></div></div>` : '';
@@ -7673,7 +7749,7 @@ function pliRelFinDados(ob){
   tot.mo = tot.fab+tot.inst; tot.geral = tot.mat+tot.mo+tot.ind;
   return { R, p, meses, mat, desemb, acum, tot, indArr };
 }
-function pliHtmlRelFin(ob){
+function pliHtmlRelFin(ob, soPagina){
   const D = pliRelFinDados(ob), R = D.R, p = D.p, T = D.tot;
   const kpi = `<div class="pli-kpis">
     ${pliKpi('Alumínio', pliFmtR(T.alu), pliFmtT(R.totKg/1000,1)+' t · R$ '+pliFmtT(p.preco,2)+'/kg')}
@@ -7702,12 +7778,14 @@ function pliHtmlRelFin(ob){
   const fases = `<div class="pli-card"><h3>Cronograma por fase</h3><div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>Descrição</th><th class="n">kg</th><th class="n">Valor alumínio</th><th>1º material</th><th>Início inst.</th><th>Fim inst.</th><th>Término LB</th><th class="n">Var. (d)</th></tr></thead><tbody>
     ${R.resumo.map(f=>`<tr><td>${esc(f.cod)}</td><td>${esc(f.desc)}</td><td class="n">${pliFmtT(f.kg,0)}</td><td class="n">${pliFmtR(f.kg*p.preco)}</td><td>${pliFmtData(f.primeiroMaterial)}</td><td>${pliFmtData(f.iniInst)}</td><td>${pliFmtData(f.fimInst)}</td><td>${pliFmtData(f.fimLB)}</td><td class="n ${f.varTermino>0?'neg':'pos'}">${f.varTermino>0?'+':''}${f.varTermino}</td></tr>`).join('')}
     </tbody></table></div></div>`;
+  if(soPagina) return mensal + fases;
   return kpi + pagamentos + faturas + mensal + fases;
 }
 function pliExportarRelFin(todas){
   const c = plcLoad(); if(!c.obras.length){ toast('Importe um cronograma financeiro antes.'); return; }
   const lista = todas ? c.obras : [c.obras[Math.min(PLI_UI.cronObra, c.obras.length-1)]];
-  const corpo = lista.map((ob,i)=>`<div class="pli-pb${i===0?' first':''}"><h2>${esc(ob.nome)} — relatório financeiro</h2>${pliHtmlRelFin(ob)}</div>`).join('');
+  const corpo = lista.map((ob,i)=>{ const R = plcCalc(ob); const L = R.meses.length + R.resumo.length + 14; const z = Math.min(1, 40/L).toFixed(2);
+    return `<div class="pli-pb${i===0?' first':''}" style="zoom:${z}"><h2>${esc(ob.nome)} — relatório financeiro</h2>${pliHtmlRelFin(ob, true)}</div>`; }).join('');
   document.getElementById('rdoPrintArea').innerHTML = `<div class="pli-print"><h1>Relatório financeiro — alumínio${todas?' (todas as obras)':''}</h1>
     <div class="meta">Divisão de Alumínio · Calper · gerado em ${pliFmtData(todayISO())} · base: cronograma financeiro importado</div>${corpo}</div>`;
   window.print();
@@ -7717,7 +7795,7 @@ function plcEditar(i, campo, valor){
   if(!c.obras[i] || !isFinite(v)) return;
   c.obras[i].prem[campo] = v; plcSave(c); renderPlanejInt();
 }
-function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; plcSave(c); renderPlanejInt(); }
+function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; c.obras[i].alvoDefinido = true; plcSave(c); renderPlanejInt(); }
 function plcVincular(i, v){ const c = plcLoad(); if(!c.obras[i]) return; if(v==='') delete c.obras[i].vinculo; else c.obras[i].vinculo = v; plcSave(c); renderPlanejInt(); }
 function plcRenomear(i, nome){ const c = plcLoad(); if(!c.obras[i] || !nome.trim()) return; c.obras[i].nome = nome.trim(); plcSave(c); renderPlanejInt(); }
 function plcExcluir(i){
