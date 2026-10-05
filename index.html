@@ -367,6 +367,8 @@
   .pli-t .pos{color:var(--ok);}
   .pli-t .warn{color:var(--warn);font-weight:700;}
   .pli-m td{text-align:right;min-width:52px;}
+  .pli-m thead th:not(.rot){text-align:right;min-width:52px;}
+  .pli-m tbody th:not(.rot){text-align:right;}
   .pli-m th.rot{position:sticky;left:0;background:#fff;z-index:2;min-width:230px;max-width:230px;overflow:hidden;text-overflow:ellipsis;}
   .pli-m thead th.rot{background:#f6f6f4;}
   .pli-m tr.tot th.rot{background:#f6f6f4;}
@@ -400,6 +402,7 @@
     #rdoPrintArea .pli-print table{ table-layout:auto; width:100%; font-size:6.5px; margin:0; }
     #rdoPrintArea .pli-print th,#rdoPrintArea .pli-print td{ padding:1.5px 3px; font-size:6.5px; border-bottom:1px solid #ddd; background:none; color:inherit; text-align:left; }
     #rdoPrintArea .pli-print .pli-m td{ text-align:right; min-width:0; }
+    #rdoPrintArea .pli-print .pli-m thead th:not(.rot){ text-align:right; min-width:0; }
     #rdoPrintArea .pli-print th.rot{ position:static; min-width:0; max-width:none; width:auto; white-space:nowrap; }
     #rdoPrintArea .pli-print thead th{ position:static; background:#f1f1ef; }
     #rdoPrintArea .pli-print tr{ page-break-inside:avoid; }
