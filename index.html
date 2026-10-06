@@ -4231,7 +4231,7 @@
 
       <hr class="divider">
       <h4 style="font-family:var(--serif);margin:0 0 10px;">Localizações</h4>
-      <div class="step-note" style="margin-bottom:10px;">A mesma esquadria pode se repetir em vários ambientes/pavimentos — adicione uma linha para cada local, com sua quantidade. O total é somado automaticamente.</div>
+      <div class="step-note" style="margin-bottom:10px;">A mesma esquadria pode se repetir em vários ambientes/pavimentos — adicione uma linha para cada local, com sua quantidade. Você pode <b>editar o local e a quantidade</b> direto na tabela. O total é somado automaticamente.</div>
       <table>
         <thead><tr><th>Local</th><th>Quantidade</th><th></th></tr></thead>
         <tbody id="itemLocalizacoesBody"></tbody>
@@ -6788,7 +6788,7 @@ function pliCalc(P){
 
 /* ---------- motor do Cronograma financeiro (por obra) ---------- */
 /* ---------- parcelamento (~R$ 500 mil) e sequenciamento da fábrica ---------- */
-const PLC_CFG_PADRAO = { concentrar:true, maxObras:3, minMat:1, parcela:500000, intervalo:30, folgaMeses:2, prioridade:'prazo', divisao:'igual', ordemObras:[] };
+const PLC_CFG_PADRAO = { concentrar:true, maxObras:3, minMat:1, parcela:500000, intervalo:30, folgaMeses:2, pctInsumoMes:0, prioridade:'prazo', divisao:'igual', ordemObras:[] };
 let PLC_CFG_CACHE = { raw:null, cfg:null };
 function plcCfg(){
   const raw = localStorage.getItem(DB_PREFIX+PLC_KEY);
@@ -7239,7 +7239,8 @@ function plcOtmAvaliar(C, base, par, capNova){
     (R.fluxo||[]).forEach((p,i)=>{ const o = b0[i]; if(o && p.venc && o.venc){ const d = pliDiffDias(o.venc, p.venc); if(d>0) c += p.valor*d/30*par.taxa/100; } mes[String(p.venc).slice(0,7)] = (mes[String(p.venc).slice(0,7)]||0) + p.valor; });
     const mo = (R.custoFab||[]).reduce((a,b)=>a+b,0) + (R.custoInst||[]).reduce((a,b)=>a+b,0), prev = base.__mo ? base.__mo[ob.id] : null;
     if(par.moLim && prev!=null && mo > prev+1) excMO += mo-prev;
-    custo += c; porObra[ob.id] = { mo, moPrev:prev, fim:x.fim, ok:x.ok, atraso:at, custo:c, primeira:((R.fluxo||[]).map(p=>p.venc).filter(Boolean).sort()[0])||'' };
+    if(par.gastoLim!==0) excMO += plcGastoExcesso(ob, R);
+    custo += c; porObra[ob.id] = { gTot:(R.pagto||[]).reduce((a,b)=>a+b,0)+(R.comp||[]).reduce((a,b)=>a+b,0)+mo, ag:ob.aGastar||0, mo, moPrev:prev, fim:x.fim, ok:x.ok, atraso:at, custo:c, primeira:((R.fluxo||[]).map(p=>p.venc).filter(Boolean).sort()[0])||'' };
   });
   let excesso = excMO, pico = 0; Object.values(mes).forEach(v=>{ if(v>pico) pico = v; if(par.teto>0 && v>par.teto) excesso += v-par.teto; });
   return { atraso, excesso, custo, pico, porObra, mes };
@@ -7374,13 +7375,13 @@ function pliHtmlOtimizador(){
   if(r){
     const st = x => x && x.ok ? '<span style="color:#2e7d32">✔</span>' : '<span style="color:#b00020">✖</span>';
     const lin = r.obras.map(o=>{ const aj = o.ajuste; const desc = aj ? ('antecipa '+aj.A+' d'+(aj.k<1?' · comprime a '+Math.round(aj.k*100)+'%':'')) : 'sem ajuste';
-      return `<tr><td><b>${esc(o.nome)}</b></td><td>${pliFmtData(o.alvo)}</td><td>${pliFmtData(o.hoje.fim)} ${st(o.hoje)}</td><td>${desc}${r.efUsa&&r.efUsa[o.id]?' · efetivo '+o.ef0+'→'+r.efUsa[o.id]:''}</td><td>${pliFmtData(o.dep.primeira)}</td><td>${pliFmtData(o.dep.fim)} ${st(o.dep)}</td><td class="n">${pliFmtR(o.dep.custo)}</td><td class="n" style="color:${o.dep.moPrev!=null&&o.dep.mo>o.dep.moPrev+1?'#b00020':'#2e7d32'}">${pliFmtR(o.dep.moPrev)} → ${pliFmtR(o.dep.mo)}</td></tr>`; }).join('');
+      return `<tr><td><b>${esc(o.nome)}</b></td><td>${pliFmtData(o.alvo)}</td><td>${pliFmtData(o.hoje.fim)} ${st(o.hoje)}</td><td>${desc}${r.efUsa&&r.efUsa[o.id]?' · efetivo '+o.ef0+'→'+r.efUsa[o.id]:''}</td><td>${pliFmtData(o.dep.primeira)}</td><td>${pliFmtData(o.dep.fim)} ${st(o.dep)}</td><td class="n">${pliFmtR(o.dep.custo)}</td><td class="n" style="color:${o.dep.moPrev!=null&&o.dep.mo>o.dep.moPrev+1?'#b00020':'#2e7d32'}">${pliFmtR(o.dep.moPrev)} → ${pliFmtR(o.dep.mo)}</td><td class="n" style="color:${o.dep.ag>0&&o.dep.gTot>o.dep.ag+1?'#b00020':'#2e7d32'}">${o.dep.ag>0?pliFmtR(o.dep.gTot)+' / '+pliFmtR(o.dep.ag):'—'}</td></tr>`; }).join('');
     const msg = r.ok ? `<div class="pli-alerta ok">✔ Encontrei um fluxo que cumpre todos os prazos${r.capMudou?' <b>com a fábrica em '+r.cap+' t/mês</b> (hoje '+r.capAtual+' t/mês)':' com a capacidade atual'}.</div>`
-      : `<div class="pli-alerta erro">✖ Não existe fluxo que cumpra todos os prazos${r.excesso>0?' respeitando o teto de caixa / custo de MO previsto':''} com capacidade até ${Math.max(r.par.capMax||0, r.capAtual)} t/mês. A proposta abaixo é a que chega mais perto (${r.atraso} dia(s) de atraso somados). Aumente a capacidade máxima permitida, relaxe os prazos ou o teto.</div>`;
+      : `<div class="pli-alerta erro">✖ Não existe fluxo que cumpra todos os prazos${r.excesso>0?' respeitando o teto de caixa / custo de MO previsto / à gastar':''} com capacidade até ${Math.max(r.par.capMax||0, r.capAtual)} t/mês. A proposta abaixo é a que chega mais perto (${r.atraso} dia(s) de atraso somados). Aumente a capacidade máxima permitida, relaxe os prazos ou o teto.</div>`;
     const efl = r.obras.filter(o=>r.efNec&&r.efNec[o.id]&&!(r.efUsa&&r.efUsa[o.id])).map(o=>`<b>${esc(o.nome)}</b>: ${r.efNec[o.id]} pessoas (hoje ${o.ef0})`);
     const efi = r.obras.filter(o=>r.efNec&&!r.efNec[o.id]&&o.dep.atraso>0).map(o=>esc(o.nome));
     res += msg + (efl.length?`<div class="pli-alerta aviso">⚠ Gargalo na <b>instalação</b>: para cumprir o prazo, o efetivo precisaria ser — ${efl.join(' · ')}. Informe um <b>efetivo máx.</b> acima desses valores e otimize de novo.</div>`:'') + (efi.length?`<div class="pli-alerta aviso">⚠ Ainda sem solução para: ${efi.join(', ')}. Provável falta de capacidade da fábrica (aumente a <b>capacidade máx.</b>) e/ou de efetivo na instalação (informe <b>efetivo máx.</b>).</div>`:'') + `<div class="pli-kpis">${pliKpi('Custo financeiro da antecipação', pliFmtR(r.custo), 'hoje '+pliFmtR(r.custoHoje)+' · taxa '+String(r.par.taxa).replace('.',',')+'% a.m.')}${pliKpi('Pico de desembolso mensal', pliFmtR(r.pico), 'hoje '+pliFmtR(r.picoHoje)+(r.par.teto>0?' · teto '+pliFmtR(r.par.teto):''))}${pliKpi('Capacidade da fábrica', r.cap+' t/mês', (r.capMudou?'+'+(r.cap-r.capAtual)+' sobre o atual':'sem mudança')+' · '+r.maxObras+' obras em paralelo')}</div>
-      <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th>Prazo</th><th>Hoje termina</th><th>Proposta</th><th>1ª compra</th><th>Termina</th><th class="n">Custo antecip.</th><th class="n">MO prevista → proposta</th></tr></thead><tbody>${lin}</tbody></table></div>
+      <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th>Prazo</th><th>Hoje termina</th><th>Proposta</th><th>1ª compra</th><th>Termina</th><th class="n">Custo antecip.</th><th class="n">MO prevista → proposta</th><th class="n">Total × à gastar</th></tr></thead><tbody>${lin}</tbody></table></div>
       <div class="pli-filtros" style="margin-top:8px;"><button class="btn small" onclick="plcOtmAplicar()">Aplicar proposta</button><button class="btn small secondary" onclick="plcOtmDescartar()">Descartar</button><span style="font-size:12px;color:#666;">${r.truncado?'Busca interrompida por tempo — resultado parcial. ':''}${r.passos} simulações em ${r.seg}s</span></div>`;
   }
   return `<div class="pli-card"><h3>Otimizador automático do fluxo de pagamento</h3>
@@ -7388,6 +7389,84 @@ function pliHtmlOtimizador(){
       <label>MO previsto <select onchange="plcOtmSet('moLim',this.value)"><option value="1" ${par.moLim!==0?'selected':''}>Não ultrapassar o custo de MO previsto (fábrica + instalação)</option><option value="0" ${par.moLim===0?'selected':''}>Ignorar</option></select></label>
       <label>Objetivo <select onchange="plcOtmSet('modo',this.value)"><option value="1" ${par.modo===1?'selected':''}>Antecipar as compras ao máximo (produção pode vir depois)</option><option value="0" ${par.modo!==1?'selected':''}>Pagar o mínimo de antecipação</option></select></label>
       <button class="btn small" onclick="this.disabled=true;this.textContent='Calculando…';setTimeout(plcOtmCalcular,30)">Otimizar</button></div>${res}</div>`;
+}
+/* ---------- À GASTAR: verba por obra (insumos + material + mão de obra) e % de compra de insumos por mês ---------- */
+function plcGasto(ob, R){
+  const soma = a => (a||[]).reduce((s,v)=>s+(v||0),0);
+  const pct = plcCfg().pctInsumoMes || 0, ag = ob.aGastar || 0;
+  const alu = soma(R.pagto), comp = soma(R.comp), fab = soma(R.custoFab), inst = soma(R.custoInst), total = alu+comp+fab+inst;
+  const lim = (ag>0 && pct>0) ? ag*pct/100 : 0;
+  const meses = R.meses || [], ins = meses.map((m,i)=>(R.pagto[i]||0)+(R.comp[i]||0));
+  const exc = []; if(lim>0) ins.forEach((v,i)=>{ if(v>lim+1) exc.push({ m:meses[i], v, lim }); });
+  return { ag, pct, alu, comp, fab, inst, total, lim, ins, meses, exc, pico:Math.max(0,...ins),
+           saldo: ag>0 ? ag-total : null, okTotal: ag>0 ? total<=ag+1 : true, okMes: exc.length===0 };
+}
+function plcGastoExcesso(ob, R){ const g = plcGasto(ob, R); if(!(g.ag>0)) return 0; return Math.max(0, g.total-g.ag) + g.exc.reduce((s,x)=>s+(x.v-x.lim),0); }
+function plcSetGastar(i, v){
+  const c = plcLoad(), ob = c.obras[i]; if(!ob) return;
+  const t = String(v||'').replace(/R\$|\s/g,''); const n = parseFloat(t.includes(',') ? t.replace(/\./g,'').replace(',','.') : t.replace(/\.(?=\d{3}(\D|$))/g,''));
+  if(isFinite(n) && n>0) ob.aGastar = n; else delete ob.aGastar;
+  plcSave(c); PLI_UI.otm = null; renderPlanejInt();
+}
+function plcGastarPreencher(){
+  const c = plcLoad(); let n = 0;
+  c.obras.forEach(ob=>{ if(!(ob.aGastar>0)){ ob.aGastar = Math.round(plcGasto(ob, plcCalc(ob)).total); n++; } });
+  plcSave(c); toast(n ? 'À gastar preenchido com o total previsto de '+n+' obra(s). Ajuste os valores para a verba real.' : 'Todas as obras já têm à gastar.'); renderPlanejInt();
+}
+function plcGastoDiagnostico(C){
+  const out = [], mesTxt = m => { const [y,mm] = String(m).split('-'); return ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][(+mm)-1]+'/'+y.slice(2); };
+  let totAg = 0, totPrev = 0, algum = false;
+  C.obras.forEach(ob=>{
+    const R = plcCalc(ob), g = plcGasto(ob, R); totPrev += g.total;
+    if(!(g.ag>0)){ out.push({ sev:'info', obra:ob.nome, msg:'Sem "à gastar" definido — nenhuma verificação feita.', sug:['Informe a verba na tabela acima (ou use "Preencher com o previsto atual").'] }); return; }
+    algum = true; totAg += g.ag;
+    const kg = ob.fases.reduce((s,f)=>s+f.kg,0), p = ob.prem;
+    if(!g.okTotal){
+      const falta = g.total-g.ag, sug = [];
+      const precoMax = kg>0 ? (g.ag-g.fab-g.inst)/(kg*(1+p.compPct)) : 0;
+      if(precoMax>0) sug.push('Preço do alumínio: para caber, no máximo '+pliFmtR(precoMax)+'/kg (hoje '+pliFmtR(p.preco)+'/kg).');
+      const compMax = g.alu>0 ? (g.ag-g.fab-g.inst-g.alu)/g.alu : 0;
+      if(compMax>=0 && compMax<p.compPct) sug.push('Componentes: reduzir de '+Math.round(p.compPct*100)+'% para até '+Math.round(compMax*1000)/10+'% do alumínio.');
+      else if(compMax<0) sug.push('Só reduzir componentes não resolve: alumínio + MO já passam do à gastar.');
+      if(g.fab+g.inst>0) sug.push('Mão de obra (fábrica + instalação) é '+Math.round((g.fab+g.inst)/g.total*100)+'% do total: rode o Otimizador (ele encurta a janela de instalação e evita efetivo parado).');
+      sug.push('Ou elevar o à gastar em '+pliFmtR(falta)+'.');
+      out.push({ sev:'erro', obra:ob.nome, msg:'Total previsto '+pliFmtR(g.total)+' passa do à gastar '+pliFmtR(g.ag)+' em '+pliFmtR(falta)+' (alumínio '+pliFmtR(g.alu)+' · componentes '+pliFmtR(g.comp)+' · MO fab. '+pliFmtR(g.fab)+' · MO inst. '+pliFmtR(g.inst)+').', sug });
+    }
+    if(g.lim>0 && !g.okMes){
+      const folga = g.meses.map((m,i)=>({ m, f:g.lim-g.ins[i] })).filter(x=>x.f>1 && x.m>=g.exc[0].m).sort((a,b)=>b.f-a.f).slice(0,3);
+      const nmin = Math.ceil((g.alu+g.comp)/g.lim);
+      const sug = [];
+      sug.push('Distribuir as compras em pelo menos '+nmin+' meses (hoje há pagamento em '+g.ins.filter(v=>v>0).length+').');
+      if(folga.length) sug.push('Mover o excesso para meses com folga: '+folga.map(x=>mesTxt(x.m)+' (cabem '+pliFmtR(x.f)+')').join(', ')+'.');
+      sug.push('Ou subir o limite para '+(Math.ceil(g.pico/g.ag*1000)/10).toString().replace('.',',')+'% do à gastar por mês.');
+      sug.push('O Otimizador já considera esse limite ao antecipar/comprimir os pagamentos.');
+      out.push({ sev:'erro', obra:ob.nome, msg:'Compra de insumos acima de '+String(g.pct).replace('.',',')+'% do à gastar ('+pliFmtR(g.lim)+') em '+g.exc.length+' mês(es): '+g.exc.slice(0,6).map(x=>mesTxt(x.m)+' '+pliFmtR(x.v)).join(' · ')+(g.exc.length>6?' …':'')+'.', sug });
+    }
+    const R2 = R; if(!plcAtende(ob, R2)) out.push({ sev:'aviso', obra:ob.nome, msg:'Não cumpre os prazos de instalação com o fluxo atual.', sug:['Rode o Otimizador: ele antecipa compras e ajusta efetivo sem passar do à gastar.'] });
+  });
+  if(algum && totAg>0 && totPrev>totAg) out.unshift({ sev:'erro', obra:'TOTAL', msg:'Soma das obras: previsto '+pliFmtR(totPrev)+' contra à gastar '+pliFmtR(totAg)+'.', sug:[] });
+  return out;
+}
+function pliHtmlGasto(){
+  const c = plcLoad(); if(!c.obras.length) return '';
+  const cfg = plcCfg(), pct = cfg.pctInsumoMes || 0;
+  let T = { ag:0, alu:0, comp:0, fab:0, inst:0, total:0 };
+  const lin = c.obras.map((ob,i)=>{ const R = plcCalc(ob), g = plcGasto(ob, R); T.ag += g.ag; T.alu += g.alu; T.comp += g.comp; T.fab += g.fab; T.inst += g.inst; T.total += g.total;
+    const st = !(g.ag>0) ? '<span style="color:#888">— definir</span>' : ((g.okTotal && g.okMes) ? '<span style="color:#2e7d32">✔ dentro</span>' : '<span style="color:#b00020">✖ '+(!g.okTotal?'estoura o total':'')+(!g.okTotal&&!g.okMes?' · ':'')+(!g.okMes?'estoura mês':'')+'</span>');
+    return `<tr><td><b>${esc(ob.nome)}</b></td><td class="n"><input type="text" value="${g.ag>0?Math.round(g.ag).toLocaleString('pt-BR'):''}" placeholder="R$" style="width:120px;text-align:right" onchange="plcSetGastar(${i},this.value)"></td>
+      <td class="n">${pliFmtR(g.alu)}</td><td class="n">${pliFmtR(g.comp)}</td><td class="n">${pliFmtR(g.fab)}</td><td class="n">${pliFmtR(g.inst)}</td><td class="n"><b>${pliFmtR(g.total)}</b></td>
+      <td class="n" style="color:${g.saldo!=null&&g.saldo<0?'#b00020':'#2e7d32'}">${g.saldo==null?'—':pliFmtR(g.saldo)}</td>
+      <td class="n">${pliFmtR(g.pico)}${g.lim>0?' <span style="color:#888">/ '+pliFmtR(g.lim)+'</span>':''}</td><td>${st}</td></tr>`; }).join('');
+  const diag = plcGastoDiagnostico(c);
+  const cor = { erro:'#b00020', aviso:'#b26a00', info:'#666' }, ico = { erro:'✖', aviso:'⚠', info:'ℹ' };
+  const dh = diag.length ? diag.map(d=>`<div class="pli-xal" style="border-left:4px solid ${cor[d.sev]};padding:6px 10px;margin:6px 0;background:#fafafa"><b style="color:${cor[d.sev]}">${ico[d.sev]} ${esc(d.obra)}</b> — ${esc(d.msg)}${d.sug.length?'<ul style="margin:4px 0 0 18px;padding:0">'+d.sug.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':''}</div>`).join('') : '<div class="pli-note">Nenhum problema encontrado.</div>';
+  return `<div class="pli-card"><h3>À gastar — verba por obra</h3>
+    <div class="pli-note" style="margin-top:0;">Defina quanto cada obra pode gastar no total (alumínio + componentes + mão de obra de fábrica e instalação) e o <b>% máximo da verba que pode ser comprado em insumos (alumínio + componentes) por mês</b>. O sistema aponta onde estoura e sugere ajustes; o Otimizador respeita esses limites.</div>
+    <div class="pli-filtros"><label>% máx. de compra de insumos por mês (0 = sem limite) <input type="text" value="${String(pct).replace('.',',')}" style="width:70px" onchange="plcSetCfg('pctInsumoMes',this.value)"></label>
+      <button class="btn small secondary" onclick="plcGastarPreencher()">Preencher vazios com o previsto atual</button></div>
+    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th class="n">À gastar</th><th class="n">Alumínio</th><th class="n">Componentes</th><th class="n">MO fábrica</th><th class="n">MO instalação</th><th class="n">Total previsto</th><th class="n">Saldo</th><th class="n">Pico mensal de insumos / limite</th><th>Situação</th></tr></thead><tbody>${lin}
+      <tr class="tot"><td>TOTAL</td><td class="n">${pliFmtR(T.ag)}</td><td class="n">${pliFmtR(T.alu)}</td><td class="n">${pliFmtR(T.comp)}</td><td class="n">${pliFmtR(T.fab)}</td><td class="n">${pliFmtR(T.inst)}</td><td class="n">${pliFmtR(T.total)}</td><td class="n">${T.ag>0?pliFmtR(T.ag-T.total):'—'}</td><td></td><td></td></tr></tbody></table></div>
+    <h4 style="margin:12px 0 6px;">Onde está o problema e o que mudar</h4>${dh}</div>`;
 }
 function plcSetCfg(campo, valor){
   const c = plcLoad(); c.cfgFab = Object.assign({}, PLC_CFG_PADRAO, c.cfgFab||{});
@@ -8184,6 +8263,7 @@ function pliHtmlCruzamento(){
   ${prazos}
   ${pliHtmlMarcos()}
   ${pliHtmlCenarios()}
+  ${pliHtmlGasto()}
   ${pliHtmlOtimizador()}
   ${pliHtmlCapNec()}
   ${ordem}
@@ -13526,8 +13606,8 @@ function renderTempLocalizacoes(){
   const body = document.getElementById('itemLocalizacoesBody');
   body.innerHTML = tempLocalizacoes.length ? tempLocalizacoes.map((l,i)=>`
     <tr>
-      <td>${esc(l.local)}</td>
-      <td>${l.quantidade}</td>
+      <td><input type="text" value="${esc(l.local)}" style="width:100%;" onchange="editTempLocalizacao(${i},'local',this.value)"></td>
+      <td><input type="number" min="0" step="1" value="${l.quantidade}" style="width:90px;" oninput="editTempLocalizacao(${i},'quantidade',this.value,true)" onchange="editTempLocalizacao(${i},'quantidade',this.value)"></td>
       <td style="text-align:right;"><button class="btn small danger" onclick="removeTempLocalizacao(${i})">Excluir</button></td>
     </tr>`).join('') : `<tr><td colspan="3" class="step-note" style="padding:10px;">Nenhuma localização adicionada ainda.</td></tr>`;
   const total = tempLocalizacoes.reduce((s,l)=> s + (parseFloat(l.quantidade)||0), 0);
@@ -13545,6 +13625,15 @@ function addTempLocalizacao(){
   renderTempLocalizacoes();
 }
 
+function editTempLocalizacao(index, campo, valor, semRender){
+  const l = tempLocalizacoes[index]; if(!l) return;
+  if(campo==='local'){ const t = String(valor||'').trim(); if(!t){ toast('O local não pode ficar vazio.'); renderTempLocalizacoes(); return; } l.local = t; return; }
+  const q = parseFloat(String(valor).replace(',','.'));
+  if(!(q>0)){ if(!semRender){ toast('A quantidade precisa ser maior que zero.'); renderTempLocalizacoes(); } return; }
+  l.quantidade = q;
+  const total = tempLocalizacoes.reduce((s,x)=> s + (parseFloat(x.quantidade)||0), 0);
+  const el = document.getElementById('itemQtdTotalPreview'); if(el) el.textContent = total;
+}
 function removeTempLocalizacao(index){
   tempLocalizacoes.splice(index,1);
   renderTempLocalizacoes();
