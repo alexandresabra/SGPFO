@@ -10466,7 +10466,7 @@ function plcCalcBase(ob, ovr){
 }
 
 /* ---------- acesso (apenas Gerência) ---------- */
-function pliTemAcesso(){ return souGerente(); }
+function pliTemAcesso(){ return souGerente() || souCoordenador(); }
 function pliAtualizarMenu(){
   const it = document.getElementById('navPlanejInt');
   const lb = document.getElementById('navGrpPlanej');
@@ -16552,6 +16552,10 @@ function toggleReplicarBlocoDestinoModo(){
 }
 
 function confirmarReplicarBloco(){
+  try{ _confirmarReplicarBloco(); }
+  catch(e){ console.error(e); toast('Erro ao replicar bloco: '+(e && e.message || e)); }
+}
+function _confirmarReplicarBloco(){
   const origemId = document.getElementById('replicarBlocoOrigemId').value;
   const modo = document.getElementById('replicarBlocoDestinoModo').value;
   let blocos = load('blocos');
@@ -16592,7 +16596,18 @@ function confirmarReplicarBloco(){
   }));
   itens = itens.concat(novos);
   save('itensObra', itens);
-  novos.forEach(n=>gerarTarefasParaItemNovo(n));
+  try{
+    // Tarefas de Projeto em lote (uma leitura/gravação só) — antes era uma por item/fase, o que travava em blocos grandes.
+    let tarefas = load('tarefas');
+    const ja = new Set(tarefas.filter(t=>t.origemModulo==='projeto').map(t=>t.origemItemId+'|'+t.origemFaseKey));
+    novos.forEach(n=>{
+      MODULOS_ITEM.projeto.fases.forEach(f=>{
+        if(ja.has(n.id+'|'+f.key)) return;
+        criarTarefaAutomatica(tarefas, { titulo:`Projeto — ${n.nomenclatura} — ${f.label}`, origemModulo:'projeto', origemItemId:n.id, origemUnitKey:null, origemFaseKey:f.key });
+      });
+    });
+    save('tarefas', tarefas);
+  }catch(e){ console.error(e); toast('Itens replicados, mas houve erro ao gerar as tarefas: '+e.message); }
   closeModal('modalReplicarBloco');
   renderAllItemModulos();
   toast(`${novos.length} item(ns) replicado(s) para o bloco de destino.`);
@@ -17689,8 +17704,8 @@ let contaSemCadastroVinculado = false;
 // não é idêntico a "Gerente" — o cadastro de papéis (Gerenciar papéis) é
 // livre, então o texto exato nunca deveria ser a única forma de reconhecer
 // o papel.
-const PAPEIS_ACESSO_FINANCEIRO = ['Gerente','Administrativo','RH/DP','RH','DP'];
-const PAPEIS_ACESSO_RH = ['Gerente','Administrativo','RH/DP','RH','DP'];
+const PAPEIS_ACESSO_FINANCEIRO = ['Gerente','Coordenador','Administrativo','RH/DP','RH','DP'];
+const PAPEIS_ACESSO_RH = ['Gerente','Coordenador','Administrativo','RH/DP','RH','DP'];
 
 // Normaliza um texto (papel/cargo) para comparação: minúsculas, sem
 // acentos e sem espaços nas pontas. Usada para reconhecer o papel mesmo
@@ -17745,6 +17760,16 @@ function souGerente(){
   return sel.tipo === 'responsavel' && papelConcedeAcesso(sel.registro.papel, ['Gerente']);
 }
 
+// Coordenador: acesso a todo o sistema (Financeiro, RH, Planejamento Integrado,
+// visão 360°). Única exceção mantida: salário de Coordenador/Gerente (ver
+// ehCargoSalarioRestrito) continua visível só ao Gerente.
+function souCoordenador(){
+  if(contaSemCadastroVinculado) return false;
+  const sel = getCurrentUserSelection();
+  if(!sel) return false;
+  return sel.tipo === 'responsavel' && papelConcedeAcesso(sel.registro.papel, ['Coordenador']);
+}
+
 // Cargos cujo salário só o Gerente pode ver — nem RH/DP, nem Administrativo.
 function ehCargoSalarioRestrito(cargo){
   const c = (cargo||'').trim().toLowerCase();
@@ -17787,7 +17812,7 @@ function renderDashboard(){
 
   const userSel = getCurrentUserSelection();
   const currentUser = userSel ? userSel.registro : null;
-  const isManager = !userSel || (userSel.tipo==='funcionario' && userSel.registro.gerente) || (userSel.tipo==='responsavel' && papelConcedeAcesso(userSel.registro.papel, ['Gerente']));
+  const isManager = !userSel || (userSel.tipo==='funcionario' && userSel.registro.gerente) || (userSel.tipo==='responsavel' && papelConcedeAcesso(userSel.registro.papel, ['Gerente','Coordenador']));
 
   document.getElementById('dashManagerView').style.display = isManager ? 'block' : 'none';
   document.getElementById('dashUserView').style.display = isManager ? 'none' : 'block';
