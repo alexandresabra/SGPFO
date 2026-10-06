@@ -9656,7 +9656,7 @@ function pliCalc(P){
 
 /* ---------- motor do Cronograma financeiro (por obra) ---------- */
 /* ---------- parcelamento (~R$ 500 mil) e sequenciamento da fábrica ---------- */
-const PLC_CFG_PADRAO = { concentrar:true, maxObras:3, minMat:1, parcela:500000, intervalo:30, folgaMeses:2, pctInsumoMes:0, prioridade:'prazo', divisao:'igual', ordemObras:[] };
+const PLC_CFG_PADRAO = { concentrar:true, maxObras:3, minMat:1, parcela:500000, intervalo:30, folgaMeses:2, pctInsumoMes:0, ratearSaldo:true, prioridade:'prazo', divisao:'igual', ordemObras:[] };
 let PLC_CFG_CACHE = { raw:null, cfg:null };
 function plcCfg(){
   const raw = localStorage.getItem(DB_PREFIX+PLC_KEY);
@@ -10235,6 +10235,111 @@ function plcOtmAplicar(){
   toast('Proposta aplicada: fluxo de pagamento reorganizado'+(r.capMudou?' e capacidade ajustada para '+r.cap+' t/mês':'')+'.'); renderPlanejInt();
 }
 function plcOtmDescartar(){ PLI_UI.otm = null; renderPlanejInt(); }
+/* ---------- Recalcular prazos (compra · fabricação · instalação) ----------
+   Refaz o calendário a partir dos deadlines (alvo, habite-se, investidor, obra − folga) e das premissas.
+   Mostra a prévia (antes × depois, por fase) e só grava ao clicar em "Aplicar". */
+function plcRecalcLimite(ob){
+  const ds = [], folga = plcCfg().folgaMeses;
+  if(ob.prem.alvo) ds.push(ob.prem.alvo);
+  PLC_MARCOS.forEach(([k])=>{ if(ob.marcos && ob.marcos[k]) ds.push(pliAddMeses(ob.marcos[k], -folga)); });
+  return ds.sort()[0] || '';
+}
+function plcRecalcPrazos(escopo, idxObra){
+  escopo = escopo || 'geral';
+  const C0 = plcLoad(), C = JSON.parse(JSON.stringify(C0));
+  if(!C.obras.length){ toast('Importe os cronogramas (ou crie uma obra) antes de recalcular.'); return null; }
+  const comp = escopo!=='instalacao', inst = escopo!=='compra';
+  const noEscopo = i => idxObra==null || i===idxObra;
+  const ordem = C.obras.map((o,i)=>i).filter(noEscopo).sort((a,b)=>(plcRecalcLimite(C.obras[a])||'9999')<(plcRecalcLimite(C.obras[b])||'9999')?-1:1);
+  const aval = i => { const S = plcSeqCalcular(C), ob = C.obras[i], R = plcCalcBase(ob, S && S.byObra[ob.id]); return { ok:plcAtende(ob,R), fim:R.maxInst }; };
+  const cands = [];
+  [1,0.85,0.7,0.55,0.4,0.3].forEach(k=>[0,30,60,90,120,180,240,300,420,600].forEach(A=>cands.push({ k, A, custo:A/30+(1-k)*10 })));
+  cands.sort((a,b)=>a.custo-b.custo);
+  if(comp) ordem.forEach(i=>{ delete C.obras[i].ajuste; });
+  const t0 = Date.now(); let truncou = false;
+  const ef0s = {}; ordem.forEach(i=>{ ef0s[i] = C0.obras[i].prem.efetivo; });
+  const resolver = i=>{
+    const ob = C.obras[i]; let r = aval(i); if(r.ok) return r;
+    if(inst){ ob.prem.efetivo = ef0s[i]; }
+    if(comp){
+      let melhor = null;
+      for(const cd of cands){
+        if(Date.now()-t0 > 150000){ truncou = true; break; }
+        ob.ajuste = (cd.A===0 && cd.k===1) ? undefined : cd; if(ob.ajuste===undefined) delete ob.ajuste;
+        r = aval(i);
+        if(!melhor || r.fim < melhor.fim) melhor = { cd, fim:r.fim, ok:r.ok };
+        if(r.ok){ melhor = { cd, fim:r.fim, ok:true }; break; }
+      }
+      if(melhor){ if(melhor.cd.A===0 && melhor.cd.k===1) delete ob.ajuste; else ob.ajuste = melhor.cd; r = aval(i); }
+    }
+    if(!r.ok && inst){
+      const ef0 = ef0s[i]; let ef = ef0, ach = false;
+      for(let n=0; n<16 && !ach; n++){
+        ef = Math.ceil(ef*1.15); if(ef > ef0*4+10) break;
+        ob.prem.efetivo = ef; r = aval(i); if(r.ok) ach = true;
+      }
+      if(!ach){ ob.prem.efetivo = ef0; r = aval(i); }
+    }
+    return r;
+  };
+  // Passadas: as obras interagem pela fábrica (uma mudança em uma altera as outras), então repete até estabilizar.
+  for(let p=0; p<4; p++){
+    let mudou = false;
+    ordem.forEach(i=>{ const ok0 = aval(i).ok; if(ok0) return; const r = resolver(i); if(r.ok) mudou = true; });
+    if(!ordem.some(i=>!aval(i).ok) || !mudou && p>0) break;
+  }
+  const antes = plcAvaliarObras(C0), depois = plcAvaliarObras(C);
+  const linhas = C.obras.map((ob,i)=>{
+    const a = antes[ob.id], d = depois[ob.id], o0 = C0.obras[i], R = d.R;
+    const cal = plcCalendarioCompras(ob, R);
+    const fases = cal.map(f=>{ const rs = R.resumo.find(x=>x.cod===f.cod) || {};
+      return { cod:f.cod, desc:f.desc, compraIni:f.compraIni, compraFim:f.compraFim, iniFab:rs.iniFab, fimFab:rs.fimFab, iniInst:rs.iniInst, fimInst:rs.fimInst, prazo:f.prazo,
+               folga: (f.prazo && rs.fimInst) ? pliDiffDias(f.prazo, rs.fimInst) : null }; });
+    return { id:ob.id, nome:ob.nome, noEscopo:noEscopo(i), limite:plcRecalcLimite(ob),
+      antes:{ fim:a.fim, ok:a.ok, ajuste:o0.ajuste||null, efetivo:o0.prem.efetivo }, depois:{ fim:d.fim, ok:d.ok, ajuste:ob.ajuste||null, efetivo:ob.prem.efetivo }, fases,
+      mudou: noEscopo(i) && (JSON.stringify(o0.ajuste||null)!==JSON.stringify(ob.ajuste||null) || o0.prem.efetivo!==ob.prem.efetivo) };
+  });
+  const r = { escopo, idxObra:idxObra==null?null:idxObra, linhas, truncou };
+  PLI_UI.recalc = r; return r;
+}
+function plcRecalcExecutar(escopo, idxObra){
+  toast('Recalculando prazos…');
+  setTimeout(()=>{ try{ plcRecalcPrazos(escopo, idxObra); }catch(e){ console.error(e); toast('Erro ao recalcular: '+e.message); } renderPlanejInt(); }, 30);
+}
+function plcRecalcAplicar(){
+  const r = PLI_UI.recalc; if(!r) return;
+  const c = plcLoad();
+  r.linhas.forEach(x=>{ if(!x.noEscopo) return; const ob = c.obras.find(o=>o.id===x.id); if(!ob) return;
+    if(r.escopo!=='instalacao'){ if(x.depois.ajuste) ob.ajuste = x.depois.ajuste; else delete ob.ajuste; ob.ajusteAutoFeito = true; }
+    if(r.escopo!=='compra' && x.depois.efetivo) ob.prem.efetivo = x.depois.efetivo; });
+  plcSave(c); PLI_UI.recalc = null; PLI_UI.otm = null; PLI_UI.cen = null; PLI_UI.capRes = null;
+  toast('Prazos recalculados e aplicados.'); renderPlanejInt();
+}
+function plcRecalcDescartar(){ PLI_UI.recalc = null; renderPlanejInt(); }
+function pliHtmlRecalc(){
+  const c = plcLoad(); if(!c.obras.length) return '';
+  const r = PLI_UI.recalc, esc0 = PLI_UI.recalcEscopo || 'geral', ob0 = PLI_UI.recalcObra;
+  const f = pliFmtData, ok = v => v ? '<span style="color:#2e7d32">✔ no prazo</span>' : '<span style="color:#b00020">✖ fora</span>';
+  let res = '';
+  if(r){
+    const tit = { geral:'Geral (compra + fabricação + instalação)', compra:'Compras', instalacao:'Instalação' }[r.escopo];
+    res = `<h4 style="margin:12px 0 6px;">Proposta — ${tit}${r.idxObra!=null?' · '+esc(c.obras[r.idxObra].nome):''}</h4>
+      ${r.truncou?'<div class="pli-alerta aviso">⚠ O cálculo atingiu o tempo máximo; algumas obras podem não ter a melhor combinação.</div>':''}
+      <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th>Deadline (marcos − folga)</th><th>Término hoje</th><th>Término recalculado</th><th>Situação</th><th>Compras</th><th class="n">Efetivo inst.</th></tr></thead><tbody>${r.linhas.map(x=>`<tr style="${x.noEscopo?'':'opacity:.55'}"><td><b>${esc(x.nome)}</b></td><td>${f(x.limite)}</td><td>${f(x.antes.fim)} ${ok(x.antes.ok)}</td><td><b>${f(x.depois.fim)}</b></td><td>${ok(x.depois.ok)}</td>
+        <td>${x.depois.ajuste?`pagamentos ${x.depois.ajuste.A} d antes${x.depois.ajuste.k<1?' · ritmo '+Math.round(x.depois.ajuste.k*100)+'%':''}`:'calendário original'}${x.noEscopo&&JSON.stringify(x.antes.ajuste)!==JSON.stringify(x.depois.ajuste)?' <span style="color:#1565c0">(alterado)</span>':''}</td>
+        <td class="n">${x.antes.efetivo!==x.depois.efetivo?x.antes.efetivo+' → <b>'+x.depois.efetivo+'</b>':x.depois.efetivo}</td></tr>`).join('')}</tbody></table></div>
+      ${r.linhas.filter(x=>x.noEscopo).map(x=>`<details style="margin:6px 0"><summary><b>${esc(x.nome)}</b> — prazos por fase</summary><div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>Compra (1º → último pgto)</th><th>Fabricação</th><th>Instalação</th><th>Prazo</th><th class="n">Folga (d)</th></tr></thead><tbody>${x.fases.map(z=>`<tr><td>${esc(z.cod)} · ${esc(z.desc||'')}</td><td>${f(z.compraIni)} → ${f(z.compraFim)}</td><td>${f(z.iniFab)} → ${f(z.fimFab)}</td><td>${f(z.iniInst)} → ${f(z.fimInst)}</td><td>${f(z.prazo)}</td><td class="n" style="color:${z.folga!=null&&z.folga<0?'#b00020':'#2e7d32'}"><b>${z.folga==null?'—':z.folga}</b></td></tr>`).join('')}</tbody></table></div></details>`).join('')}
+      <div class="form-actions" style="margin-top:8px"><button class="btn" onclick="plcRecalcAplicar()">Aplicar</button> <button class="btn secondary" onclick="plcRecalcDescartar()">Descartar</button></div>
+      <div class="pli-note">Fabricação segue a capacidade e a ordem da fábrica (Otimizador / Ordem de produção). Se mesmo assim algo ficar fora do prazo, rode o Otimizador para ajustar capacidade e obras em paralelo.</div>`;
+  }
+  return `<div class="pli-card"><h3>Recalcular prazos</h3>
+    <div class="pli-note" style="margin-top:0;">Refaz o calendário a partir dos <b>deadlines</b> (prazo alvo, habite-se, entrega ao investidor e obra, menos a folga) e das <b>premissas</b> de cada obra (entrega do material, início da fabricação/instalação, capacidade, efetivo). Antecipa as compras o mínimo necessário e, se preciso, aumenta o efetivo de instalação. Mostra a prévia antes de gravar.</div>
+    <div class="pli-filtros"><label>O que recalcular
+      <select onchange="PLI_UI.recalcEscopo=this.value"><option value="geral" ${esc0==='geral'?'selected':''}>Geral — compra + fabricação + instalação</option><option value="compra" ${esc0==='compra'?'selected':''}>Só compras (calendário de pagamentos)</option><option value="instalacao" ${esc0==='instalacao'?'selected':''}>Só instalação (efetivo necessário)</option></select></label>
+      <label>Obra <select onchange="PLI_UI.recalcObra=this.value===''?null:+this.value"><option value="">Todas</option>${c.obras.map((o,i)=>`<option value="${i}" ${ob0===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
+      <button class="btn" onclick="plcRecalcExecutar(PLI_UI.recalcEscopo||'geral', PLI_UI.recalcObra==null?null:PLI_UI.recalcObra)">Recalcular prazos</button></div>${res}</div>`;
+}
+
 function pliHtmlOtimizador(){
   const c = plcLoad(); if(!c.obras.length) return '';
   const par = plcOtmParams(), r = PLI_UI.otm, P = pliLoad();
@@ -10264,10 +10369,15 @@ function plcGasto(ob, R){
   const pct = plcCfg().pctInsumoMes || 0, ag = ob.aGastar || 0;
   const alu = soma(R.pagto), comp = soma(R.comp), fab = soma(R.custoFab), inst = soma(R.custoInst), total = alu+comp+fab+inst;
   const lim = (ag>0 && pct>0) ? ag*pct/100 : 0;
-  const meses = R.meses || [], ins = meses.map((m,i)=>(R.pagto[i]||0)+(R.comp[i]||0));
+  const meses = R.meses || [], ins0 = meses.map((m,i)=>(R.pagto[i]||0)+(R.comp[i]||0));
+  // Saldo (à gastar − previsto) rateado entre os meses com gasto de insumos, proporcional ao gasto de cada mês.
+  const saldo = ag>0 ? ag-total : null, somaIns = ins0.reduce((s,v)=>s+v,0);
+  const rat = plcCfg().ratearSaldo !== false && saldo>1 && somaIns>0;
+  const fator = rat ? saldo/somaIns : 0;
+  const rateio = ins0.map(v=>v*fator), ins = ins0.map((v,i)=>v+rateio[i]);
   const exc = []; if(lim>0) ins.forEach((v,i)=>{ if(v>lim+1) exc.push({ m:meses[i], v, lim }); });
-  return { ag, pct, alu, comp, fab, inst, total, lim, ins, meses, exc, pico:Math.max(0,...ins),
-           saldo: ag>0 ? ag-total : null, okTotal: ag>0 ? total<=ag+1 : true, okMes: exc.length===0 };
+  return { ag, pct, alu, comp, fab, inst, total, lim, ins, ins0, rateio, fator, ratSaldo: rat ? saldo : 0, meses, exc, pico:Math.max(0,...ins),
+           saldo, okTotal: ag>0 ? total<=ag+1 : true, okMes: exc.length===0 };
 }
 function plcGastoExcesso(ob, R){ const g = plcGasto(ob, R); if(!(g.ag>0)) return 0; return Math.max(0, g.total-g.ag) + g.exc.reduce((s,x)=>s+(x.v-x.lim),0); }
 function plcSetGastar(i, v){
@@ -10315,6 +10425,15 @@ function plcGastoDiagnostico(C){
   if(algum && totAg>0 && totPrev>totAg) out.unshift({ sev:'erro', obra:'TOTAL', msg:'Soma das obras: previsto '+pliFmtR(totPrev)+' contra à gastar '+pliFmtR(totAg)+'.', sug:[] });
   return out;
 }
+function pliHtmlRateioSaldo(c){
+  if(plcCfg().ratearSaldo === false) return '';
+  const mt = m => { const [y,mm] = String(m).split('-'); return ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][(+mm)-1]+'/'+y.slice(2); };
+  const blocos = c.obras.map(ob=>{ const g = plcGasto(ob, plcCalc(ob)); if(!(g.ratSaldo>0)) return '';
+    const linhas = g.meses.map((m,i)=> g.ins0[i]>0 ? `<tr><td>${mt(m)}</td><td class="n">${pliFmtR(g.ins0[i])}</td><td class="n" style="color:#2e7d32">+ ${pliFmtR(g.rateio[i])}</td><td class="n"><b>${pliFmtR(g.ins[i])}</b></td></tr>` : '').join('');
+    return `<details style="margin:6px 0"><summary><b>${esc(ob.nome)}</b> — saldo de ${pliFmtR(g.ratSaldo)} rateado (+${(g.fator*100).toFixed(1).replace('.',',')}% sobre o insumo de cada mês)</summary>
+      <table class="pli-t"><thead><tr><th>Mês</th><th class="n">Insumos previstos</th><th class="n">Rateio do saldo</th><th class="n">Insumos com rateio</th></tr></thead><tbody>${linhas}</tbody></table></details>`; }).join('');
+  return blocos ? `<h4 style="margin:12px 0 6px;">Rateio do saldo por mês (insumos)</h4><div class="pli-note" style="margin-top:0">O que sobra do à gastar em cada obra é distribuído nos meses em que há compra de insumos, na proporção do que é gasto em cada um. O limite de % mensal considera o valor já com o rateio.</div>${blocos}` : '';
+}
 function pliHtmlGasto(){
   const c = plcLoad(); if(!c.obras.length) return '';
   const cfg = plcCfg(), pct = cfg.pctInsumoMes || 0;
@@ -10331,14 +10450,17 @@ function pliHtmlGasto(){
   return `<div class="pli-card"><h3>À gastar — verba por obra</h3>
     <div class="pli-note" style="margin-top:0;">Defina quanto cada obra pode gastar no total (alumínio + componentes + mão de obra de fábrica e instalação) e o <b>% máximo da verba que pode ser comprado em insumos (alumínio + componentes) por mês</b>. O sistema aponta onde estoura e sugere ajustes; o Otimizador respeita esses limites.</div>
     <div class="pli-filtros"><label>% máx. de compra de insumos por mês (0 = sem limite) <input type="text" value="${String(pct).replace('.',',')}" style="width:70px" onchange="plcSetCfg('pctInsumoMes',this.value)"></label>
-      <button class="btn small secondary" onclick="plcGastarPreencher()">Preencher vazios com o previsto atual</button></div>
+      <button class="btn small secondary" onclick="plcGastarPreencher()">Preencher vazios com o previsto atual</button>
+      <label><input type="checkbox" ${cfg.ratearSaldo!==false?'checked':''} onchange="plcSetCfg('ratearSaldo',this.checked)"> Ratear o saldo entre os meses com gasto (proporcional aos insumos)</label></div>
     <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th class="n">À gastar</th><th class="n">Alumínio</th><th class="n">Componentes</th><th class="n">MO fábrica</th><th class="n">MO instalação</th><th class="n">Total previsto</th><th class="n">Saldo</th><th class="n">Pico mensal de insumos / limite</th><th>Situação</th></tr></thead><tbody>${lin}
       <tr class="tot"><td>TOTAL</td><td class="n">${pliFmtR(T.ag)}</td><td class="n">${pliFmtR(T.alu)}</td><td class="n">${pliFmtR(T.comp)}</td><td class="n">${pliFmtR(T.fab)}</td><td class="n">${pliFmtR(T.inst)}</td><td class="n">${pliFmtR(T.total)}</td><td class="n">${T.ag>0?pliFmtR(T.ag-T.total):'—'}</td><td></td><td></td></tr></tbody></table></div>
+    ${pliHtmlRateioSaldo(c)}
     <h4 style="margin:12px 0 6px;">Onde está o problema e o que mudar</h4>${dh}</div>`;
 }
 function plcSetCfg(campo, valor){
   const c = plcLoad(); c.cfgFab = Object.assign({}, PLC_CFG_PADRAO, c.cfgFab||{});
   if(campo==='concentrar') c.cfgFab.concentrar = !!valor;
+  else if(campo==='ratearSaldo') c.cfgFab.ratearSaldo = !!valor;
   else if(campo==='prioridade' || campo==='divisao') c.cfgFab[campo] = String(valor);
   else { const v = parseFloat(String(valor).replace(',','.')); if(isFinite(v)) c.cfgFab[campo] = campo==='minMat' ? Math.min(100,Math.max(5,v))/100 : (campo==='maxObras' ? Math.max(1,Math.round(v)) : (campo==='folgaMeses' ? Math.max(0,Math.round(v)) : Math.max(0,v))); }
   plcSave(c); renderPlanejInt();
@@ -11129,6 +11251,7 @@ function pliHtmlCruzamento(){
     ${ctrl}<div class="pli-kpis">${pliKpi('Obras no cruzamento', D.linhas.length)}${pliKpi('Conflitos críticos', nC)}${pliKpi('Atenções', nA)}${pliKpi('Fábrica (t)', pliFmtT(totF,0))}</div>
     <h4 style="margin:12px 0 6px;">Problemas encontrados</h4>${alHtml}</div>
   ${prazos}
+  ${pliHtmlRecalc()}
   ${pliHtmlMarcos()}
   ${pliHtmlCenarios()}
   ${pliHtmlGasto()}
