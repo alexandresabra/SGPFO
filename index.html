@@ -984,6 +984,10 @@
       <div class="nav-group-label" id="navGrpPlanej" style="display:none;">Planejamento (Gerência)</div>
       <div class="nav-item" id="navPlanejInt" data-section="planejint" style="display:none;"><span class="ico">📈</span><span class="label">Planejamento Integrado de Alumínio</span></div>
 
+      <div class="nav-group-label" id="navGrpCoord" style="display:none;">Coordenação</div>
+      <div class="nav-item" id="navPainel" data-section="painel" style="display:none;"><span class="ico">🚨</span><span class="label">Painel de Pendências</span><span id="navPainelBadge" style="display:none;margin-left:auto;background:#bd0c1d;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;font-weight:700"></span></div>
+      <div class="nav-item" id="navBackup" data-section="backup" style="display:none;"><span class="ico">💾</span><span class="label">Backup e Versões</span></div>
+
       <div class="nav-group-label">Suprimentos</div>
       <div class="nav-item" data-section="materiaisgeral"><span class="ico">▧</span><span class="label">Materiais — Visão Geral</span></div>
 
@@ -1048,6 +1052,11 @@
           <div class="panel">
             <div class="panel-head">Últimos cálculos técnicos</div>
             <div class="panel-body" id="dashCalcRecentes"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">Evolução das obras — Projeto · Produção · Instalação (%, kg e m²)</div>
+            <div class="panel-body" id="dashEvolucaoObras"></div>
           </div>
 
           <div class="panel">
@@ -2210,6 +2219,9 @@
       </section>
 
       <!-- ============ MATERIAIS — VISÃO GERAL (TODAS AS OBRAS) ============ -->
+      <section class="section" id="sec-painel"><div id="painelConteudo"></div></section>
+      <section class="section" id="sec-backup"><div id="backupConteudo"></div></section>
+
       <!-- ============ PLANEJAMENTO INTEGRADO DE ALUMÍNIO (somente Gerência) ============ -->
       <section class="section" id="sec-planejint">
         <div id="pliSemAcesso" class="empty-state" style="display:none;">
@@ -7104,6 +7116,8 @@ const sectionTitles = {
   tarefas: ['Tarefas por Setor','Controle de tarefas por setor'],
   metas: ['Metas por Setor','Acompanhamento de metas por setor'],
   materiaisgeral: ['Materiais — Visão Geral','Todos os pedidos de material, agrupados por obra'],
+  painel: ['Painel de Pendências','Atrasos e pendências de todas as áreas (Gerência e Coordenação)'],
+  backup: ['Backup e Versões','Cópia de segurança dos dados e versões do plano'],
   planejint: ['Planejamento Integrado de Alumínio','Fábrica, instalação, compras e cronograma financeiro por obra (somente Gerência)'],
   rateiomdo: ['Rateio de Mão de Obra','Rateio mensal do custo de funcionários por obra (acesso restrito)'],
   chamados: ['Revisão de Esquadrias','Sistema de chamados de assistência técnica'],
@@ -7168,6 +7182,8 @@ function showSection(id){
     if(id==='materiaisgeral') renderMateriaisGeral();
     if(id==='rateiomdo') renderRateioMaoDeObra();
     if(id==='planejint') renderPlanejInt();
+    if(id==='painel') renderPainel();
+    if(id==='backup') renderBackup();
     if(id==='chamados') carregarChamadosFrame();
     if(id==='almoxarifado') carregarAlmoxarifadoFrame();
   }catch(e){
@@ -7563,7 +7579,16 @@ function expEditarRemessa(id){
 function expFecharRemessa(id){
   const rs = load('remessas'), r = rs.find(x=>x.id===id); if(!r) return;
   if(r.aberta){
-    if(!expItensDaRemessa(r).length){ toast('A remessa está vazia.'); return; }
+    const carga = expItensDaRemessa(r);
+    if(!carga.length){ toast('A remessa está vazia.'); return; }
+    // Conferência de carga: o que está carregado × o que está pronto e ficou de fora
+    const qC = carga.reduce((t,x)=>t+x.qtd,0), kgC = carga.reduce((t,x)=>t+x.qtd*(parseFloat(x.it.pesoLiquido)||0),0);
+    const fora = {}; let nFora = 0;
+    load('itensObra').filter(it=>it.obraId===r.obraId && itemAtivo(it)).forEach(it=>expPecas(it).forEach(p=>{ if(expEstadoPeca(p)==='pronto'){ fora[it.nomenclatura] = (fora[it.nomenclatura]||0)+1; nFora++; } }));
+    const lin = carga.slice(0,15).map(x=>'  • '+x.it.nomenclatura+': '+x.qtd+' pç').join('\n') + (carga.length>15?'\n  … e mais '+(carga.length-15)+' item(ns)':'');
+    const txtFora = nFora ? '\n\nATENÇÃO — '+nFora+' peça(s) liberada(s) pela fábrica NÃO estão nesta remessa:\n'+Object.keys(fora).slice(0,10).map(k=>'  • '+k+': '+fora[k]+' pç').join('\n')+(Object.keys(fora).length>10?'\n  …':'') : '\n\nNenhuma peça liberada ficou de fora.';
+    if(!confirm('CONFERÊNCIA DE CARGA — remessa '+r.numero+'\n'+qC+' peça(s) · '+kgC.toFixed(1)+' kg\n'+lin+txtFora+'\n\nConferiu a carga no veículo e deseja fechar a remessa?')) return;
+    r.conferencia = { em:new Date().toISOString(), por:expUsuario(), pecas:qC, kg:Math.round(kgC*10)/10, ficaramProntas:nFora };
     if(!r.veiculo && !r.motorista){ const v = prompt('Veículo / placa (opcional):',''); if(v!==null) r.veiculo = v.trim(); const m = prompt('Motorista (opcional):',''); if(m!==null) r.motorista = m.trim(); }
     r.aberta = false; r.fechadaEm = new Date().toISOString(); r.fechadaPor = expUsuario(); save('remessas', rs);
   }
@@ -7576,7 +7601,7 @@ function expImprimirRomaneio(r){
   const f1 = v => (v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
   const tq = its.reduce((s,x)=>s+x.qtd,0), tp = its.reduce((s,x)=>s+x.qtd*(parseFloat(x.it.pesoLiquido)||0),0);
   document.getElementById('rdoPrintArea').innerHTML = `<h1>Romaneio de Expedição ${esc(r.numero)}</h1>
-    <div class="meta">Obra: <strong>${esc(obra.nome||'—')}</strong><br>Aberta em ${expFmtDH(r.criadaEm)} (${esc(r.criadaPor||'')})${r.fechadaEm?' · fechada em '+expFmtDH(r.fechadaEm)+' ('+esc(r.fechadaPor||'')+')':''}<br>Veículo: ${esc(r.veiculo||'—')} · Motorista: ${esc(r.motorista||'—')}${r.obs?'<br>Obs.: '+esc(r.obs):''}</div>
+    <div class="meta">Obra: <strong>${esc(obra.nome||'—')}</strong><br>Aberta em ${expFmtDH(r.criadaEm)} (${esc(r.criadaPor||'')})${r.fechadaEm?' · fechada em '+expFmtDH(r.fechadaEm)+' ('+esc(r.fechadaPor||'')+')':''}<br>Veículo: ${esc(r.veiculo||'—')} · Motorista: ${esc(r.motorista||'—')}${r.obs?'<br>Obs.: '+esc(r.obs):''}${r.conferencia?'<br>Carga conferida por '+esc(r.conferencia.por||'—')+' em '+expFmtDH(r.conferencia.em)+' — '+r.conferencia.pecas+' peça(s), '+r.conferencia.kg+' kg'+(r.conferencia.ficaramProntas?' ('+r.conferencia.ficaramProntas+' peça(s) liberada(s) ficaram na fábrica)':''):''}</div>
     <table><thead><tr><th>Item</th><th>Bloco</th><th>Tipo</th><th>Medidas (mm)</th><th style="text-align:right">Peças</th><th style="text-align:right">Peso (kg)</th><th>Peças expedidas (local · nº)</th></tr></thead><tbody>${its.map(x=>`<tr><td><b>${esc(x.it.nomenclatura||'')}</b></td><td>${esc(nb(x))}</td><td>${esc(x.it.tipoEsquadria||'')}</td><td>${x.it.largura?esc(x.it.largura)+' × '+esc(x.it.altura):'—'}</td><td style="text-align:right">${x.qtd}</td><td style="text-align:right">${f1(x.qtd*(parseFloat(x.it.pesoLiquido)||0))}</td><td style="font-size:10px;">${esc(x.locs.join(', '))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="4">TOTAL — ${its.length} itens</td><td style="text-align:right">${tq}</td><td style="text-align:right">${f1(tp)}</td><td></td></tr></tfoot></table>
     <div style="display:flex;gap:30px;margin-top:60px;font-size:12px;"><div style="flex:1;border-top:1px solid #333;padding-top:4px;">Expedição (liberou)</div><div style="flex:1;border-top:1px solid #333;padding-top:4px;">Transportador</div><div style="flex:1;border-top:1px solid #333;padding-top:4px;">Recebido na obra (nome / data)</div></div>`;
@@ -7695,7 +7720,7 @@ function renderObraWorkspaceGeral(){
   const itens = itensTodos.filter(itemAtivo);
   const resCanc = resumoCancelados(itensTodos);
   document.getElementById('owKpiCancel').textContent = resCanc.itens;
-  document.getElementById('owKpiCancelDet').innerHTML = resCanc.itens ? `${resCanc.unid} un · ${resCanc.kg.toFixed(1)} kg<br>${resCanc.fabItens} já fabricado(s) (${resCanc.fabUnid} un · ${resCanc.fabKg.toFixed(1)} kg)${resCanc.emFabItens?'<br>'+resCanc.emFabItens+' com produção iniciada':''}` : 'nenhum';
+  document.getElementById('owKpiCancelDet').innerHTML = (resCanc.itens || resCanc.parcUnid) ? `${resCanc.itens?`${resCanc.unid} un · ${resCanc.kg.toFixed(1)} kg<br>${resCanc.fabItens} já fabricado(s) (${resCanc.fabUnid} un · ${resCanc.fabKg.toFixed(1)} kg)${resCanc.emFabItens?'<br>'+resCanc.emFabItens+' com produção iniciada':''}`:''}${resCanc.parcUnid?`${resCanc.itens?'<br>':''}Parcial: ${resCanc.parcUnid} un · ${resCanc.parcKg.toFixed(1)} kg${resCanc.parcFabUnid?' ('+resCanc.parcFabUnid+' já fabricada(s))':''}`:''}` : 'nenhum';
   const materiais = load('materiais').filter(m=>m.obraId===currentObraId);
   const cVento = load('calculosVento').filter(c=>c.obraId===currentObraId);
   const cPerfil = load('calculosPerfil').filter(c=>c.obraId===currentObraId);
@@ -7755,7 +7780,9 @@ function snapshotFasesItem(it){
   return { projeto:{ done:pj.done, total:pj.total }, producao:{ done:pd.done, total:pd.total, concluida: pd.total>0 && pd.done===pd.total, iniciada: pd.done>0 }, instalacao:{ instaladas:ok, total:tot } };
 }
 function resumoCancelados(itens){
-  const r = { itens:0, unid:0, kg:0, fabItens:0, fabUnid:0, fabKg:0, emFabItens:0 };
+  const r = { itens:0, unid:0, kg:0, fabItens:0, fabUnid:0, fabKg:0, emFabItens:0, parcUnid:0, parcKg:0, parcFabUnid:0 };
+  itens.filter(it=>!it.cancelado && it.cancParcial && it.cancParcial.length).forEach(it=>it.cancParcial.forEach(c=>{
+    r.parcUnid += c.qtd||0; r.parcKg += (c.kgUn||0)*(c.qtd||0); if(c.fab) r.parcFabUnid += c.qtd||0; }));
   itens.filter(it=>it.cancelado).forEach(it=>{
     const q = qtdTotalLocalizacoes(it), kg = (parseFloat(it.pesoLiquido)||0)*q, sn = it.cancelado.producao ? it.cancelado : snapshotFasesItem(it);
     const prod = sn.producao || {};
@@ -7766,6 +7793,13 @@ function resumoCancelados(itens){
 }
 function cancelarItem(id){
   const it = load('itensObra').find(x=>x.id===id); if(!it) return;
+  const qTot = qtdTotalLocalizacoes(it);
+  if(qTot > 1){
+    const resp = prompt('Item '+it.nomenclatura+' — total de '+qTot+' unidade(s).\nQuantas unidades cancelar?\n• Digite '+qTot+' (ou deixe como está) para cancelar o ITEM INTEIRO;\n• digite um número menor para cancelar só PARTE (sai das últimas localizações da lista).', String(qTot));
+    if(resp===null) return;
+    const n = parseInt(String(resp).trim(), 10);
+    if(isFinite(n) && n>0 && n<qTot){ cancelarParteItem(id, n); return; }
+  }
   const sn = snapshotFasesItem(it);
   const est = sn.producao.concluida ? 'JÁ FABRICADO' : (sn.producao.iniciada ? 'produção iniciada ('+sn.producao.done+'/'+sn.producao.total+' fases)' : 'sem produção iniciada');
   const motivo = prompt('Cancelar o item '+it.nomenclatura+' ('+est+(sn.instalacao.instaladas?'; '+sn.instalacao.instaladas+' un instalada(s)':'')+').\nMotivo do cancelamento (opcional):', '');
@@ -7774,6 +7808,24 @@ function cancelarItem(id){
   itens[i].cancelado = Object.assign({ em:todayISO(), motivo:String(motivo).trim() }, sn);
   save('itensObra', itens); renderAllItemModulos(); try{ renderObraWorkspaceGeral(); }catch(e){}
   toast('Item '+it.nomenclatura+' cancelado — o progresso já feito foi mantido no registro.');
+}
+function cancelarParteItem(id, n){
+  const itens = load('itensObra'), i = itens.findIndex(x=>x.id===id); if(i<0) return;
+  const it = itens[i], sn = snapshotFasesItem(it);
+  const locs = (it.localizacoes||[]).map(l=>({ ...l }));
+  // unidades que sairão (do fim da lista) e quantas delas já estão instaladas
+  const unids = gerarUnidadesInstalacao(it), saem = unids.slice(unids.length-n);
+  const inst = saem.filter(u=>{ const p = calcProgressoUnidade(getUnidadeState(it, u.unitKey)); return p.total>0 && p.done===p.total; }).length;
+  const est = sn.producao.concluida ? 'JÁ FABRICADO' : (sn.producao.iniciada ? 'produção iniciada' : 'sem produção iniciada');
+  const motivo = prompt('Cancelar '+n+' unidade(s) de '+it.nomenclatura+' ('+est+(inst?'; '+inst+' delas já instalada(s)':'')+').\nMotivo (opcional):', '');
+  if(motivo===null) return;
+  let falta = n; const detalhes = [];
+  for(let k=locs.length-1; k>=0 && falta>0; k--){ const q = parseFloat(locs[k].quantidade)||0, tira = Math.min(q, falta); if(tira<=0) continue; locs[k].quantidade = q - tira; falta -= tira; detalhes.push({ locId:locs[k].id, local:locs[k].local, qtd:tira }); }
+  it.localizacoes = locs.filter(l=>(parseFloat(l.quantidade)||0) > 0);
+  if(it.quantidade!=null) it.quantidade = qtdTotalLocalizacoes(it);
+  it.cancParcial = (it.cancParcial||[]).concat([{ id:uid(), em:todayISO(), motivo:String(motivo).trim(), qtd:n, kgUn:parseFloat(it.pesoLiquido)||0, fab:!!sn.producao.concluida, instaladas:inst, detalhes }]);
+  itens[i] = it; save('itensObra', itens); renderAllItemModulos(); try{ renderObraWorkspaceGeral(); }catch(e){}
+  toast(n+' unidade(s) de '+it.nomenclatura+' canceladas — restam '+qtdTotalLocalizacoes(it)+'. O registro fica no item e na Visão Geral.');
 }
 function reativarItem(id){
   const itens = load('itensObra'), i = itens.findIndex(x=>x.id===id); if(i<0) return;
@@ -10227,6 +10279,7 @@ function plcOtmCalcular(){
 }
 function plcOtmAplicar(){
   const r = PLI_UI.otm; if(!r) return;
+  planoSnapshot('Antes de aplicar o Otimizador');
   const c = plcLoad();
   c.obras.forEach(ob=>{ const x = r.obras.find(o=>o.id===ob.id); if(!x) return; if(x.ajuste) ob.ajuste = x.ajuste; else delete ob.ajuste; ob.ajusteAutoFeito = true; if(r.efUsa && r.efUsa[ob.id]) ob.prem.efetivo = r.efUsa[ob.id]; });
   c.cfgFab = Object.assign({}, PLC_CFG_PADRAO, c.cfgFab||{}, { maxObras:r.maxObras });
@@ -10355,6 +10408,7 @@ function plcRecalcExecutar(escopo, idxObra){
 function plcRecalcSel(id){ if(PLI_UI.recalc){ PLI_UI.recalc.sel = id; renderPlanejInt(); } }
 function plcRecalcAplicar(){
   const r = PLI_UI.recalc; if(!r) return;
+  planoSnapshot('Antes de aplicar Recalcular prazos — '+((r.opcoes.find(o=>o.id===r.sel)||{}).titulo||''));
   const op = r.opcoes.find(o=>o.id===r.sel) || r.opcoes[0];
   const c = plcLoad();
   op.linhas.forEach(x=>{ if(!x.noEscopo) return; const ob = c.obras.find(o=>o.id===x.id); if(!ob) return;
@@ -10392,6 +10446,258 @@ function pliHtmlRecalc(){
       <select onchange="PLI_UI.recalcEscopo=this.value"><option value="geral" ${esc0==='geral'?'selected':''}>Geral — compra + fabricação + instalação (3 opções)</option><option value="compra" ${esc0==='compra'?'selected':''}>Só compras (calendário de pagamentos)</option><option value="instalacao" ${esc0==='instalacao'?'selected':''}>Só instalação (efetivo necessário)</option></select></label>
       <label>Obra <select onchange="PLI_UI.recalcObra=this.value===''?null:+this.value"><option value="">Todas</option>${c.obras.map((o,i)=>`<option value="${i}" ${ob0===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
       <button class="btn" onclick="plcRecalcExecutar(PLI_UI.recalcEscopo||'geral', PLI_UI.recalcObra==null?null:PLI_UI.recalcObra)">Recalcular prazos</button></div>${res}</div>`;
+}
+
+/* ---------- Curva S por obra (planejada): compra · fabricação · instalação, acumulado % ---------- */
+function plcCurvaS(ob, R){
+  const L = R.lotes || []; if(!L.length) return null;
+  const d0 = L.map(l=>l.venc).filter(Boolean).sort()[0], d1 = L.map(l=>l.fimInst).filter(Boolean).sort().slice(-1)[0];
+  if(!d0 || !d1) return null;
+  const marcos = plcMarcos(ob, R), alvo = ob.prem.alvo;
+  let fim = d1; marcos.forEach(m=>{ if(m.data && m.data > fim) fim = m.data; }); if(alvo && alvo > fim) fim = alvo;
+  const ini = pliAddDias(d0, -15), pts = [];
+  const totKg = L.reduce((s,l)=>s+l.kg,0) || 1, totV = L.reduce((s,l)=>s+l.valor,0) || 1;
+  const frac = (d, a, b) => d <= a ? 0 : (d >= b ? 1 : (b===a ? 1 : pliDiffDias(d, a)/pliDiffDias(b, a)));
+  // um ponto por mês (fim do mês) + o início
+  const ms = pliMesesEntre(pliYM(ini), pliYM(fim));
+  const datas = [ini].concat(ms.map(m=>{ const [y,mm] = m.split('-').map(Number); const u = new Date(Date.UTC(y, mm, 0)); return u.toISOString().slice(0,10); }));
+  datas.forEach(d=>{
+    const compra = L.reduce((s,l)=> s + (l.venc && l.venc <= d ? l.valor : 0), 0) / totV;
+    const fab = L.reduce((s,l)=> s + l.kg*frac(d, l.iniFab, l.fimFab), 0) / totKg;
+    const inst = L.reduce((s,l)=> s + l.kg*frac(d, l.iniInst, l.fimInst), 0) / totKg;
+    pts.push({ d, compra:compra*100, fab:fab*100, inst:inst*100 });
+  });
+  return { pts, ini, fim, marcos, alvo, hoje: (pliLoad()||{}).dataBase || todayISO() };
+}
+function pliSvgCurvaS(S){
+  const W = 820, H = 320, ml = 44, mr = 16, mt = 16, mb = 46, iw = W-ml-mr, ih = H-mt-mb;
+  const t0 = new Date(S.ini).getTime(), t1 = new Date(S.fim).getTime(), span = Math.max(1, t1-t0);
+  const X = d => ml + (new Date(d).getTime()-t0)/span*iw, Y = v => mt + ih - v/100*ih;
+  const cores = { compra:'#f2994a', fab:'#bd0c1d', inst:'#1565c0' }, nomes = { compra:'Compras (R$ acumulado)', fab:'Fabricação (kg)', inst:'Instalação (kg)' };
+  let g = '';
+  [0,25,50,75,100].forEach(v=>{ g += `<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e5e5e5"/><text x="${ml-6}" y="${Y(v)+4}" font-size="11" text-anchor="end" fill="#666">${v}%</text>`; });
+  const n = S.pts.length, passo = Math.max(1, Math.ceil(n/14));
+  S.pts.forEach((p,i)=>{ if(i%passo===0 || i===n-1){ const [y,m] = p.d.split('-'); g += `<text x="${X(p.d)}" y="${H-mb+16}" font-size="10.5" text-anchor="${i===n-1?'end':'middle'}" fill="#666">${m}/${y.slice(2)}</text>`; } });
+  const linha = k => 'M'+S.pts.map(p=>X(p.d).toFixed(1)+','+Y(p[k]).toFixed(1)).join(' L');
+  ['compra','fab','inst'].forEach(k=>{ g += `<path d="${linha(k)}" fill="none" stroke="${cores[k]}" stroke-width="2.4" stroke-linejoin="round"/>`; });
+  const vert = (d, cor, rot, dy) => (d && d>=S.ini && d<=S.fim) ? `<line x1="${X(d)}" x2="${X(d)}" y1="${mt}" y2="${mt+ih}" stroke="${cor}" stroke-dasharray="4 3"/><text x="${X(d)+3}" y="${mt+10+dy}" font-size="10" fill="${cor}">${rot}</text>` : '';
+  g += vert(S.hoje, '#444', 'hoje', 0);
+  S.marcos.forEach((m,i)=>{ g += vert(m.limite, '#2e7d32', m.rot.split(' ')[0]+' −folga', 12+12*i); });
+  if(S.alvo) g += vert(S.alvo, '#8e44ad', 'prazo alvo', 48);
+  const leg = ['compra','fab','inst'].map((k,i)=>`<rect x="${ml+i*190}" y="${H-12}" width="14" height="4" fill="${cores[k]}"/><text x="${ml+i*190+20}" y="${H-7}" font-size="11" fill="#444">${nomes[k]}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;background:#fff" role="img" aria-label="Curva S">${g}${leg}</svg>`;
+}
+function pliHtmlCurvaS(){
+  const c = plcLoad(); if(!c.obras.length) return '';
+  let i = PLI_UI.curvaObra; if(!(i>=0 && i<c.obras.length)) i = 0;
+  const ob = c.obras[i], R = plcCalc(ob), S = plcCurvaS(ob, R);
+  const mark = S ? S.pts.reduce((a,p)=> p.d <= S.hoje ? p : a, S.pts[0]) : null;
+  const tab = S ? `<div class="pli-scroll" style="max-height:240px"><table class="pli-t"><thead><tr><th>Fim do mês</th><th class="n">Compras %</th><th class="n">Fabricação %</th><th class="n">Instalação %</th></tr></thead><tbody>${S.pts.slice(1).map(p=>`<tr><td>${pliFmtData(p.d)}</td><td class="n">${p.compra.toFixed(0)}</td><td class="n">${p.fab.toFixed(0)}</td><td class="n">${p.inst.toFixed(0)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  return `<div class="pli-card"><h3>Curva S por obra</h3>
+    <div class="pli-note" style="margin-top:0;">Avanço acumulado planejado de <b>compras</b> (R$), <b>fabricação</b> e <b>instalação</b> (kg) ao longo do tempo, já considerando o calendário de pagamentos, a capacidade da fábrica e os ajustes aplicados. As linhas verticais mostram hoje, os marcos (já com a folga) e o prazo alvo. Muda sozinha após <i>Recalcular prazos</i>.</div>
+    <div class="pli-filtros"><label>Obra <select onchange="PLI_UI.curvaObra=+this.value;renderPlanejInt()">${c.obras.map((o,k)=>`<option value="${k}" ${k===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
+      ${S?`<span class="step-note">Início das compras ${pliFmtData(S.pts[1]?S.ini:S.ini)} · término da instalação ${pliFmtData(R.maxInst)}</span>`:''}</div>
+    ${S ? pliSvgCurvaS(S)+`<details style="margin-top:8px"><summary>Ver tabela mensal</summary>${tab}</details>` : '<div class="pli-note">Sem lotes para esta obra.</div>'}</div>`;
+}
+
+/* ============================================================
+   COORDENAÇÃO — Painel de pendências (alertas) · Backup · Versões do plano
+   ============================================================ */
+function coordTemAcesso(){ return pliTemAcesso() || (function(){ try{ return temAcessoFinanceiro(); }catch(e){ return false; } })(); }
+function coordAtualizarMenu(){
+  const v = coordTemAcesso() ? '' : 'none';
+  ['navGrpCoord','navPainel','navBackup'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = v; });
+  try{ const n = painelContarAlertas(); const b = document.getElementById('navPainelBadge'); if(b){ b.textContent = n>0 ? n : ''; b.style.display = n>0 ? 'inline-block' : 'none'; } }catch(e){}
+}
+const PAINEL_CFG_KEY = DB_PREFIX+'painelCfg';
+function painelCfg(){ try{ return Object.assign({ diasParado:5, diasTransito:7 }, JSON.parse(localStorage.getItem(PAINEL_CFG_KEY)||'{}')); }catch(e){ return { diasParado:5, diasTransito:7 }; } }
+function painelSetCfg(k, v){ const c = painelCfg(); c[k] = Math.max(1, parseInt(v,10)||1); try{ localStorage.setItem(PAINEL_CFG_KEY, JSON.stringify(c)); }catch(e){} renderPainel(); }
+
+function painelColetar(){
+  const hoje = todayISO(), cfg = painelCfg(), obras = load('obras'), nomeObra = id => (obras.find(o=>o.id===id)||{}).nome || '—';
+  const dias = d => d ? Math.round((new Date(hoje)-new Date(String(d).slice(0,10)))/86400000) : 0;
+  const G = [];
+  // 1. Obras fora do prazo (Planejamento)
+  try{
+    if(pliTemAcesso()){
+      const C = plcLoad(), A = plcAvaliarObras(C), rows = [];
+      C.obras.forEach(ob=>{ const a = A[ob.id]; if(a && !a.ok){ const lim = plcRecalcLimite(ob); rows.push({ obra:ob.nome, txt:`termina ${pliFmtData(a.fim)} — deadline ${pliFmtData(lim)} (${lim?pliDiffDias(a.fim, lim):0} dias além)`, sev:'erro' }); } });
+      G.push({ id:'plan', tit:'Obras fora do prazo (Planejamento)', rows, vazio:'Todas as obras cumprem os prazos do plano.', acao:'Abra Planejamento Integrado › Cruzamento › Recalcular prazos.' });
+    }
+  }catch(e){ console.error('painel plan', e); }
+  // 2. Listas / pedidos a Suprimentos
+  try{
+    if(pliTemAcesso()){
+      const P = pliLoadX(); const rows = [];
+      if(P){ pliCalc(P).compras.filter(c=>c.status==='CRÍTICO'||c.status==='ATRASADO').sort((a,b)=>a.folga-b.folga).forEach(c=>rows.push({ obra:c.obra, txt:`${c.bloco} · ${c.frente} — ${c.status.toLowerCase()}: emitir a lista (folga ${c.folga} d)`, sev:'erro' })); }
+      G.push({ id:'sup', tit:'Listas a Suprimentos críticas ou atrasadas', rows, vazio:'Nenhuma lista crítica.', acao:'Planejamento Integrado › Compras.' });
+    }
+  }catch(e){ console.error('painel sup', e); }
+  // 3. Materiais em atraso
+  try{
+    const rows = [];
+    load('materiais').forEach(p=>{
+      const pend = (p.itens||[]).filter(it=>(parseFloat(it.qtdPedida)||0) - qtdRecebidaItem(it) > 0);
+      if(pend.length && p.dataPrevista && p.dataPrevista < hoje) rows.push({ obra:nomeObra(p.obraId), txt:`Pedido ${p.numPedido||'s/nº'} · ${p.fornecedor||'—'} — ${dias(p.dataPrevista)} dia(s) de atraso, ${pend.length} item(ns) a receber`, ord:-dias(p.dataPrevista), sev:'erro' });
+    });
+    rows.sort((a,b)=>a.ord-b.ord);
+    G.push({ id:'mat', tit:'Pedidos de material em atraso', rows, vazio:'Nenhum pedido atrasado.', acao:'Obra › Materiais › Pendências por pedido.' });
+  }catch(e){ console.error('painel mat', e); }
+  // 4. Tarefas atrasadas
+  try{
+    const rows = load('tarefas').filter(t=>t.status!=='concluida' && t.prazo && t.prazo < hoje).sort((a,b)=>a.prazo<b.prazo?-1:1)
+      .map(t=>({ obra:nomeObra(t.obraId), txt:`${t.titulo} — ${t.setor||'sem setor'}${t.responsavel?' · resp.: '+t.responsavel:''} (${dias(t.prazo)} d de atraso)`, sev:'aviso' }));
+    G.push({ id:'tar', tit:'Tarefas atrasadas', rows, vazio:'Nenhuma tarefa atrasada.', acao:'Tarefas por Setor.' });
+  }catch(e){ console.error('painel tar', e); }
+  // 5. Expedição: prontas paradas, em trânsito, ajustes pendentes
+  try{
+    const parados = [], transito = [], ajustes = [];
+    load('itensObra').filter(itemAtivo).forEach(it=>expPecas(it).forEach(p=>{
+      const est = expEstadoPeca(p), h = expHist(p), ult = tipo => (h.filter(x=>x.tipo===tipo).slice(-1)[0]||{}).em;
+      if(est==='pronto' && dias(ult('pronto')) > cfg.diasParado) parados.push({ obra:nomeObra(it.obraId), txt:`${it.nomenclatura} (${p.local}, peça ${p.n}/${p.total}) pronta há ${dias(ult('pronto'))} dias sem expedir`, ord:-dias(ult('pronto')), sev:'aviso' });
+      if(est==='expedido' && dias(ult('exp')) > cfg.diasTransito) transito.push({ obra:nomeObra(it.obraId), txt:`${it.nomenclatura} (${p.local}, peça ${p.n}/${p.total}) expedida há ${dias(ult('exp'))} dias sem confirmação de recebimento`, ord:-dias(ult('exp')), sev:'aviso' });
+      if(est==='rev_pend'){ const r = h.filter(x=>x.tipo==='revp').slice(-1)[0]||{}; ajustes.push({ obra:nomeObra(it.obraId), txt:`${it.nomenclatura} (${p.local}, peça ${p.n}/${p.total}) — ajuste: ${r.obs||'—'}`, sev:'aviso' }); }
+    }));
+    parados.sort((a,b)=>a.ord-b.ord); transito.sort((a,b)=>a.ord-b.ord);
+    G.push({ id:'par', tit:`Peças prontas paradas na fábrica (> ${cfg.diasParado} dias)`, rows:parados, vazio:'Nenhuma peça parada.', acao:'Obra › Expedição / Rastreio.' });
+    G.push({ id:'tra', tit:`Peças expedidas sem recebimento (> ${cfg.diasTransito} dias)`, rows:transito, vazio:'Nenhuma peça pendente de recebimento.', acao:'Obra › Expedição / Rastreio › Receber na obra.' });
+    G.push({ id:'aju', tit:'Ajustes pendentes para entrega (revisão)', rows:ajustes, vazio:'Nenhum ajuste pendente.', acao:'Obra › Expedição / Rastreio › Ajustes pendentes.' });
+  }catch(e){ console.error('painel exp', e); }
+  return G;
+}
+function painelContarAlertas(){ try{ return painelColetar().reduce((s,g)=>s+g.rows.length,0); }catch(e){ return 0; } }
+function painelTexto(G){
+  const l = ['SGPT — Pendências ('+new Date().toLocaleDateString('pt-BR')+')'];
+  G.filter(g=>g.rows.length).forEach(g=>{ l.push('', g.tit+' — '+g.rows.length); g.rows.slice(0,8).forEach(r=>l.push('• '+r.obra+': '+r.txt.replace(/<[^>]+>/g,''))); if(g.rows.length>8) l.push('… e mais '+(g.rows.length-8)); });
+  if(l.length===1) l.push('', 'Sem pendências.');
+  return l.join('\n');
+}
+function painelEnviar(canal){
+  const t = painelTexto(painelColetar());
+  if(canal==='wa') window.open('https://wa.me/?text='+encodeURIComponent(t), '_blank');
+  else window.location.href = 'mailto:?subject='+encodeURIComponent('SGPT — Pendências '+new Date().toLocaleDateString('pt-BR'))+'&body='+encodeURIComponent(t);
+}
+function painelCopiar(){ const t = painelTexto(painelColetar()); try{ navigator.clipboard.writeText(t); toast('Resumo copiado.'); }catch(e){ toast('Não foi possível copiar.'); } }
+function renderPainel(){
+  const el = document.getElementById('painelConteudo'); if(!el) return;
+  if(!coordTemAcesso()){ el.innerHTML = '<div class="empty-state"><div class="big">🔒</div>Acesso restrito à Gerência e Coordenação.</div>'; return; }
+  const G = painelColetar(), cfg = painelCfg(), tot = G.reduce((s,g)=>s+g.rows.length,0);
+  const cor = { erro:'#b00020', aviso:'#b26a00' };
+  el.innerHTML = `<div class="panel"><div class="panel-body" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+      <div><b style="font-size:18px">${tot}</b> pendência(s) em ${G.filter(g=>g.rows.length).length} área(s) · ${new Date().toLocaleDateString('pt-BR')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <label class="step-note">Peça pronta parada após <input type="number" min="1" value="${cfg.diasParado}" style="width:54px" onchange="painelSetCfg('diasParado',this.value)"> dias</label>
+        <label class="step-note">Sem recebimento após <input type="number" min="1" value="${cfg.diasTransito}" style="width:54px" onchange="painelSetCfg('diasTransito',this.value)"> dias</label>
+        <button class="btn small secondary" onclick="painelCopiar()">Copiar resumo</button>
+        <button class="btn small" onclick="painelEnviar('wa')">Enviar por WhatsApp</button>
+        <button class="btn small secondary" onclick="painelEnviar('email')">Enviar por e-mail</button></div></div></div>
+    ${G.map(g=>`<div class="panel"><div class="panel-head">${esc(g.tit)} <span class="tag" style="background:${g.rows.length?'#fdeceb':'#e8f5e9'};color:${g.rows.length?'#a3121f':'#2e7d32'}">${g.rows.length}</span></div><div class="panel-body">
+      ${g.rows.length ? `<table><thead><tr><th>Obra</th><th>Pendência</th></tr></thead><tbody>${g.rows.slice(0,25).map(r=>`<tr><td style="white-space:nowrap"><b>${esc(r.obra)}</b></td><td style="color:${cor[r.sev]||'#222'}">${esc(r.txt)}</td></tr>`).join('')}</tbody></table>${g.rows.length>25?`<div class="step-note">… e mais ${g.rows.length-25}.</div>`:''}<div class="step-note" style="margin-top:6px">Onde resolver: ${esc(g.acao||'')}</div>`
+        : `<div class="step-note">✔ ${esc(g.vazio)}</div>`}</div></div>`).join('')}
+    <div class="step-note">O envio abre o WhatsApp ou o e-mail com o resumo pronto; o sistema não envia mensagens sozinho (roda no navegador).</div>`;
+}
+
+/* ---------- Versões do plano ---------- */
+const PLANO_HIST_KEY = 'planoHist';
+function planoSnapshot(rotulo){
+  try{
+    const hist = load(PLANO_HIST_KEY);
+    hist.unshift({ id:uid(), em:new Date().toISOString(), por:(typeof expUsuario==='function'?expUsuario():'')||'—', rotulo:rotulo||'Versão',
+      plc: localStorage.getItem(DB_PREFIX+PLC_KEY)||'', pli: localStorage.getItem(DB_PREFIX+PLI_KEY)||'' });
+    let lista = hist.slice(0,15);
+    for(;;){ try{ save(PLANO_HIST_KEY, lista); break; }catch(e){ if(lista.length<=2) throw e; lista = lista.slice(0, lista.length-2); } }
+  }catch(e){ console.error('Versão do plano não guardada', e); }
+}
+function planoSalvarVersao(){ const r = prompt('Nome desta versão (ex.: "Antes de reajustar a Wave"):', ''); if(r===null) return; planoSnapshot(r.trim()||'Versão manual'); toast('Versão guardada.'); renderBackup(); }
+function planoRestaurar(id){
+  const h = load(PLANO_HIST_KEY).find(x=>x.id===id); if(!h) return;
+  if(!confirm('Restaurar a versão "'+h.rotulo+'" de '+new Date(h.em).toLocaleString('pt-BR')+'?\nO plano atual será guardado antes como uma nova versão.')) return;
+  planoSnapshot('Antes de restaurar "'+h.rotulo+'"');
+  if(h.plc) localStorage.setItem(DB_PREFIX+PLC_KEY, h.plc);
+  if(h.pli) localStorage.setItem(DB_PREFIX+PLI_KEY, h.pli);
+  PLI_UI.otm = null; PLI_UI.recalc = null; PLI_UI.cen = null; PLI_UI.capRes = null;
+  toast('Versão restaurada.'); renderBackup();
+}
+function planoExcluirVersao(id){ if(!confirm('Excluir esta versão?')) return; save(PLANO_HIST_KEY, load(PLANO_HIST_KEY).filter(x=>x.id!==id)); renderBackup(); }
+
+/* ---------- Backup completo ---------- */
+const BACKUP_LAST_KEY = DB_PREFIX+'ultimoBackup';
+function backupColetar(){
+  const dados = {};
+  for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && k.indexOf(DB_PREFIX)===0 && k!==BACKUP_LAST_KEY) dados[k] = localStorage.getItem(k); }
+  return { sistema:'SGPT', versao:1, geradoEm:new Date().toISOString(), por:(typeof expUsuario==='function'?expUsuario():'')||'', dados };
+}
+function backupExportar(){
+  const b = backupColetar(), blob = new Blob([JSON.stringify(b)], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SGPT_backup_'+todayISO()+'.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  try{ localStorage.setItem(BACKUP_LAST_KEY, new Date().toISOString()); }catch(e){}
+  toast('Backup baixado ('+Object.keys(b.dados).length+' conjuntos de dados).'); try{ renderBackup(); }catch(e){}
+}
+function backupImportar(input){
+  const f = input.files && input.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const b = JSON.parse(rd.result);
+      if(!b || b.sistema!=='SGPT' || !b.dados) throw new Error('Arquivo não é um backup do SGPT.');
+      const n = Object.keys(b.dados).length;
+      if(!confirm('Importar o backup de '+new Date(b.geradoEm).toLocaleString('pt-BR')+' ('+n+' conjuntos)?\nTODOS os dados atuais serão substituídos. Antes disso, uma cópia dos dados atuais será baixada.')) { input.value=''; return; }
+      backupExportar();
+      Object.keys(localStorage).filter(k=>k.indexOf(DB_PREFIX)===0 && k!==BACKUP_LAST_KEY).forEach(k=>localStorage.removeItem(k));
+      Object.keys(b.dados).forEach(k=>{ if(k.indexOf(DB_PREFIX)===0) localStorage.setItem(k, b.dados[k]); });
+      toast('Backup importado. Recarregando…'); setTimeout(()=>location.reload(), 900);
+    }catch(e){ toast('Falha ao importar: '+e.message); input.value=''; }
+  };
+  rd.readAsText(f);
+}
+function backupLembrete(){
+  try{
+    if(!coordTemAcesso()) return;
+    const ult = localStorage.getItem(BACKUP_LAST_KEY), dias = ult ? Math.round((Date.now()-new Date(ult))/86400000) : 999;
+    if(dias >= 7 && localStorage.length>3) setTimeout(()=>toast(ult ? 'Último backup há '+dias+' dias — baixe um novo em Coordenação › Backup e Versões.' : 'Nenhum backup feito ainda — baixe um em Coordenação › Backup e Versões.'), 2500);
+  }catch(e){}
+}
+function renderBackup(){
+  const el = document.getElementById('backupConteudo'); if(!el) return;
+  if(!coordTemAcesso()){ el.innerHTML = '<div class="empty-state"><div class="big">🔒</div>Acesso restrito à Gerência e Coordenação.</div>'; return; }
+  const ult = localStorage.getItem(BACKUP_LAST_KEY), hist = load(PLANO_HIST_KEY);
+  let kb = 0; try{ for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && k.indexOf(DB_PREFIX)===0) kb += (localStorage.getItem(k)||'').length; } }catch(e){}
+  el.innerHTML = `<div class="panel"><div class="panel-head">Backup completo dos dados</div><div class="panel-body">
+      <div class="step-note" style="margin-bottom:10px">Os dados ficam no navegador deste computador; limpar os dados do navegador apaga tudo. Baixe um backup com frequência (o sistema lembra a cada 7 dias) e guarde em local seguro (OneDrive/Drive).<br>
+        Último backup: <b>${ult?new Date(ult).toLocaleString('pt-BR'):'nunca'}</b> · tamanho dos dados: ${(kb/1024).toFixed(0)} KB</div>
+      <button class="btn" onclick="backupExportar()">Baixar backup agora</button>
+      <label class="btn secondary" style="margin-left:8px;cursor:pointer">Importar backup… <input type="file" accept=".json,application/json" style="display:none" onchange="backupImportar(this)"></label></div></div>
+    <div class="panel"><div class="panel-head">Versões do plano (Planejamento Integrado)</div><div class="panel-body">
+      <div class="step-note" style="margin-bottom:10px">Cada "Aplicar" (Recalcular prazos ou Otimizador) guarda automaticamente o plano anterior. Guarde versões manuais antes de testar cenários. Restaurar volta cronograma financeiro, ajustes, marcos e premissas.</div>
+      <button class="btn small" onclick="planoSalvarVersao()">Guardar versão agora</button>
+      ${hist.length ? `<table style="margin-top:10px"><thead><tr><th>Data</th><th>Por</th><th>Versão</th><th></th></tr></thead><tbody>${hist.map(h=>`<tr><td>${new Date(h.em).toLocaleString('pt-BR')}</td><td>${esc(h.por)}</td><td>${esc(h.rotulo)}</td><td style="text-align:right;white-space:nowrap"><button class="btn small secondary" onclick="planoRestaurar('${h.id}')">Restaurar</button> <button class="btn small danger" onclick="planoExcluirVersao('${h.id}')">Excluir</button></td></tr>`).join('')}</tbody></table>` : '<div class="step-note" style="margin-top:10px">Nenhuma versão guardada ainda.</div>'}</div></div>`;
+}
+
+/* ---------- Pedido real × planejado: entrega real do material por fase ---------- */
+function plcSetCompraReal(i, cod, campo, valor){
+  const c = plcLoad(), ob = c.obras[i]; if(!ob) return;
+  ob.compraReal = ob.compraReal || {}; const r = ob.compraReal[cod] = ob.compraReal[cod] || {};
+  if(valor) r[campo] = valor; else delete r[campo];
+  if(!r.pedido && !r.entrega) delete ob.compraReal[cod];
+  if(!Object.keys(ob.compraReal).length) delete ob.compraReal;
+  plcSave(c); PLI_UI.recalc = null; PLI_UI.otm = null; renderPlanejInt();
+}
+function pliHtmlCompraReal(){
+  const c = plcLoad(); if(!c.obras.length) return '';
+  let i = PLI_UI.realObra; if(!(i>=0 && i<c.obras.length)) i = 0;
+  const ob = c.obras[i], semReal = Object.assign({}, ob, { compraReal:undefined }), Rp = plcCalcBase(semReal, (plcSeqGet()||{byObra:{}}).byObra[ob.id]), R = plcCalc(ob);
+  const linhas = ob.fases.map(f=>{
+    const rp = Rp.resumo.find(x=>x.cod===f.cod) || {}, rs = R.resumo.find(x=>x.cod===f.cod) || {}, cr = (ob.compraReal||{})[f.cod] || {};
+    const desv = cr.entrega && rp.primeiroMaterial ? pliDiffDias(cr.entrega, rp.primeiroMaterial) : null;
+    return `<tr><td><b>${esc(f.cod)}</b> · ${esc(f.desc||'')}</td><td>${pliFmtData(Rp.lotes.filter(l=>l.fase===f.cod).map(l=>l.venc).sort()[0])}</td><td>${pliFmtData(rp.primeiroMaterial)}</td>
+      <td><input type="date" value="${cr.pedido||''}" onchange="plcSetCompraReal(${i},'${esc(f.cod)}','pedido',this.value)"></td>
+      <td><input type="date" value="${cr.entrega||''}" onchange="plcSetCompraReal(${i},'${esc(f.cod)}','entrega',this.value)"></td>
+      <td class="n" style="color:${desv>0?'#b00020':'#2e7d32'}"><b>${desv==null?'—':(desv>0?'+':'')+desv}</b></td><td>${pliFmtData(rs.iniFab)} → ${pliFmtData(rs.fimInst)}</td></tr>`; }).join('');
+  return `<div class="pli-card"><h3>Pedido real × planejado</h3>
+    <div class="pli-note" style="margin-top:0;">Informe, por fase, a data real do pedido e a data real (ou prometida pelo fornecedor) de chegada do material na fábrica. O <b>cronograma de fabricação e instalação e o Recalcular prazos passam a partir da entrega real</b> dessa fase. Apague a data para voltar ao planejado. Desvio positivo = material chegando depois do plano.</div>
+    <div class="pli-filtros"><label>Obra <select onchange="PLI_UI.realObra=+this.value;renderPlanejInt()">${c.obras.map((o,k)=>`<option value="${k}" ${k===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label></div>
+    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>1º pedido planejado</th><th>Material na fábrica (plano)</th><th>Pedido real</th><th>Entrega real / prometida</th><th class="n">Desvio (d)</th><th>Fab. início → inst. fim (atual)</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
 }
 
 function pliHtmlOtimizador(){
@@ -10539,7 +10845,8 @@ function plcCalcBase(ob, ovr){
   const lotes = [];
   let fimFabAnt = null, fimInstAnt = null;
   const mk = (par, f, kg, valor)=>{
-    const chegada = pliAddDias(par.venc, p.entregaDias);
+    let chegada = pliAddDias(par.venc, p.entregaDias);
+    { const cr = ob.compraReal && ob.compraReal[f.cod]; if(cr && cr.entrega) chegada = cr.entrega; }
     const liberado = pliAddDias(chegada, p.iniFabDias);
     const iniFab = (fimFabAnt && fimFabAnt > liberado) ? fimFabAnt : liberado;
     const diasFab = Math.round(kg/1000/p.capFab*p.diasMes);
@@ -10649,6 +10956,7 @@ function pliAtualizarMenu(){
   const v = pliTemAcesso() ? '' : 'none';
   if(it) it.style.display = v;
   if(lb) lb.style.display = v;
+  try{ coordAtualizarMenu(); }catch(e){}
 }
 
 /* ---------- interface ---------- */
@@ -11022,6 +11330,20 @@ function pliHtmlCompras(P, R){
   const ativos = R.compras.filter(c=>c.status!=='COMPRADO' && c.status!=='EM EXECUÇÃO');
   const mm = {}, ll = {};
   ativos.forEach(c=>{ const k=pliYM(c.pedidoCons); mm[k]=(mm[k]||0)+c.t; const k2=pliYM(c.iniciarLista); ll[k2]=(ll[k2]||0)+1; });
+  // Plano real (cadeia 1ª compra → entrega → fabricação → instalação) por obra/fase, para cruzar com a linha de balanço
+  const PR = {}; let nImp = 0;
+  try{
+    const cr = plcLoad().obras, mapa = {};
+    lista.forEach(c=>{
+      const ob = cr.find(o=>pliNorm(o.nome)===pliNorm(c.obra)) || cr.find(o=>pliNorm(o.nome).includes(pliNorm(c.obra)) || pliNorm(c.obra).includes(pliNorm(o.nome)));
+      const m = /Fase\s+(\S+)/i.exec(c.bloco||''); if(!ob || !m) return;
+      if(!mapa[ob.id]) mapa[ob.id] = plcCalc(ob);
+      const R = mapa[ob.id], rs = R.resumo.find(x=>String(x.cod).toUpperCase()===m[1].toUpperCase()); if(!rs) return;
+      const ped = R.lotes.filter(l=>l.fase===rs.cod).map(l=>l.venc).sort()[0];
+      PR[c.idx!=null?c.idx:lista.indexOf(c)] = { ini:rs.iniInst, ped, imp: !!(c.ini && rs.iniInst && c.ini < rs.iniInst) };
+    });
+    nImp = Object.values(PR).filter(x=>x.imp).length;
+  }catch(e){ console.error('Compras × plano real', e); }
   const ks = Object.keys(mm).concat(Object.keys(ll)).sort();
   const meses = ks.length ? pliMesesEntre(ks[0], ks[ks.length-1]) : [];
   return `
@@ -11030,13 +11352,14 @@ function pliHtmlCompras(P, R){
    ${meses.length?pliBarras(meses,[{nome:'t a pedir', cor:'#bd0c1d', valores:meses.map(m=>mm[m]||0)}]):'<div class="pli-note">Sem compras pendentes.</div>'}
    ${meses.length?`<div class="pli-note">Listas a emitir para Suprimentos (início da emissão) por mês: ${meses.filter(m=>ll[m]).map(m=>dashMesCurto(m)+': <b>'+ll[m]+'</b>').join(' · ')}</div>`:''}</div>
   <div class="pli-card"><h3>Lotes — contagem regressiva a partir do início da instalação</h3>
+   ${nImp?`<div class="pli-alerta aviso">⚠ ${nImp} lote(s) têm início de instalação na linha de balanço <b>antes</b> do que a cadeia real permite (1º pedido + entrega do material + fabricação, na capacidade da fábrica). Esses inícios não são atingíveis: use <b>Cruzamento › Recalcular prazos</b> para o melhor cenário e trate a linha de balanço como meta, não como data de início.</div>`:''}
    <div class="pli-note" style="margin:0 0 8px;">Início da instalação − fabricação (${P.prazos.fab2}/${P.prazos.fab3}/${P.prazos.fab4} meses conforme obras simultâneas) − entrega do fornecedor (${P.prazos.cons} d conservador) − cotação (${P.prazos.cotacao} d) − lista (${P.prazos.lista} d). Folga = dias que faltam, a partir da data base, para iniciar a emissão da lista. Clique nos cartões acima para filtrar.</div>
    <div class="pli-filtros"><label>Obra <select onchange="PLI_UI.filtroObraCompras=this.value;renderPlanejInt()"><option value="">Todas</option>${P.obras.map(o=>`<option ${fo===o.nome?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
      <label>Status <select onchange="PLI_UI.filtroCompras=this.value;renderPlanejInt()"><option value="">A comprar (pendentes)</option>${ordem.map(s=>`<option value="${s}" ${fs===s?'selected':''}>${s}</option>`).join('')}</select></label>
      <span class="pli-note" style="margin:0;">${lista.length} lotes</span>
      <button class="btn small secondary" onclick="pliExportarComprasCSV()">Exportar CSV</button></div>
-   <div class="pli-scroll" style="max-height:520px;"><table class="pli-t"><thead><tr><th>Obra</th><th>Bloco/Setor</th><th>Frente</th><th>Início inst.</th><th class="n">t</th><th class="n">Simult.</th><th class="n">Fab. (m)</th><th>Material na fábrica até</th><th>Pedido (cons. ${P.prazos.cons}d)</th><th>Lista a Suprimentos</th><th>Iniciar emissão</th><th class="n">Folga (d)</th><th>Status</th><th>Comprado</th></tr></thead>
-   <tbody>${lista.map(c=>`<tr><td>${esc(c.obra)}</td><td>${esc(c.bloco)}</td><td>${esc(c.frente)}</td><td>${pliFmtData(c.ini)}</td><td class="n">${pliFmtT(c.t,1)}</td><td class="n">${c.sim}</td><td class="n">${c.mesesFab}</td><td>${pliFmtData(c.fabAte)}</td><td>${pliFmtData(c.pedidoCons)}</td><td>${pliFmtData(c.lista)}</td><td>${pliFmtData(c.iniciarLista)}</td><td class="n ${c.folga<0?'neg':''}">${c.folga}</td><td><span class="pli-tag" style="background:${PLI_STATUS_COR[c.status]}">${PLI_STATUS_TXT[c.status]}</span></td><td style="text-align:center;"><input type="checkbox" ${c.comprado?'checked':''} onchange="pliToggleComprado('${c.key}')"></td></tr>`).join('')}</tbody></table></div></div>`;
+   <div class="pli-scroll" style="max-height:520px;"><table class="pli-t"><thead><tr><th>Obra</th><th>Bloco/Setor</th><th>Frente</th><th>Início inst. (linha de balanço)</th><th title="Calculado pela cadeia real: 1º pedido + entrega + fabricação">Início inst. possível (plano real)</th><th>1º pedido (plano real)</th><th class="n">t</th><th class="n">Simult.</th><th class="n">Fab. (m)</th><th>Material na fábrica até</th><th>Pedido (cons. ${P.prazos.cons}d)</th><th>Lista a Suprimentos</th><th>Iniciar emissão</th><th class="n">Folga (d)</th><th>Status</th><th>Comprado</th></tr></thead>
+   <tbody>${lista.map(c=>`<tr><td>${esc(c.obra)}</td><td>${esc(c.bloco)}</td><td>${esc(c.frente)}</td><td>${pliFmtData(c.ini)}</td>${(()=>{ const x = PR[c.idx!=null?c.idx:lista.indexOf(c)]; return x ? `<td style="${x.imp?'color:#b00020;font-weight:700':''}">${pliFmtData(x.ini)}${x.imp?' ⚠':''}</td><td>${pliFmtData(x.ped)}</td>` : '<td>—</td><td>—</td>'; })()}<td class="n">${pliFmtT(c.t,1)}</td><td class="n">${c.sim}</td><td class="n">${c.mesesFab}</td><td>${pliFmtData(c.fabAte)}</td><td>${pliFmtData(c.pedidoCons)}</td><td>${pliFmtData(c.lista)}</td><td>${pliFmtData(c.iniciarLista)}</td><td class="n ${c.folga<0?'neg':''}">${c.folga}</td><td><span class="pli-tag" style="background:${PLI_STATUS_COR[c.status]}">${PLI_STATUS_TXT[c.status]}</span></td><td style="text-align:center;"><input type="checkbox" ${c.comprado?'checked':''} onchange="pliToggleComprado('${c.key}')"></td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function pliExportarComprasCSV(){
   const P = pliLoadX(); if(!P) return; const R = pliCalc(P);
@@ -11306,9 +11629,11 @@ function pliHtmlCruzamento(){
     <h4 style="margin:12px 0 6px;">Problemas encontrados</h4>${alHtml}</div>
   ${prazos}
   ${pliHtmlRecalc()}
+  ${pliHtmlCurvaS()}
   ${pliHtmlMarcos()}
   ${pliHtmlCenarios()}
   ${pliHtmlGasto()}
+  ${pliHtmlCompraReal()}
   ${pliHtmlOtimizador()}
   ${pliHtmlCapNec()}
   ${ordem}
@@ -17016,7 +17341,7 @@ function renderItensModulo(moduleKey){
       const { done, total } = it.progresso;
       const canc = !!it.cancelado;
       return `<tr${canc?' style="opacity:.6;background:#fbf3f3;"':''}>
-        <td><strong${canc?' style="text-decoration:line-through;"':''}>${esc(it.nomenclatura)}</strong>${it.tipoEsquadria?`<div class="step-note">${esc(it.tipoEsquadria)}</div>`:''}${canc?`<div class="step-note" style="color:#a80e26;">${esc(textoSituacaoCancelado(it))}</div>`:''}</td>
+        <td><strong${canc?' style="text-decoration:line-through;"':''}>${esc(it.nomenclatura)}</strong>${it.tipoEsquadria?`<div class="step-note">${esc(it.tipoEsquadria)}</div>`:''}${(!canc && it.cancParcial && it.cancParcial.length)?`<div class="step-note" style="color:#a80e26;">${it.cancParcial.reduce((t,c)=>t+(c.qtd||0),0)} un. cancelada(s) parcialmente${it.cancParcial.some(c=>c.fab)?' (já fabricadas)':''}</div>`:''}${canc?`<div class="step-note" style="color:#a80e26;">${esc(textoSituacaoCancelado(it))}</div>`:''}</td>
         <td>${medidas}</td>
         <td>${it.quantidade||0}</td>
         <td style="max-width:220px;">${locaisResumo}</td>
@@ -17223,6 +17548,40 @@ function miniProgressBar(pct){
     <div class="progress-bar-outer"><div class="progress-bar-inner ${cls}" style="width:${pct}%;"></div></div>
     <span class="pct">${pct}%</span>
   </div>`;
+}
+
+/* ---------- Dashboard: evolução de todas as obras (barras horizontais, %, kg e m²) ---------- */
+function dashEvolucaoObras(){
+  const itens = load('itensObra').filter(itemAtivo), obras = load('obras');
+  const fmt = (v, d) => (+v).toLocaleString('pt-BR', { minimumFractionDigits:d||0, maximumFractionDigits:d||0 });
+  const fases = [['projeto','Projeto','#6a1b9a'], ['producao','Produção','#bd0c1d'], ['instalacao','Instalação','#1565c0']];
+  const calc = lista => {
+    const r = { kg:0, m2:0, un:0 }; fases.forEach(([k])=>{ r[k] = { kg:0, m2:0 }; });
+    lista.forEach(it=>{
+      const q = qtdTotalLocalizacoes(it) || parseFloat(it.quantidade) || 0;
+      const kg = (parseFloat(it.pesoLiquido)||0) * q, m2 = ((parseFloat(it.largura)||0) * (parseFloat(it.altura)||0) / 1e6) * q;
+      r.kg += kg; r.m2 += m2; r.un += q;
+      fases.forEach(([k])=>{ const p = (k==='instalacao' ? pctInstalacaoItem(it) : pctModulo(it,k)) / 100; r[k].kg += kg*p; r[k].m2 += m2*p; });
+    });
+    return r;
+  };
+  const barra = (r, k, nome, cor) => {
+    const pct = r.kg > 0 ? r[k].kg/r.kg*100 : (r.m2 > 0 ? r[k].m2/r.m2*100 : 0);
+    return `<div style="display:grid;grid-template-columns:86px 1fr;gap:8px;align-items:center;margin:4px 0">
+      <div style="font-size:12px;color:#555">${nome}</div>
+      <div style="position:relative;background:#eee;border-radius:5px;height:24px;overflow:hidden">
+        <div style="width:${Math.min(100,pct).toFixed(1)}%;background:${cor};height:100%"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:11.5px;font-weight:600;color:#111;text-shadow:0 0 3px #fff,0 0 3px #fff">
+          <span>${fmt(pct,1)}%</span><span>${fmt(r[k].kg,0)} / ${fmt(r.kg,0)} kg · ${fmt(r[k].m2,1)} / ${fmt(r.m2,1)} m²</span></div></div></div>`;
+  };
+  const card = (nome, r, destaque) => `<div style="border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;margin:8px 0;${destaque?'background:#fafafa;border-color:#bd0c1d':''}">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b>${esc(nome)}</b><span class="step-note">${fmt(r.un,0)} un · ${fmt(r.kg/1000,1)} t · ${fmt(r.m2,1)} m²</span></div>
+      ${fases.map(([k,n,c])=>barra(r,k,n,c)).join('')}</div>`;
+  const porObra = obras.map(o=>({ o, r:calc(itens.filter(it=>it.obraId===o.id)) })).filter(x=>x.r.un>0);
+  if(!porObra.length) return '<div class="step-note">Nenhum item cadastrado nas obras ainda.</div>';
+  const tot = calc(itens.filter(it=>obras.some(o=>o.id===it.obraId)));
+  return card('TODAS AS OBRAS', tot, true) + porObra.map(x=>card(x.o.nome, x.r)).join('') +
+    '<div class="step-note">Avanço ponderado pelo peso (kg) de cada item; m² = largura × altura × quantidade. Itens cancelados não entram.</div>';
 }
 
 function renderStatusExecucaoDashboard(){
@@ -17965,6 +18324,7 @@ function temAcessoSalarioFuncionario(funcionario){
 
 function renderDashboard(){
   try{ pliAtualizarMenu(); }catch(e){}
+  if(!window._bkLemb){ window._bkLemb = 1; try{ backupLembrete(); }catch(e){} }
   const obras = load('obras');
   const funcionarios = load('funcionarios');
   const tecnicos = load('tecnicos');
@@ -18027,6 +18387,7 @@ function renderDashboard(){
     ` : `<div class="empty-state"><div class="big">↝</div>Nenhum cálculo realizado ainda.</div>`;
 
     renderStatusExecucaoDashboard();
+    try{ const _e = document.getElementById('dashEvolucaoObras'); if(_e) _e.innerHTML = dashEvolucaoObras(); }catch(e){ console.error('Evolução das obras', e); }
 
     const todasOrdenadas = tarefas.slice().sort((a,b)=>(a.prazo||'').localeCompare(b.prazo||''));
     document.getElementById('dashTodasTarefas').innerHTML = todasOrdenadas.length ? `
