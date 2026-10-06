@@ -1303,6 +1303,7 @@
                   <button class="btn secondary" onclick="openBlocoModal()">+ Novo bloco</button>
                   <button class="btn secondary" onclick="gerarTarefasModulo('projeto')">Gerar tarefas</button>
                   <button class="btn secondary" onclick="gerarRelatorioItensIncompletos()">Relatório de itens incompletos</button>
+                  <button class="btn secondary" onclick="gerarRelatorioTodosItens()">Relatório de todos os itens</button>
                   <button class="btn" onclick="openItemModal()">+ Novo item</button>
                 </div>
               </div>
@@ -4394,12 +4395,13 @@
 <div class="modal-overlay" id="itensIncompModal">
   <div class="modal" style="max-width:900px;">
     <div class="modal-head">
-      <h3>Relatório de itens com informações incompletas</h3>
+      <h3 id="itensIncompTitulo">Relatório de itens com informações incompletas</h3>
       <button class="modal-close" onclick="fecharRelatorioItensIncompletos()">&times;</button>
     </div>
     <div class="modal-body">
       <div class="form-actions" style="margin-bottom:14px;">
         <button class="btn secondary" id="itensIncompEditBtn" onclick="alternarEdicaoItensIncompletos()">Editar</button>
+        <button class="btn secondary" id="itensIncompCsvBtn" style="display:none" onclick="baixarCsvTodosItens()">Baixar planilha (CSV)</button>
         <button class="btn" onclick="imprimirItensIncompletos()">Imprimir / salvar PDF</button>
       </div>
       <div id="itensIncompConteudo" class="memoria-doc"></div>
@@ -13025,10 +13027,72 @@ function montarHtmlRelatorioItensIncompletos(){
 
 function gerarRelatorioItensIncompletos(){
   if(!currentObraId){ toast('Abra uma obra para gerar o relatório.'); return; }
+  document.getElementById('itensIncompTitulo').textContent = 'Relatório de itens com informações incompletas';
+  document.getElementById('itensIncompCsvBtn').style.display = 'none';
   document.getElementById('itensIncompConteudo').innerHTML = montarHtmlRelatorioItensIncompletos();
   document.getElementById('itensIncompConteudo').contentEditable = 'false';
   document.getElementById('itensIncompEditBtn').textContent = 'Editar';
   document.getElementById('itensIncompModal').classList.add('open');
+}
+
+/* ---------- Relatório de todos os itens, por fase / bloco ---------- */
+function dadosTodosItens(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const fases = load('fasesObra').filter(f=>f.obraId===currentObraId);
+  const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const num = v => parseFloat(String(v==null?'':v).replace(',','.')) || 0;
+  const linhas = itens.map(it=>{
+    const bl = blocos.find(b=>b.id===it.blocoId), fs = bl && fases.find(f=>f.id===bl.faseId);
+    const locs = (it.localizacoes||[]), qtd = locs.length ? locs.reduce((s,l)=>s+num(l.quantidade),0) : num(it.quantidade);
+    return { it, faseId: fs ? fs.id : '__sem_fase__', fase: fs ? fs.nome : 'Sem fase', blocoId: bl ? bl.id : '__sem_bloco__', bloco: bl ? bl.nome : 'Sem bloco',
+      larg:num(it.largura), alt:num(it.altura), pu:num(it.pesoLiquido), qtd, locs };
+  });
+  const ord = (a,b)=>String(a).localeCompare(String(b),'pt-BR',{numeric:true});
+  linhas.sort((a,b)=> ord(a.fase,b.fase) || ord(a.bloco,b.bloco) || ord(a.it.nomenclatura||'',b.it.nomenclatura||''));
+  return { obra, linhas };
+}
+function montarHtmlRelatorioTodosItens(){
+  const { obra, linhas } = dadosTodosItens();
+  const f0 = (v,d)=> (v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||0,maximumFractionDigits:d||0});
+  const cab = `<h1>Relatório de Itens por Fase e Bloco</h1><div class="meta">Obra: <strong>${esc(obra.nome||'—')}</strong><br>Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}</div>`;
+  if(!linhas.length) return cab + '<p style="margin-top:20px;">Nenhum item cadastrado nesta obra.</p>';
+  const peso = l => l.qtd*l.pu;
+  const tot = ls => ({ n:ls.length, q:ls.reduce((s,l)=>s+l.qtd,0), p:ls.reduce((s,l)=>s+peso(l),0) });
+  let html = '', geral = tot(linhas);
+  const porFase = []; linhas.forEach(l=>{ let g = porFase.find(x=>x.id===l.faseId); if(!g){ g = { id:l.faseId, nome:l.fase, ls:[] }; porFase.push(g); } g.ls.push(l); });
+  porFase.forEach(fg=>{
+    const tf = tot(fg.ls);
+    html += `<h2 style="page-break-before:auto;">Fase: ${esc(fg.nome)} <span style="font-weight:400;color:#777;font-size:12.5px;">(${tf.n} itens · ${f0(tf.q)} un · ${f0(tf.p/1000,2)} t)</span></h2>`;
+    const porBloco = []; fg.ls.forEach(l=>{ let g = porBloco.find(x=>x.id===l.blocoId); if(!g){ g = { id:l.blocoId, nome:l.bloco, ls:[] }; porBloco.push(g); } g.ls.push(l); });
+    porBloco.forEach(bg=>{
+      const tb = tot(bg.ls);
+      const rows = bg.ls.map(l=>`<tr><td><b>${esc(l.it.nomenclatura||'—')}</b></td><td>${esc(l.it.tipoEsquadria||'')}</td><td class="n">${l.larg?f0(l.larg)+' × '+f0(l.alt):'—'}</td><td class="n">${l.pu?f0(l.pu,2):'—'}</td><td class="n">${f0(l.qtd)}</td><td class="n">${l.pu?f0(peso(l),1):'—'}</td><td>${esc(l.locs.map(x=>x.local+' ('+x.quantidade+')').join(', ')||'—')}</td></tr>`).join('');
+      html += `<h3 style="font-size:13px;margin:14px 0 4px;">Bloco: ${esc(bg.nome)} <span style="font-weight:400;color:#777;font-size:11.5px;">(${tb.n} itens)</span></h3>
+        <table style="page-break-inside:auto;"><thead><tr><th>Item</th><th>Tipo</th><th class="n">Medidas (mm)</th><th class="n">Peso un. (kg)</th><th class="n">Qtd</th><th class="n">Peso total (kg)</th><th>Localizações</th></tr></thead><tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="4">Subtotal do bloco</td><td class="n">${f0(tb.q)}</td><td class="n">${f0(tb.p,1)}</td><td></td></tr></tfoot></table>`;
+    });
+  });
+  html += `<table><tfoot><tr><td>TOTAL DA OBRA — ${geral.n} itens</td><td class="n">${f0(geral.q)} un</td><td class="n">${f0(geral.p/1000,2)} t</td></tr></tfoot></table>`;
+  return cab + html;
+}
+function gerarRelatorioTodosItens(){
+  if(!currentObraId){ toast('Abra uma obra para gerar o relatório.'); return; }
+  document.getElementById('itensIncompTitulo').textContent = 'Relatório de todos os itens — por fase e bloco';
+  document.getElementById('itensIncompCsvBtn').style.display = '';
+  document.getElementById('itensIncompConteudo').innerHTML = montarHtmlRelatorioTodosItens();
+  document.getElementById('itensIncompConteudo').contentEditable = 'false';
+  document.getElementById('itensIncompEditBtn').textContent = 'Editar';
+  document.getElementById('itensIncompModal').classList.add('open');
+}
+function baixarCsvTodosItens(){
+  const { obra, linhas } = dadosTodosItens();
+  const q = v => '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const rows = [['Obra','Fase','Bloco','Item','Tipo','Largura (mm)','Altura (mm)','Peso unitário (kg)','Quantidade','Peso total (kg)','Localizações'].map(q).join(';')];
+  linhas.forEach(l=>rows.push([obra.nome,l.fase,l.bloco,l.it.nomenclatura,l.it.tipoEsquadria,l.larg,l.alt,String(l.pu).replace('.',','),l.qtd,String(Math.round(l.qtd*l.pu*100)/100).replace('.',','),l.locs.map(x=>x.local+' ('+x.quantidade+')').join(' | ')].map(q).join(';')));
+  const blob = new Blob(['\ufeff'+rows.join('\r\n')], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'itens_por_fase_bloco_'+String(obra.nome||'obra').replace(/[^\w]+/g,'_')+'.csv';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 function fecharRelatorioItensIncompletos(){
