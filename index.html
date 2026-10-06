@@ -1202,7 +1202,8 @@
         <div class="ow-tab-content" id="owTab-geral">
           <div class="kpi-row">
             <div class="kpi"><div class="num" id="owKpiBlocos">0</div><div class="lbl">Blocos</div></div>
-            <div class="kpi"><div class="num" id="owKpiItens">0</div><div class="lbl">Itens cadastrados</div></div>
+            <div class="kpi"><div class="num" id="owKpiItens">0</div><div class="lbl">Itens ativos</div></div>
+            <div class="kpi"><div class="num" id="owKpiCancel" style="color:#a80e26;">0</div><div class="lbl">Itens cancelados <span id="owKpiCancelDet" style="display:block;font-size:11px;color:#777;font-weight:400;text-transform:none;letter-spacing:0;"></span></div></div>
             <div class="kpi"><div class="num" id="owKpiMateriais">0</div><div class="lbl">Pedidos de material</div></div>
             <div class="kpi"><div class="num" id="owKpiVento">0</div><div class="lbl">Cálculos de vento</div></div>
             <div class="kpi"><div class="num" id="owKpiPerfil">0</div><div class="lbl">Cálculos de perfil</div></div>
@@ -1297,6 +1298,7 @@
                     <option value="aguardando">Aguardando início</option>
                     <option value="andamento">Em andamento</option>
                     <option value="concluido">Concluído</option>
+                    <option value="cancelado">Cancelado</option>
                   </select>
                 </div>
                 <div style="display:flex;gap:8px;">
@@ -1335,6 +1337,7 @@
                     <option value="aguardando">Aguardando início</option>
                     <option value="andamento">Em andamento</option>
                     <option value="concluido">Concluído</option>
+                    <option value="cancelado">Cancelado</option>
                   </select>
                 </div>
                 <div style="display:flex;gap:8px;">
@@ -4265,6 +4268,8 @@
       <div id="fasesChecklist" style="margin-top:16px;"></div>
 
       <div class="form-actions">
+        <button class="btn danger" id="fasesBtnCancelar" onclick="cancelarItemDoModalFases()">Cancelar item</button>
+        <button class="btn secondary" id="fasesBtnReativar" style="display:none" onclick="reativarItemDoModalFases()">Reativar item</button>
         <button class="btn secondary" onclick="closeModal('modalFases')">Fechar</button>
       </div>
     </div>
@@ -4872,7 +4877,11 @@ function showObraTab(tab){
 
 function renderObraWorkspaceGeral(){
   const blocos = load('blocos').filter(b=>b.obraId===currentObraId);
-  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const itensTodos = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const itens = itensTodos.filter(itemAtivo);
+  const resCanc = resumoCancelados(itensTodos);
+  document.getElementById('owKpiCancel').textContent = resCanc.itens;
+  document.getElementById('owKpiCancelDet').innerHTML = resCanc.itens ? `${resCanc.unid} un · ${resCanc.kg.toFixed(1)} kg<br>${resCanc.fabItens} já fabricado(s) (${resCanc.fabUnid} un · ${resCanc.fabKg.toFixed(1)} kg)${resCanc.emFabItens?'<br>'+resCanc.emFabItens+' com produção iniciada':''}` : 'nenhum';
   const materiais = load('materiais').filter(m=>m.obraId===currentObraId);
   const cVento = load('calculosVento').filter(c=>c.obraId===currentObraId);
   const cPerfil = load('calculosPerfil').filter(c=>c.obraId===currentObraId);
@@ -4923,6 +4932,49 @@ function renderObraWorkspaceGeral(){
   renderProgressoPorBloco();
 }
 
+/* ---------- Itens cancelados (podem ser cancelados em qualquer fase, mesmo já fabricados) ---------- */
+function itemAtivo(it){ return !it.cancelado; }
+function snapshotFasesItem(it){
+  const pj = calcProgressoModulo(it, 'projeto'), pd = calcProgressoModulo(it, 'producao');
+  let tot = 0, ok = 0;
+  try{ gerarUnidadesInstalacao(it).forEach(u=>{ tot++; const p = calcProgressoUnidade(getUnidadeState(it, u.unitKey)); if(p.total>0 && p.done===p.total) ok++; }); }catch(e){}
+  return { projeto:{ done:pj.done, total:pj.total }, producao:{ done:pd.done, total:pd.total, concluida: pd.total>0 && pd.done===pd.total, iniciada: pd.done>0 }, instalacao:{ instaladas:ok, total:tot } };
+}
+function resumoCancelados(itens){
+  const r = { itens:0, unid:0, kg:0, fabItens:0, fabUnid:0, fabKg:0, emFabItens:0 };
+  itens.filter(it=>it.cancelado).forEach(it=>{
+    const q = qtdTotalLocalizacoes(it), kg = (parseFloat(it.pesoLiquido)||0)*q, sn = it.cancelado.producao ? it.cancelado : snapshotFasesItem(it);
+    const prod = sn.producao || {};
+    r.itens++; r.unid += q; r.kg += kg;
+    if(prod.concluida){ r.fabItens++; r.fabUnid += q; r.fabKg += kg; } else if(prod.iniciada) r.emFabItens++;
+  });
+  return r;
+}
+function cancelarItem(id){
+  const it = load('itensObra').find(x=>x.id===id); if(!it) return;
+  const sn = snapshotFasesItem(it);
+  const est = sn.producao.concluida ? 'JÁ FABRICADO' : (sn.producao.iniciada ? 'produção iniciada ('+sn.producao.done+'/'+sn.producao.total+' fases)' : 'sem produção iniciada');
+  const motivo = prompt('Cancelar o item '+it.nomenclatura+' ('+est+(sn.instalacao.instaladas?'; '+sn.instalacao.instaladas+' un instalada(s)':'')+').\nMotivo do cancelamento (opcional):', '');
+  if(motivo===null) return;
+  const itens = load('itensObra'), i = itens.findIndex(x=>x.id===id); if(i<0) return;
+  itens[i].cancelado = Object.assign({ em:todayISO(), motivo:String(motivo).trim() }, sn);
+  save('itensObra', itens); renderAllItemModulos(); try{ renderObraWorkspaceGeral(); }catch(e){}
+  toast('Item '+it.nomenclatura+' cancelado — o progresso já feito foi mantido no registro.');
+}
+function reativarItem(id){
+  const itens = load('itensObra'), i = itens.findIndex(x=>x.id===id); if(i<0) return;
+  if(!confirm('Reativar o item '+itens[i].nomenclatura+'?')) return;
+  delete itens[i].cancelado; save('itensObra', itens); renderAllItemModulos(); try{ renderObraWorkspaceGeral(); }catch(e){}
+  toast('Item reativado.');
+}
+function cancelarItemDoModalFases(){ const id = document.getElementById('fasesItemId').value; closeModal('modalFases'); cancelarItem(id); }
+function reativarItemDoModalFases(){ const id = document.getElementById('fasesItemId').value; closeModal('modalFases'); reativarItem(id); }
+function textoSituacaoCancelado(it){
+  const c = it.cancelado; if(!c) return '';
+  const p = c.producao || {};
+  const fase = p.concluida ? 'cancelado já fabricado' : (p.iniciada ? 'cancelado com produção iniciada ('+p.done+'/'+p.total+')' : 'cancelado antes de produzir');
+  return fase + (c.instalacao && c.instalacao.instaladas ? ' · '+c.instalacao.instaladas+' un instalada(s)' : '') + (c.em ? ' · em '+String(c.em).split('-').reverse().join('/') : '') + (c.motivo ? ' · '+c.motivo : '');
+}
 // Mesma lógica de peso/área usada no total da obra (acima), mas somada
 // bloco a bloco — é a base tanto dos gráficos de barra horizontal quanto
 // da tabela de apoio usada na impressão.
@@ -4933,7 +4985,7 @@ function calcularDadosPorBloco(faseFiltroId){
   fasesObra.forEach(f=>{ faseNomePorId[f.id] = f.nome; });
   let blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
   if(faseFiltroId) blocos = blocos.filter(b=>b.faseId===faseFiltroId);
-  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId && itemAtivo(it));
   return blocos.map(bloco=>{
     let pesoPrevisto=0, pesoProduzido=0, pesoInstalado=0, areaPrevista=0, areaProduzida=0, areaInstalada=0;
     itens.filter(it=>it.blocoId===bloco.id).forEach(item=>{
@@ -5200,7 +5252,7 @@ function calcularSaldoAGastarObra(obraId){
 // e no painel "Progresso por bloco" dentro da obra, só que agregada aqui em
 // nível de obra pra aparecer na listagem geral.
 function calcularAvancoObra(obraId){
-  const itens = load('itensObra').filter(it=>it.obraId===obraId);
+  const itens = load('itensObra').filter(it=>it.obraId===obraId && itemAtivo(it));
   let pesoPrevisto=0, pesoInstalado=0;
   itens.forEach(item=>{
     const pesoUnitario = parseFloat(item.pesoLiquido) || 0;
@@ -8619,7 +8671,7 @@ function vidroCategoriaLabel(vidroTipo, vidroSubcategoria){
 // % físico médio da obra (Projeto + Produção + Instalação, mesma base do
 // Dashboard) — usado como referência para projetar a Tendência de custo.
 function calcularPercFisicoObra(){
-  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId && itemAtivo(it));
   if(!itens.length) return null;
   let soma = 0, contagem = 0;
   itens.forEach(item=>{
@@ -12976,7 +13028,7 @@ function montarHtmlRelatorioItensIncompletos(){
   const porBloco = {};
   let totalItensIncompletos = 0;
 
-  itens.forEach(it=>{
+  itens.filter(itemAtivo).forEach(it=>{
     const faltando = CAMPOS_ITEM_OBRIGATORIOS.filter(c=>c.check(it)).map(c=>c.label);
     if(!faltando.length) return;
     totalItensIncompletos++;
@@ -13057,23 +13109,23 @@ function montarHtmlRelatorioTodosItens(){
   const f0 = (v,d)=> (v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||0,maximumFractionDigits:d||0});
   const cab = `<h1>Relatório de Itens por Fase e Bloco</h1><div class="meta">Obra: <strong>${esc(obra.nome||'—')}</strong><br>Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}</div>`;
   if(!linhas.length) return cab + '<p style="margin-top:20px;">Nenhum item cadastrado nesta obra.</p>';
-  const peso = l => l.qtd*l.pu;
-  const tot = ls => ({ n:ls.length, q:ls.reduce((s,l)=>s+l.qtd,0), p:ls.reduce((s,l)=>s+peso(l),0) });
+  const peso = l => l.it.cancelado ? 0 : l.qtd*l.pu;
+  const tot = ls => { const at = ls.filter(l=>!l.it.cancelado), cn = ls.filter(l=>l.it.cancelado); return { n:at.length, nc:cn.length, q:at.reduce((s,l)=>s+l.qtd,0), qc:cn.reduce((s,l)=>s+l.qtd,0), pc:cn.reduce((s,l)=>s+l.qtd*l.pu,0), p:ls.reduce((s,l)=>s+peso(l),0) }; };
   let html = '', geral = tot(linhas);
   const porFase = []; linhas.forEach(l=>{ let g = porFase.find(x=>x.id===l.faseId); if(!g){ g = { id:l.faseId, nome:l.fase, ls:[] }; porFase.push(g); } g.ls.push(l); });
   porFase.forEach(fg=>{
     const tf = tot(fg.ls);
-    html += `<h2 style="page-break-before:auto;">Fase: ${esc(fg.nome)} <span style="font-weight:400;color:#777;font-size:12.5px;">(${tf.n} itens · ${f0(tf.q)} un · ${f0(tf.p/1000,2)} t)</span></h2>`;
+    html += `<h2 style="page-break-before:auto;">Fase: ${esc(fg.nome)} <span style="font-weight:400;color:#777;font-size:12.5px;">(${tf.n} itens · ${f0(tf.q)} un · ${f0(tf.p/1000,2)} t${tf.nc?' · '+tf.nc+' cancelado(s): '+f0(tf.qc)+' un':''})</span></h2>`;
     const porBloco = []; fg.ls.forEach(l=>{ let g = porBloco.find(x=>x.id===l.blocoId); if(!g){ g = { id:l.blocoId, nome:l.bloco, ls:[] }; porBloco.push(g); } g.ls.push(l); });
     porBloco.forEach(bg=>{
       const tb = tot(bg.ls);
-      const rows = bg.ls.map(l=>`<tr><td><b>${esc(l.it.nomenclatura||'—')}</b></td><td>${esc(l.it.tipoEsquadria||'')}</td><td class="n">${l.larg?f0(l.larg)+' × '+f0(l.alt):'—'}</td><td class="n">${l.pu?f0(l.pu,2):'—'}</td><td class="n">${f0(l.qtd)}</td><td class="n">${l.pu?f0(peso(l),1):'—'}</td><td>${esc(l.locs.map(x=>x.local+' ('+x.quantidade+')').join(', ')||'—')}</td></tr>`).join('');
+      const rows = bg.ls.map(l=>`<tr${l.it.cancelado?' style="color:#a80e26;"':''}><td><b${l.it.cancelado?' style="text-decoration:line-through;"':''}>${esc(l.it.nomenclatura||'—')}</b>${l.it.cancelado?'<div style="font-size:9.5px;">'+esc(textoSituacaoCancelado(l.it))+'</div>':''}</td><td>${esc(l.it.tipoEsquadria||'')}</td><td class="n">${l.larg?f0(l.larg)+' × '+f0(l.alt):'—'}</td><td class="n">${l.pu?f0(l.pu,2):'—'}</td><td class="n">${f0(l.qtd)}</td><td class="n">${l.it.cancelado?'cancel.':(l.pu?f0(peso(l),1):'—')}</td><td>${esc(l.locs.map(x=>x.local+' ('+x.quantidade+')').join(', ')||'—')}</td></tr>`).join('');
       html += `<h3 style="font-size:13px;margin:14px 0 4px;">Bloco: ${esc(bg.nome)} <span style="font-weight:400;color:#777;font-size:11.5px;">(${tb.n} itens)</span></h3>
         <table style="page-break-inside:auto;"><thead><tr><th>Item</th><th>Tipo</th><th class="n">Medidas (mm)</th><th class="n">Peso un. (kg)</th><th class="n">Qtd</th><th class="n">Peso total (kg)</th><th>Localizações</th></tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="4">Subtotal do bloco</td><td class="n">${f0(tb.q)}</td><td class="n">${f0(tb.p,1)}</td><td></td></tr></tfoot></table>`;
+        <tfoot><tr><td colspan="4">Subtotal do bloco (sem cancelados)</td><td class="n">${f0(tb.q)}</td><td class="n">${f0(tb.p,1)}</td><td>${tb.nc?tb.nc+' cancelado(s): '+f0(tb.qc)+' un · '+f0(tb.pc,1)+' kg':''}</td></tr></tfoot></table>`;
     });
   });
-  html += `<table><tfoot><tr><td>TOTAL DA OBRA — ${geral.n} itens</td><td class="n">${f0(geral.q)} un</td><td class="n">${f0(geral.p/1000,2)} t</td></tr></tfoot></table>`;
+  html += `<table><tfoot><tr><td>TOTAL DA OBRA (ativos) — ${geral.n} itens</td><td class="n">${f0(geral.q)} un</td><td class="n">${f0(geral.p/1000,2)} t</td><td>${geral.nc?'Cancelados: '+geral.nc+' itens · '+f0(geral.qc)+' un · '+f0(geral.pc/1000,2)+' t':''}</td></tr></tfoot></table>`;
   return cab + html;
 }
 function gerarRelatorioTodosItens(){
@@ -13088,8 +13140,8 @@ function gerarRelatorioTodosItens(){
 function baixarCsvTodosItens(){
   const { obra, linhas } = dadosTodosItens();
   const q = v => '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-  const rows = [['Obra','Fase','Bloco','Item','Tipo','Largura (mm)','Altura (mm)','Peso unitário (kg)','Quantidade','Peso total (kg)','Localizações'].map(q).join(';')];
-  linhas.forEach(l=>rows.push([obra.nome,l.fase,l.bloco,l.it.nomenclatura,l.it.tipoEsquadria,l.larg,l.alt,String(l.pu).replace('.',','),l.qtd,String(Math.round(l.qtd*l.pu*100)/100).replace('.',','),l.locs.map(x=>x.local+' ('+x.quantidade+')').join(' | ')].map(q).join(';')));
+  const rows = [['Obra','Fase','Bloco','Item','Tipo','Largura (mm)','Altura (mm)','Peso unitário (kg)','Quantidade','Peso total (kg)','Localizações','Situação'].map(q).join(';')];
+  linhas.forEach(l=>rows.push([obra.nome,l.fase,l.bloco,l.it.nomenclatura,l.it.tipoEsquadria,l.larg,l.alt,String(l.pu).replace('.',','),l.qtd,String(Math.round(l.qtd*l.pu*100)/100).replace('.',','),l.locs.map(x=>x.local+' ('+x.quantidade+')').join(' | '), l.it.cancelado ? textoSituacaoCancelado(l.it) : 'Ativo'].map(q).join(';')));
   const blob = new Blob(['\ufeff'+rows.join('\r\n')], { type:'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'itens_por_fase_bloco_'+String(obra.nome||'obra').replace(/[^\w]+/g,'_')+'.csv';
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -13349,6 +13401,7 @@ function statusFromProgresso({done,total}){
 
 function statusProdInstPill(status){
   const map = {
+    cancelado: ['Cancelado','status-pausado'],
     aguardando: ['Aguardando início','status-pendente'],
     andamento: ['Em andamento','status-andamento'],
     concluido: ['Concluído','status-ativo']
@@ -13770,6 +13823,7 @@ function saveItem(){
     producao: existente ? (existente.producao || {}) : {},
     instalacao: existente ? (existente.instalacao || {})  : {}
   };
+  if(existente && existente.cancelado) record.cancelado = existente.cancelado;
   const idx = itens.findIndex(it=>it.id===id);
   if(idx>=0) itens[idx] = record; else itens.push(record);
   save('itensObra', itens);
@@ -13838,19 +13892,20 @@ function renderItensModulo(moduleKey){
 
   const withStatus = itens.map(it => {
     const progresso = calcProgressoModulo(it, moduleKey);
-    return { ...it, statusCalc: statusFromProgresso(progresso), progresso };
+    return { ...it, statusCalc: it.cancelado ? 'cancelado' : statusFromProgresso(progresso), progresso };
   });
+  const ativosSt = withStatus.filter(it=>!it.cancelado);
 
   document.getElementById(p+'KpiBlocos').textContent = blocos.length;
-  document.getElementById(p+'KpiTotal').textContent = itens.length;
-  document.getElementById(p+'KpiAguardando').textContent = withStatus.filter(it=>it.statusCalc==='aguardando').length;
-  document.getElementById(p+'KpiAndamento').textContent = withStatus.filter(it=>it.statusCalc==='andamento').length;
-  document.getElementById(p+'KpiConcluido').textContent = withStatus.filter(it=>it.statusCalc==='concluido').length;
+  document.getElementById(p+'KpiTotal').textContent = ativosSt.length + (withStatus.length>ativosSt.length ? ' (+'+(withStatus.length-ativosSt.length)+' cancel.)' : '');
+  document.getElementById(p+'KpiAguardando').textContent = ativosSt.filter(it=>it.statusCalc==='aguardando').length;
+  document.getElementById(p+'KpiAndamento').textContent = ativosSt.filter(it=>it.statusCalc==='andamento').length;
+  document.getElementById(p+'KpiConcluido').textContent = ativosSt.filter(it=>it.statusCalc==='concluido').length;
 
   const filtered = withStatus.filter(it=>{
     const locaisTexto = (it.localizacoes||[]).map(l=>l.local).join(' ');
     const matchSearch = !search || [it.nomenclatura, locaisTexto].some(v=>(v||'').toLowerCase().includes(search));
-    const matchStatus = !filtroStatus || it.statusCalc===filtroStatus;
+    const matchStatus = filtroStatus ? it.statusCalc===filtroStatus : true;
     return matchSearch && matchStatus;
   });
 
@@ -13879,8 +13934,9 @@ function renderItensModulo(moduleKey){
       const medidas = (it.largura || it.altura) ? `${it.largura||'?'} x ${it.altura||'?'} mm` : '—';
       const locaisResumo = (it.localizacoes||[]).map(l=>`${esc(l.local)} (${l.quantidade})`).join(', ') || '—';
       const { done, total } = it.progresso;
-      return `<tr>
-        <td><strong>${esc(it.nomenclatura)}</strong>${it.tipoEsquadria?`<div class="step-note">${esc(it.tipoEsquadria)}</div>`:''}</td>
+      const canc = !!it.cancelado;
+      return `<tr${canc?' style="opacity:.6;background:#fbf3f3;"':''}>
+        <td><strong${canc?' style="text-decoration:line-through;"':''}>${esc(it.nomenclatura)}</strong>${it.tipoEsquadria?`<div class="step-note">${esc(it.tipoEsquadria)}</div>`:''}${canc?`<div class="step-note" style="color:#a80e26;">${esc(textoSituacaoCancelado(it))}</div>`:''}</td>
         <td>${medidas}</td>
         <td>${it.quantidade||0}</td>
         <td style="max-width:220px;">${locaisResumo}</td>
@@ -13889,6 +13945,7 @@ function renderItensModulo(moduleKey){
         <td style="text-align:right;white-space:nowrap;">
           <button class="btn small" onclick="openFasesModal('${it.id}','${moduleKey}')">Fases</button>
           <button class="btn small secondary" onclick="openItemModal('${it.id}')">Editar</button>
+          ${canc ? `<button class="btn small secondary" onclick="reativarItem('${it.id}')">Reativar</button>` : `<button class="btn small danger" onclick="cancelarItem('${it.id}')">Cancelar item</button>`}
           <button class="btn small danger" onclick="deleteItem('${it.id}')">Excluir</button>
         </td>
       </tr>`;
@@ -13930,7 +13987,9 @@ function renderFasesModalContent(itemId, moduleKey){
   const { done, total } = calcProgressoModulo(item, moduleKey);
   const locaisResumo = (item.localizacoes||[]).map(l=>`${l.local} (${l.quantidade})`).join(', ') || '—';
 
-  document.getElementById('modalFasesTitle').textContent = `${cfg.titulo} — ${item.nomenclatura}`;
+  document.getElementById('modalFasesTitle').textContent = `${cfg.titulo} — ${item.nomenclatura}${item.cancelado?' (CANCELADO)':''}`;
+  document.getElementById('fasesBtnCancelar').style.display = item.cancelado ? 'none' : '';
+  document.getElementById('fasesBtnReativar').style.display = item.cancelado ? '' : 'none';
   document.getElementById('fasesResumo').innerHTML =
     `<strong>${esc(item.nomenclatura)}</strong>${(item.largura||item.altura) ? ' · '+esc(item.largura||'?')+' x '+esc(item.altura||'?')+' mm' : ''}<br>
      Localizações: ${esc(locaisResumo)}<br>
@@ -14139,7 +14198,7 @@ function renderStatusExecucaoDashboard(){
 
 function renderInstalacaoTab(){
   const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId), 'nome');
-  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId && itemAtivo(it));
   const search = (document.getElementById('instSearch').value || '').toLowerCase();
   const filtroStatus = document.getElementById('instFiltroStatus').value;
 
@@ -14205,6 +14264,7 @@ function renderInstalacaoTab(){
           <td style="text-align:right;white-space:nowrap;">
             <button class="btn small" onclick="openFasesUnidadeModal('${u.item.id}','${u.unitKey}')">Fases</button>
             <button class="btn small secondary" onclick="openRdoModal('${u.item.id}','${u.unitKey}')">RDO${(temFotos||temComentario)?' ●':''}</button>
+            <button class="btn small danger" title="Cancelar o item inteiro (todas as unidades)" onclick="cancelarItem('${u.item.id}')">Cancelar item</button>
           </td>
         </tr>`;
       }).join('');
@@ -14540,7 +14600,7 @@ function criarTarefaSeNecessario(moduleKey, itemId, unitKey, faseKey, titulo){
 }
 
 function gerarTarefasModulo(moduleKey){
-  const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
+  const itens = load('itensObra').filter(it=>it.obraId===currentObraId && itemAtivo(it));
   if(!itens.length){ toast('Cadastre itens neste módulo antes de gerar tarefas.'); return; }
   let tarefas = load('tarefas');
   let criadas = 0, jaTinhamTarefa = 0, concluidasOuNA = 0;
