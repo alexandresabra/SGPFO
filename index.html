@@ -1431,6 +1431,7 @@
                   <button class="btn secondary" onclick="abrirDashboardMateriais('aluminio')">Dashboard de alumínio</button>
                   <button class="btn secondary" onclick="abrirDashboardMateriais('componentes')">Dashboard de componentes</button>
                   <button class="btn secondary" onclick="gerarRelatorioPendenciasMateriais()">Relatório de pendências</button>
+                  <button class="btn secondary" onclick="gerarRelatorioPendenciasPorPedido()">Pendências por pedido</button>
                   <button class="btn" onclick="openMaterialModal()">+ Novo pedido</button>
                 </div>
               </div>
@@ -4405,6 +4406,25 @@
     </div>
   </div>
 </div>
+<div class="modal-overlay" id="matPedPendModal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-head">
+      <h3>Pendências por pedido — Materiais</h3>
+      <button class="modal-close" onclick="document.getElementById('matPedPendModal').classList.remove('open')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-actions" style="margin-bottom:14px;align-items:center;">
+        <label style="font-size:13px;">Pedido:
+          <select id="matPedPendSel" onchange="renderPendenciasPorPedido()" style="margin-left:6px;"></select>
+        </label>
+        <button class="btn secondary" id="matPedPendEditBtn" onclick="alternarEdicaoPendenciasPorPedido()">Editar</button>
+        <button class="btn" onclick="imprimirPendenciasPorPedido()">Imprimir / salvar PDF</button>
+      </div>
+      <div id="matPedPendConteudo" class="memoria-doc"></div>
+    </div>
+  </div>
+</div>
+
 
 <div class="modal-overlay" id="itensIncompModal">
   <div class="modal" style="max-width:900px;">
@@ -15798,6 +15818,78 @@ function imprimirPendenciasMateriais(){
 document.getElementById('matPendModal').addEventListener('click', (e)=>{
   if(e.target.id==='matPendModal') e.currentTarget.classList.remove('open');
 });
+
+
+/* ---------------- Pendências por pedido (um relatório/página por pedido) ---------------- */
+function pendenciasDoPedido(p){
+  return (p.itens||[]).map(it=>{
+    const pedida = parseFloat(it.qtdPedida) || 0;
+    const recebida = qtdRecebidaItem(it);
+    return { ...it, pedida, recebida, aReceber: Math.max(0, pedida-recebida), status: calcularStatusItemPedido(it, p.dataPrevista) };
+  }).filter(it=>it.aReceber>0);
+}
+function pedidosComPendencia(){
+  return load('materiais').filter(m=>m.obraId===currentObraId && pendenciasDoPedido(m).length)
+    .sort((a,b)=>String(a.dataPrevista||'9999').localeCompare(String(b.dataPrevista||'9999')));
+}
+function htmlPendenciaPedido(p, obra, quebra){
+  const itens = pendenciasDoPedido(p);
+  const statusLabel = { atrasado:'Atrasado', parcial:'Recebimento parcial', pendente:'Pendente' };
+  const hoje = todayISO();
+  let atraso = '';
+  if(p.dataPrevista && p.dataPrevista < hoje){
+    const d = Math.round((new Date(hoje)-new Date(p.dataPrevista))/86400000);
+    atraso = ` · <strong style="color:#a80e26;">${d} dia(s) de atraso</strong>`;
+  }
+  const linhas = itens.map(it=>{
+    const ents = (it.entregas||[]).filter(e=>parseFloat(e.quantidade)>0)
+      .map(e=>`${fmtDate(e.data||e.dataChegada)}: ${parseFloat(e.quantidade)}${e.nf||e.numNF?' (NF '+esc(e.nf||e.numNF)+')':''}`).join('; ');
+    return `<tr>
+      <td>${esc(it.item)}</td>
+      <td>${it.pedida} ${esc(it.unidade||'')}</td>
+      <td>${it.recebida} ${esc(it.unidade||'')}${ents?`<div style="font-size:10.5px;color:#777;">${ents}</div>`:''}</td>
+      <td><strong>${it.aReceber} ${esc(it.unidade||'')}</strong></td>
+      <td style="${it.status==='atrasado'?'color:#a80e26;font-weight:700;':''}">${statusLabel[it.status]||it.status}</td></tr>`;
+  }).join('');
+  return `<div style="${quebra?'page-break-before:always;':''}">
+    <h1>Pendências do Pedido ${p.numPedido?('nº '+esc(p.numPedido)):'(sem número)'}</h1>
+    <div class="meta">Obra: <strong>${esc(obra.nome||'—')}</strong><br>
+      Fornecedor: <strong>${esc((p.fornecedor||'').trim()||'não informado')}</strong><br>
+      Data do pedido: ${fmtDate(p.dataPedido)} · Previsão de entrega: ${fmtDate(p.dataPrevista)}${atraso}${p.observacoes?'<br>Obs.: '+esc(p.observacoes):''}<br>
+      Emitido em: ${esc(new Date().toLocaleString('pt-BR'))}</div>
+    <p style="font-size:12.5px;color:#555;">${itens.length} item(ns) com quantidade a receber.</p>
+    <table><thead><tr><th>Item</th><th>Pedida</th><th>Recebida</th><th>A receber</th><th>Situação</th></tr></thead><tbody>${linhas}</tbody></table>
+  </div>`;
+}
+function renderPendenciasPorPedido(){
+  const obra = load('obras').find(o=>o.id===currentObraId) || {};
+  const sel = document.getElementById('matPedPendSel').value;
+  const peds = pedidosComPendencia().filter(p=>sel==='__todos__'||p.id===sel);
+  const el = document.getElementById('matPedPendConteudo');
+  el.contentEditable='false';
+  document.getElementById('matPedPendEditBtn').textContent='Editar';
+  el.innerHTML = peds.length ? peds.map((p,i)=>htmlPendenciaPedido(p,obra,i>0)).join('<hr style="margin:24px 0;border:none;border-top:2px dashed #ccc;">')
+    : '<p style="margin-top:20px;">Não há pendências de recebimento nesta obra — todos os pedidos estão completos.</p>';
+}
+function gerarRelatorioPendenciasPorPedido(){
+  if(!currentObraId){ toast('Abra uma obra para gerar o relatório.'); return; }
+  const peds = pedidosComPendencia();
+  document.getElementById('matPedPendSel').innerHTML = '<option value="__todos__">Todos (um por página)</option>' +
+    peds.map(p=>`<option value="${esc(p.id)}">Pedido ${esc(p.numPedido||'s/nº')} — ${esc((p.fornecedor||'').trim()||'sem fornecedor')}</option>`).join('');
+  renderPendenciasPorPedido();
+  document.getElementById('matPedPendModal').classList.add('open');
+}
+function alternarEdicaoPendenciasPorPedido(){
+  const el = document.getElementById('matPedPendConteudo');
+  const ed = el.contentEditable==='true';
+  el.contentEditable = ed?'false':'true';
+  document.getElementById('matPedPendEditBtn').textContent = ed?'Editar':'Concluir edição';
+  if(!ed) el.focus();
+}
+function imprimirPendenciasPorPedido(){
+  document.getElementById('rdoPrintArea').innerHTML = document.getElementById('matPedPendConteudo').innerHTML;
+  window.print();
+}
 
 /* ---------------- Relatório de itens com informações incompletas ---------------- */
 // Cadastro compartilhado (Projeto/Produção/Instalação) permite salvar um
