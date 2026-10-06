@@ -10039,6 +10039,7 @@ function pliHtmlEditor(){
       <label>Alumínio (R$/kg) <input type="number" step="0.5" value="${e.preco}" ${bloqueado?'disabled':''} style="width:80px;" onchange="plcEdCampo('preco',this.value)"></label>
       <label>Efetivo de instalação (pessoas) <input type="number" value="${e.efetivo}" ${bloqueado?'disabled':''} style="width:70px;" onchange="plcEdCampo('efetivo',this.value)"></label>
       <label>1ª compra (data) <input type="date" value="${e.inicio||''}" ${bloqueado?'disabled':''} onchange="plcEdCampo('inicio',this.value)"></label>
+      ${(()=>{ try{ const ob = plcLoad().obras[e.idx]; if(!ob || !ob.ajuste) return ''; const ef = plcPrimeiraCompra(ob); return ef ? `<span class="step-note" style="align-self:center">Com o ajuste de compras aplicado, a 1ª compra efetiva é <b>${pliFmtData(ef)}</b>.</span>` : ''; }catch(x){ return ''; } })()}
     </div>
     <div class="pli-filtros">
       <label>Entrega ao investidor <input type="date" value="${e.marcos.inv||''}" onchange="plcEdMarco('inv',this.value)"></label>
@@ -10236,31 +10237,45 @@ function plcOtmAplicar(){
 }
 function plcOtmDescartar(){ PLI_UI.otm = null; renderPlanejInt(); }
 /* ---------- Recalcular prazos (compra · fabricação · instalação) ----------
-   Refaz o calendário a partir dos deadlines (alvo, habite-se, investidor, obra − folga) e das premissas.
-   Mostra a prévia (antes × depois, por fase) e só grava ao clicar em "Aplicar". */
+   Refaz TODA a cadeia a partir dos deadlines (alvo, habite-se, investidor, obra − folga) e das premissas:
+   1ª compra → entrega do material → fabricação → instalação. Gera 3 opções, mostra a prévia e um plano de ação. */
 function plcRecalcLimite(ob){
   const ds = [], folga = plcCfg().folgaMeses;
   if(ob.prem.alvo) ds.push(ob.prem.alvo);
   PLC_MARCOS.forEach(([k])=>{ if(ob.marcos && ob.marcos[k]) ds.push(pliAddMeses(ob.marcos[k], -folga)); });
   return ds.sort()[0] || '';
 }
-function plcRecalcPrazos(escopo, idxObra){
-  escopo = escopo || 'geral';
+function plcPrimeiraCompra(ob, semAjuste){
+  const o = semAjuste ? Object.assign({}, ob, { ajuste:undefined }) : ob;
+  return plcFluxoEfetivo(o).fluxo.map(x=>x.venc).filter(Boolean).sort()[0] || '';
+}
+const PLC_RC_OPCOES = {
+  rec:   { titulo:'Recomendado', desc:'Antecipa as compras só o necessário e, se preciso, sobe o efetivo de instalação. Menor custo financeiro que cumpre os prazos.' },
+  cedo:  { titulo:'Compra o mais cedo possível', desc:'Começa a comprar já (data base) para ter a maior folga nos prazos; sobe o efetivo só se ainda faltar.' },
+  manter:{ titulo:'Manter a 1ª compra cadastrada', desc:'Não mexe na data da 1ª compra; só aumenta o efetivo de instalação. Mostra o que ainda não cabe.' }
+};
+function plcRecalcCenario(modo, escopo, idxObra){
   const C0 = plcLoad(), C = JSON.parse(JSON.stringify(C0));
-  if(!C.obras.length){ toast('Importe os cronogramas (ou crie uma obra) antes de recalcular.'); return null; }
-  const comp = escopo!=='instalacao', inst = escopo!=='compra';
+  const comp = escopo!=='instalacao' && modo!=='manter', inst = escopo!=='compra';
   const noEscopo = i => idxObra==null || i===idxObra;
   const ordem = C.obras.map((o,i)=>i).filter(noEscopo).sort((a,b)=>(plcRecalcLimite(C.obras[a])||'9999')<(plcRecalcLimite(C.obras[b])||'9999')?-1:1);
   const aval = i => { const S = plcSeqCalcular(C), ob = C.obras[i], R = plcCalcBase(ob, S && S.byObra[ob.id]); return { ok:plcAtende(ob,R), fim:R.maxInst }; };
   const cands = [];
   [1,0.85,0.7,0.55,0.4,0.3].forEach(k=>[0,30,60,90,120,180,240,300,420,600].forEach(A=>cands.push({ k, A, custo:A/30+(1-k)*10 })));
   cands.sort((a,b)=>a.custo-b.custo);
-  if(comp) ordem.forEach(i=>{ delete C.obras[i].ajuste; });
+  if(escopo!=='instalacao') ordem.forEach(i=>{ delete C.obras[i].ajuste; });
+  if(modo==='cedo' && escopo!=='instalacao') ordem.forEach(i=>{ C.obras[i].ajuste = { A:900, k:1 }; });
   const t0 = Date.now(); let truncou = false;
   const ef0s = {}; ordem.forEach(i=>{ ef0s[i] = C0.obras[i].prem.efetivo; });
+  const efetivoBusca = i=>{
+    const ob = C.obras[i], ef0 = ef0s[i]; let ef = ef0, r = aval(i);
+    for(let n=0; n<16 && !r.ok; n++){ ef = Math.ceil(ef*1.15); if(ef > ef0*4+10) break; ob.prem.efetivo = ef; r = aval(i); }
+    if(!r.ok){ ob.prem.efetivo = ef0; r = aval(i); }
+    return r;
+  };
   const resolver = i=>{
     const ob = C.obras[i]; let r = aval(i); if(r.ok) return r;
-    if(inst){ ob.prem.efetivo = ef0s[i]; }
+    if(inst) ob.prem.efetivo = ef0s[i];
     if(comp){
       let melhor = null;
       for(const cd of cands){
@@ -10272,22 +10287,16 @@ function plcRecalcPrazos(escopo, idxObra){
       }
       if(melhor){ if(melhor.cd.A===0 && melhor.cd.k===1) delete ob.ajuste; else ob.ajuste = melhor.cd; r = aval(i); }
     }
-    if(!r.ok && inst){
-      const ef0 = ef0s[i]; let ef = ef0, ach = false;
-      for(let n=0; n<16 && !ach; n++){
-        ef = Math.ceil(ef*1.15); if(ef > ef0*4+10) break;
-        ob.prem.efetivo = ef; r = aval(i); if(r.ok) ach = true;
-      }
-      if(!ach){ ob.prem.efetivo = ef0; r = aval(i); }
-    }
+    if(!r.ok && inst) r = efetivoBusca(i);
     return r;
   };
-  // Passadas: as obras interagem pela fábrica (uma mudança em uma altera as outras), então repete até estabilizar.
+  // As obras interagem pela fábrica: repete até estabilizar.
   for(let p=0; p<4; p++){
     let mudou = false;
-    ordem.forEach(i=>{ const ok0 = aval(i).ok; if(ok0) return; const r = resolver(i); if(r.ok) mudou = true; });
-    if(!ordem.some(i=>!aval(i).ok) || !mudou && p>0) break;
+    ordem.forEach(i=>{ if(aval(i).ok) return; if(resolver(i).ok) mudou = true; });
+    if(!ordem.some(i=>!aval(i).ok) || (!mudou && p>0)) break;
   }
+  const P = pliLoad(), hoje = P ? P.dataBase : todayISO(), pr = (P && P.prazos) || { cotacao:30, lista:15 };
   const antes = plcAvaliarObras(C0), depois = plcAvaliarObras(C);
   const linhas = C.obras.map((ob,i)=>{
     const a = antes[ob.id], d = depois[ob.id], o0 = C0.obras[i], R = d.R;
@@ -10295,47 +10304,92 @@ function plcRecalcPrazos(escopo, idxObra){
     const fases = cal.map(f=>{ const rs = R.resumo.find(x=>x.cod===f.cod) || {};
       return { cod:f.cod, desc:f.desc, compraIni:f.compraIni, compraFim:f.compraFim, iniFab:rs.iniFab, fimFab:rs.fimFab, iniInst:rs.iniInst, fimInst:rs.fimInst, prazo:f.prazo,
                folga: (f.prazo && rs.fimInst) ? pliDiffDias(f.prazo, rs.fimInst) : null }; });
-    return { id:ob.id, nome:ob.nome, noEscopo:noEscopo(i), limite:plcRecalcLimite(ob),
-      antes:{ fim:a.fim, ok:a.ok, ajuste:o0.ajuste||null, efetivo:o0.prem.efetivo }, depois:{ fim:d.fim, ok:d.ok, ajuste:ob.ajuste||null, efetivo:ob.prem.efetivo }, fases,
-      mudou: noEscopo(i) && (JSON.stringify(o0.ajuste||null)!==JSON.stringify(ob.ajuste||null) || o0.prem.efetivo!==ob.prem.efetivo) };
+    const folgas = fases.map(z=>z.folga).filter(v=>v!=null);
+    const L = { id:ob.id, nome:ob.nome, noEscopo:noEscopo(i), limite:plcRecalcLimite(ob),
+      antes:{ fim:a.fim, ok:a.ok, ajuste:o0.ajuste||null, efetivo:o0.prem.efetivo, compra:plcPrimeiraCompra(o0) },
+      depois:{ fim:d.fim, ok:d.ok, ajuste:ob.ajuste||null, efetivo:ob.prem.efetivo, compra:plcPrimeiraCompra(ob) },
+      cadastro: plcPrimeiraCompra(o0, true), fases, folgaMin: folgas.length ? Math.min(...folgas) : null, entregaDias: ob.prem.entregaDias,
+      iniInstMin: fases.map(z=>z.iniInst).filter(Boolean).sort()[0] || '',
+      atrasoDias: (!d.ok && plcRecalcLimite(ob) && d.fim) ? pliDiffDias(d.fim, plcRecalcLimite(ob)) : 0,
+      foraFases: fases.filter(z=>z.folga!=null && z.folga<0).map(z=>z.cod) };
+    L.mudou = noEscopo(i) && (JSON.stringify(o0.ajuste||null)!==JSON.stringify(ob.ajuste||null) || o0.prem.efetivo!==ob.prem.efetivo);
+    L.acoes = noEscopo(i) ? plcRecalcAcoes(L, hoje, pr) : [];
+    return L;
   });
-  const r = { escopo, idxObra:idxObra==null?null:idxObra, linhas, truncou };
+  return { modo, linhas, truncou };
+}
+function plcRecalcAcoes(L, hoje, pr){
+  const f = pliFmtData, ac = [], dd = (a,b)=>pliDiffDias(a,b);
+  const compra = L.depois.compra, cad = L.cadastro;
+  if(compra){
+    if(cad && compra < cad) ac.push({ t:'compra', txt:`Antecipar o 1º pedido/pagamento de ${f(cad)} para <b>${f(compra)}</b> (${dd(cad,compra)} dias antes).` });
+    else if(cad && compra > cad) ac.push({ t:'compra', txt:`1ª compra mantida em <b>${f(compra)}</b>.` });
+    else ac.push({ t:'compra', txt:`1ª compra mantida em <b>${f(compra)}</b>.` });
+    const lista = pliAddDias(compra, -((pr.cotacao||0)+(pr.lista||0)));
+    ac.push({ t:'lista', txt: lista < hoje
+      ? `Emitir a lista a Suprimentos <b>imediatamente</b>: para pedir em ${f(compra)} ela deveria ter começado em ${f(lista)} (${dd(hoje,lista)} dias de atraso) — cotação ${pr.cotacao} d + lista ${pr.lista} d.`
+      : `Iniciar a emissão da lista a Suprimentos até <b>${f(lista)}</b> (cotação ${pr.cotacao} d + lista ${pr.lista} d antes do pedido).` });
+  }
+  if(L.depois.ajuste && L.depois.ajuste.k<1) ac.push({ t:'ritmo', txt:`Concentrar os pedidos: comprar em ritmo de ${Math.round(L.depois.ajuste.k*100)}% do calendário original (parcelas mais próximas).` });
+  if(L.depois.efetivo > L.antes.efetivo) ac.push({ t:'efetivo', txt:`Subir o efetivo de instalação de ${L.antes.efetivo} para <b>${L.depois.efetivo}</b> pessoas${L.iniInstMin?', mobilizando até '+f(L.iniInstMin):''}.` });
+  if(L.depois.ok) ac.push({ t:'ok', txt:`Resultado: termina em <b>${f(L.depois.fim)}</b>, dentro do deadline (${f(L.limite)})${L.folgaMin!=null?' — menor folga por fase: '+L.folgaMin+' dias':''}.` });
+  else {
+    ac.push({ t:'falha', txt:`<b>Ainda não cabe:</b> termina em ${f(L.depois.fim)}, ${L.atrasoDias} dias depois do deadline (${f(L.limite)})${L.foraFases.length?'; fases fora: '+L.foraFases.join(', '):''}.` });
+    ac.push({ t:'sug', txt:'Para fechar a conta: (1) rode o Otimizador — ele ajusta capacidade da fábrica e obras em paralelo; (2) negociar prazo de entrega do fornecedor'+(L.entregaDias?' (hoje '+L.entregaDias+' d)':'')+'; (3) revisar a folga de meses antes dos marcos; (4) escalonar a entrega por marco, priorizando as fases do investidor; (5) renegociar o marco com a incorporação.' });
+  }
+  return ac;
+}
+function plcRecalcPrazos(escopo, idxObra){
+  escopo = escopo || 'geral';
+  const C0 = plcLoad();
+  if(!C0.obras.length){ toast('Importe os cronogramas (ou crie uma obra) antes de recalcular.'); return null; }
+  const modos = escopo==='geral' ? ['rec','cedo','manter'] : ['rec'];
+  const opcoes = modos.map(m=>Object.assign({ id:m }, PLC_RC_OPCOES[m], plcRecalcCenario(m, escopo, idxObra)));
+  const r = { escopo, idxObra:idxObra==null?null:idxObra, opcoes, sel:'rec' };
   PLI_UI.recalc = r; return r;
 }
 function plcRecalcExecutar(escopo, idxObra){
   toast('Recalculando prazos…');
   setTimeout(()=>{ try{ plcRecalcPrazos(escopo, idxObra); }catch(e){ console.error(e); toast('Erro ao recalcular: '+e.message); } renderPlanejInt(); }, 30);
 }
+function plcRecalcSel(id){ if(PLI_UI.recalc){ PLI_UI.recalc.sel = id; renderPlanejInt(); } }
 function plcRecalcAplicar(){
   const r = PLI_UI.recalc; if(!r) return;
+  const op = r.opcoes.find(o=>o.id===r.sel) || r.opcoes[0];
   const c = plcLoad();
-  r.linhas.forEach(x=>{ if(!x.noEscopo) return; const ob = c.obras.find(o=>o.id===x.id); if(!ob) return;
+  op.linhas.forEach(x=>{ if(!x.noEscopo) return; const ob = c.obras.find(o=>o.id===x.id); if(!ob) return;
     if(r.escopo!=='instalacao'){ if(x.depois.ajuste) ob.ajuste = x.depois.ajuste; else delete ob.ajuste; ob.ajusteAutoFeito = true; }
     if(r.escopo!=='compra' && x.depois.efetivo) ob.prem.efetivo = x.depois.efetivo; });
   plcSave(c); PLI_UI.recalc = null; PLI_UI.otm = null; PLI_UI.cen = null; PLI_UI.capRes = null;
-  toast('Prazos recalculados e aplicados.'); renderPlanejInt();
+  toast('Opção "'+op.titulo+'" aplicada.'); renderPlanejInt();
 }
 function plcRecalcDescartar(){ PLI_UI.recalc = null; renderPlanejInt(); }
 function pliHtmlRecalc(){
   const c = plcLoad(); if(!c.obras.length) return '';
   const r = PLI_UI.recalc, esc0 = PLI_UI.recalcEscopo || 'geral', ob0 = PLI_UI.recalcObra;
-  const f = pliFmtData, ok = v => v ? '<span style="color:#2e7d32">✔ no prazo</span>' : '<span style="color:#b00020">✖ fora</span>';
+  const f = pliFmtData, ok = v => v ? '<span style="color:#2e7d32">✔</span>' : '<span style="color:#b00020">✖</span>';
   let res = '';
   if(r){
-    const tit = { geral:'Geral (compra + fabricação + instalação)', compra:'Compras', instalacao:'Instalação' }[r.escopo];
-    res = `<h4 style="margin:12px 0 6px;">Proposta — ${tit}${r.idxObra!=null?' · '+esc(c.obras[r.idxObra].nome):''}</h4>
-      ${r.truncou?'<div class="pli-alerta aviso">⚠ O cálculo atingiu o tempo máximo; algumas obras podem não ter a melhor combinação.</div>':''}
-      <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th>Deadline (marcos − folga)</th><th>Término hoje</th><th>Término recalculado</th><th>Situação</th><th>Compras</th><th class="n">Efetivo inst.</th></tr></thead><tbody>${r.linhas.map(x=>`<tr style="${x.noEscopo?'':'opacity:.55'}"><td><b>${esc(x.nome)}</b></td><td>${f(x.limite)}</td><td>${f(x.antes.fim)} ${ok(x.antes.ok)}</td><td><b>${f(x.depois.fim)}</b></td><td>${ok(x.depois.ok)}</td>
-        <td>${x.depois.ajuste?`pagamentos ${x.depois.ajuste.A} d antes${x.depois.ajuste.k<1?' · ritmo '+Math.round(x.depois.ajuste.k*100)+'%':''}`:'calendário original'}${x.noEscopo&&JSON.stringify(x.antes.ajuste)!==JSON.stringify(x.depois.ajuste)?' <span style="color:#1565c0">(alterado)</span>':''}</td>
-        <td class="n">${x.antes.efetivo!==x.depois.efetivo?x.antes.efetivo+' → <b>'+x.depois.efetivo+'</b>':x.depois.efetivo}</td></tr>`).join('')}</tbody></table></div>
-      ${r.linhas.filter(x=>x.noEscopo).map(x=>`<details style="margin:6px 0"><summary><b>${esc(x.nome)}</b> — prazos por fase</summary><div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>Compra (1º → último pgto)</th><th>Fabricação</th><th>Instalação</th><th>Prazo</th><th class="n">Folga (d)</th></tr></thead><tbody>${x.fases.map(z=>`<tr><td>${esc(z.cod)} · ${esc(z.desc||'')}</td><td>${f(z.compraIni)} → ${f(z.compraFim)}</td><td>${f(z.iniFab)} → ${f(z.fimFab)}</td><td>${f(z.iniInst)} → ${f(z.fimInst)}</td><td>${f(z.prazo)}</td><td class="n" style="color:${z.folga!=null&&z.folga<0?'#b00020':'#2e7d32'}"><b>${z.folga==null?'—':z.folga}</b></td></tr>`).join('')}</tbody></table></div></details>`).join('')}
-      <div class="form-actions" style="margin-top:8px"><button class="btn" onclick="plcRecalcAplicar()">Aplicar</button> <button class="btn secondary" onclick="plcRecalcDescartar()">Descartar</button></div>
-      <div class="pli-note">Fabricação segue a capacidade e a ordem da fábrica (Otimizador / Ordem de produção). Se mesmo assim algo ficar fora do prazo, rode o Otimizador para ajustar capacidade e obras em paralelo.</div>`;
+    const sel = r.opcoes.find(o=>o.id===r.sel) || r.opcoes[0];
+    const tabs = r.opcoes.map(o=>{ const n = o.linhas.filter(x=>x.noEscopo).length, nok = o.linhas.filter(x=>x.noEscopo && x.depois.ok).length;
+      return `<button class="btn ${o.id===sel.id?'':'secondary'}" style="margin-right:6px" onclick="plcRecalcSel('${o.id}')">${esc(o.titulo)} <span style="opacity:.8">· ${nok}/${n} no prazo</span></button>`; }).join('');
+    const comp = `<div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th>Deadline</th><th>Hoje: 1ª compra → término</th>${r.opcoes.map(o=>`<th>${esc(o.titulo)}<br><span style="font-weight:400">1ª compra → término</span></th>`).join('')}</tr></thead><tbody>${c.obras.map((ob,i)=>{
+      const l0 = r.opcoes[0].linhas[i]; if(!l0.noEscopo) return '';
+      return `<tr><td><b>${esc(ob.nome)}</b></td><td>${f(l0.limite)}</td><td>${f(l0.antes.compra)} → ${f(l0.antes.fim)} ${ok(l0.antes.ok)}</td>${r.opcoes.map(o=>{ const x = o.linhas[i]; return `<td>${f(x.depois.compra)} → <b>${f(x.depois.fim)}</b> ${ok(x.depois.ok)}${x.depois.efetivo!==x.antes.efetivo?` <span style="color:#1565c0">ef. ${x.depois.efetivo}</span>`:''}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+    const det = sel.linhas.filter(x=>x.noEscopo).map(x=>`<details style="margin:8px 0" ${r.idxObra!=null||!x.depois.ok?'open':''}><summary><b>${esc(x.nome)}</b> — ${x.depois.ok?'<span style="color:#2e7d32">✔ atende</span>':'<span style="color:#b00020">✖ não atende</span>'} · 1ª compra ${f(x.depois.compra)} (cadastro: ${f(x.cadastro)}) · término ${f(x.depois.fim)}</summary>
+      <div class="pli-xal" style="border-left:4px solid #1565c0;padding:6px 10px;margin:6px 0;background:#f6f9fe"><b>Plano de ação</b><ol style="margin:4px 0 0 18px;padding:0">${x.acoes.map(a=>`<li style="margin:3px 0;${a.t==='falha'?'color:#b00020':''}">${a.txt}</li>`).join('')}</ol></div>
+      <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>Compra (1º → último pgto)</th><th>Fabricação</th><th>Instalação</th><th>Prazo</th><th class="n">Folga (d)</th></tr></thead><tbody>${x.fases.map(z=>`<tr><td>${esc(z.cod)} · ${esc(z.desc||'')}</td><td>${f(z.compraIni)} → ${f(z.compraFim)}</td><td>${f(z.iniFab)} → ${f(z.fimFab)}</td><td>${f(z.iniInst)} → ${f(z.fimInst)}</td><td>${f(z.prazo)}</td><td class="n" style="color:${z.folga!=null&&z.folga<0?'#b00020':'#2e7d32'}"><b>${z.folga==null?'—':z.folga}</b></td></tr>`).join('')}</tbody></table></div></details>`).join('');
+    res = `<h4 style="margin:12px 0 6px;">Opções</h4>
+      ${r.opcoes.some(o=>o.truncou)?'<div class="pli-alerta aviso">⚠ O cálculo atingiu o tempo máximo; algumas obras podem não ter a melhor combinação.</div>':''}
+      <div style="margin-bottom:8px">${tabs}</div>${comp}
+      <div class="pli-note"><b>${esc(sel.titulo)}:</b> ${esc(sel.desc)}</div>${det}
+      <div class="form-actions" style="margin-top:8px"><button class="btn" onclick="plcRecalcAplicar()">Aplicar "${esc(sel.titulo)}"</button> <button class="btn secondary" onclick="plcRecalcDescartar()">Descartar</button></div>
+      <div class="pli-note">A fabricação segue a capacidade e a ordem da fábrica (Otimizador / Ordem de produção). O início da instalação aqui é o <b>real</b>: depende da 1ª compra + entrega do material + fabricação — diferente do início “de linha de balanço” usado na aba Compras.</div>`;
   }
   return `<div class="pli-card"><h3>Recalcular prazos</h3>
-    <div class="pli-note" style="margin-top:0;">Refaz o calendário a partir dos <b>deadlines</b> (prazo alvo, habite-se, entrega ao investidor e obra, menos a folga) e das <b>premissas</b> de cada obra (entrega do material, início da fabricação/instalação, capacidade, efetivo). Antecipa as compras o mínimo necessário e, se preciso, aumenta o efetivo de instalação. Mostra a prévia antes de gravar.</div>
+    <div class="pli-note" style="margin-top:0;">Refaz a cadeia inteira — <b>1ª compra → entrega do material → fabricação → instalação</b> — a partir dos <b>deadlines</b> (prazo alvo, habite-se, investidor e obra, menos a folga) e das <b>premissas</b> de cada obra. Apresenta 3 opções (recomendada, compra o mais cedo possível e manter a 1ª compra cadastrada) com plano de ação; só grava ao clicar em Aplicar.</div>
     <div class="pli-filtros"><label>O que recalcular
-      <select onchange="PLI_UI.recalcEscopo=this.value"><option value="geral" ${esc0==='geral'?'selected':''}>Geral — compra + fabricação + instalação</option><option value="compra" ${esc0==='compra'?'selected':''}>Só compras (calendário de pagamentos)</option><option value="instalacao" ${esc0==='instalacao'?'selected':''}>Só instalação (efetivo necessário)</option></select></label>
+      <select onchange="PLI_UI.recalcEscopo=this.value"><option value="geral" ${esc0==='geral'?'selected':''}>Geral — compra + fabricação + instalação (3 opções)</option><option value="compra" ${esc0==='compra'?'selected':''}>Só compras (calendário de pagamentos)</option><option value="instalacao" ${esc0==='instalacao'?'selected':''}>Só instalação (efetivo necessário)</option></select></label>
       <label>Obra <select onchange="PLI_UI.recalcObra=this.value===''?null:+this.value"><option value="">Todas</option>${c.obras.map((o,i)=>`<option value="${i}" ${ob0===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
       <button class="btn" onclick="plcRecalcExecutar(PLI_UI.recalcEscopo||'geral', PLI_UI.recalcObra==null?null:PLI_UI.recalcObra)">Recalcular prazos</button></div>${res}</div>`;
 }
@@ -12564,7 +12618,7 @@ function gerarRelatorioRateioCompleto(){
     return;
   }
 
-  const podeVerRestritos = souGerente();
+  const podeVerRestritos = souGerente() || souCoordenador();
   const secoes = chaves.map(id=>{
     const g = porObra[id];
     totalGeral += g.totalObra;
@@ -17858,7 +17912,7 @@ function temAcessoFinanceiro(){
   if(sel.tipo === 'responsavel'){
     return papelConcedeAcesso(sel.registro.papel, PAPEIS_ACESSO_FINANCEIRO);
   }
-  return false;
+  return souCoordenador();
 }
 
 // Acesso a dados de salário/benefício do Funcionário (CLT e PJ):
@@ -17870,7 +17924,7 @@ function temAcessoRH(){
   if(sel.tipo === 'responsavel'){
     return papelConcedeAcesso(sel.registro.papel, PAPEIS_ACESSO_RH);
   }
-  return false;
+  return souCoordenador();
 }
 
 // Confirma que quem está logado é especificamente o Gerente (Responsável
@@ -17884,13 +17938,14 @@ function souGerente(){
 }
 
 // Coordenador: acesso a todo o sistema (Financeiro, RH, Planejamento Integrado,
-// visão 360°). Única exceção mantida: salário de Coordenador/Gerente (ver
-// ehCargoSalarioRestrito) continua visível só ao Gerente.
+// visão 360°, salários — inclusive de Coordenador/Gerente).
 function souCoordenador(){
   if(contaSemCadastroVinculado) return false;
   const sel = getCurrentUserSelection();
   if(!sel) return false;
-  return sel.tipo === 'responsavel' && papelConcedeAcesso(sel.registro.papel, ['Coordenador']);
+  if(sel.tipo === 'responsavel') return papelConcedeAcesso(sel.registro.papel, ['Coordenador']);
+  // Também vale para quem está logado como Funcionário com cargo de Coordenador (ex.: Luiz Claudio Lopes Durães).
+  return sel.tipo === 'funcionario' && normalizarTextoPapel(sel.registro.cargo).indexOf('coordenador') >= 0;
 }
 
 // Cargos cujo salário só o Gerente pode ver — nem RH/DP, nem Administrativo.
@@ -17904,7 +17959,7 @@ function ehCargoSalarioRestrito(cargo){
 // o salário específico de UM funcionário for exibido/editado.
 function temAcessoSalarioFuncionario(funcionario){
   if(!temAcessoRH()) return false;
-  if(funcionario && ehCargoSalarioRestrito(funcionario.cargo)) return souGerente();
+  if(funcionario && ehCargoSalarioRestrito(funcionario.cargo)) return souGerente() || souCoordenador();
   return true;
 }
 
@@ -17935,7 +17990,7 @@ function renderDashboard(){
 
   const userSel = getCurrentUserSelection();
   const currentUser = userSel ? userSel.registro : null;
-  const isManager = !userSel || (userSel.tipo==='funcionario' && userSel.registro.gerente) || (userSel.tipo==='responsavel' && papelConcedeAcesso(userSel.registro.papel, ['Gerente','Coordenador']));
+  const isManager = !userSel || (userSel.tipo==='funcionario' && (userSel.registro.gerente || souCoordenador())) || (userSel.tipo==='responsavel' && papelConcedeAcesso(userSel.registro.papel, ['Gerente','Coordenador']));
 
   document.getElementById('dashManagerView').style.display = isManager ? 'block' : 'none';
   document.getElementById('dashUserView').style.display = isManager ? 'none' : 'block';
