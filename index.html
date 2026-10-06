@@ -15570,6 +15570,7 @@ function renderMateriais(){
         <span class="count">${itens.length} item${itens.length===1?'':'s'}</span>
         ${statusMaterialPill(p.statusCalc)}
         <span style="float:right;">
+          <button class="btn small secondary" onclick="event.preventDefault();event.stopPropagation();gerarRelatorioPendenciasPorPedido('${p.id}')">Pendências</button>
           <button class="btn small secondary" onclick="event.preventDefault();event.stopPropagation();openMaterialModal('${p.id}')">Editar pedido</button>
           <button class="btn small danger" onclick="event.preventDefault();event.stopPropagation();deleteMaterial('${p.id}')">Excluir pedido</button>
         </span>
@@ -15864,18 +15865,19 @@ function htmlPendenciaPedido(p, obra, quebra){
 function renderPendenciasPorPedido(){
   const obra = load('obras').find(o=>o.id===currentObraId) || {};
   const sel = document.getElementById('matPedPendSel').value;
-  const peds = pedidosComPendencia().filter(p=>sel==='__todos__'||p.id===sel);
+  const peds = sel==='__todos__' ? pedidosComPendencia() : load('materiais').filter(p=>p.obraId===currentObraId && p.id===sel);
   const el = document.getElementById('matPedPendConteudo');
   el.contentEditable='false';
   document.getElementById('matPedPendEditBtn').textContent='Editar';
   el.innerHTML = peds.length ? peds.map((p,i)=>htmlPendenciaPedido(p,obra,i>0)).join('<hr style="margin:24px 0;border:none;border-top:2px dashed #ccc;">')
-    : '<p style="margin-top:20px;">Não há pendências de recebimento nesta obra — todos os pedidos estão completos.</p>';
+    : '<p style="margin-top:20px;">Não há pendências de recebimento — o pedido selecionado está completo.</p>';
 }
-function gerarRelatorioPendenciasPorPedido(){
+function gerarRelatorioPendenciasPorPedido(pedidoId){
   if(!currentObraId){ toast('Abra uma obra para gerar o relatório.'); return; }
-  const peds = pedidosComPendencia();
-  document.getElementById('matPedPendSel').innerHTML = '<option value="__todos__">Todos (um por página)</option>' +
-    peds.map(p=>`<option value="${esc(p.id)}">Pedido ${esc(p.numPedido||'s/nº')} — ${esc((p.fornecedor||'').trim()||'sem fornecedor')}</option>`).join('');
+  const peds = load('materiais').filter(m=>m.obraId===currentObraId);
+  document.getElementById('matPedPendSel').innerHTML = '<option value="__todos__">Todos os pedidos com pendência (um por página)</option>' +
+    peds.map(p=>`<option value="${esc(p.id)}">Pedido ${esc(p.numPedido||'s/nº')} — ${esc((p.fornecedor||'').trim()||'sem fornecedor')}${pendenciasDoPedido(p).length?'':' (completo)'}</option>`).join('');
+  document.getElementById('matPedPendSel').value = (typeof pedidoId==='string' && peds.some(p=>p.id===pedidoId)) ? pedidoId : '__todos__';
   renderPendenciasPorPedido();
   document.getElementById('matPedPendModal').classList.add('open');
 }
