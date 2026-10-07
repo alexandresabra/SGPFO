@@ -9721,7 +9721,7 @@ function pliCalc(P){
       pArr = M.map((ym,i)=> ym<dbYM0 ? pArr[i] : (mi[ym]!==undefined ? CR.fabricado[mi[ym]]/1000 : 0));
       fontes[o.nome] = { fonte:'cronograma', cron:cr.nome, ton:iArr.reduce((s,v)=>s+v,0), tonCron:CR.totKg/1000, fim:CR.maxInst };
       obrasComCron[o.nome] = true;
-      CR.lotes.forEach(l=> lotesCron.push({ obra:o.nome, bloco:'Fase '+l.fase+' · parc. '+l.parcela, frente:l.desc, lote:String(l.n), abr:'',
+      CR.lotes.forEach(l=> lotesCron.push({ obra:o.nome, bloco: l.etapa ? ('Etapa '+l.etapa+' · '+l.fase+(l.pct<0.999?' ('+Math.round(l.pct*100)+'%)':'')) : ('Fase '+l.fase+' · parc. '+l.parcela), frente:l.desc, lote:String(l.n), abr:'',
         ini:l.iniInst, fim:l.fimInst, t:l.kg/1000, passa:'S', comprado:false, key:'cron:'+cr.id+':'+l.n }));
     } catch(err){ console.error('Cronograma '+cr.nome, err); fontes[o.nome] = { fonte:'plano', ton:o.ton, erro:cr.nome+': '+(err.message||err) }; iArr = M.map((_,i)=> o.ton*(bi[i]||0)); pArr = M.map((_,i)=> o.ton*(bp[i]||0)); } }
     inst[o.nome] = iArr; prodBase[o.nome] = pArr;
@@ -9865,7 +9865,7 @@ function plcPersFluxo(ob){
   for(let i=0; i<L.length; i++){
     const r = plcPersParse(L[i].expr, ob.fases); if(r.erros.length) return null;
     const valor = Math.round(r.itens.reduce((t,it)=>{ const f = ob.fases.find(x=>x.cod===it.fase); return t + f.kg*it.pct*p.preco; }, 0)*100)/100;
-    fluxo.push({ grupo:(L[i].grupo||('P'+String(i+1).padStart(2,'0'))), parcela:(i+1)+'/'+L.length, venc:L[i].venc || pliAddMeses(venc0, (L[i].off!=null && L[i].off!=='' && !isNaN(+L[i].off)) ? +L[i].off : i), valor, itens:r.itens });
+    fluxo.push({ grupo:(L[i].grupo||('P'+String(i+1).padStart(2,'0'))), parcela:(i+1)+'/'+L.length, venc:L[i].venc || pliAddMeses(venc0, (L[i].off!=null && L[i].off!=='' && !isNaN(+L[i].off)) ? +L[i].off : i), valor, itens:r.itens, expr:String(L[i].expr||'').trim() });
   }
   return fluxo;
 }
@@ -10884,17 +10884,22 @@ function pliHtmlCompraReal(){
   const c = plcLoad(); if(!c.obras.length) return '';
   let i = PLI_UI.realObra; if(!(i>=0 && i<c.obras.length)) i = 0;
   const ob = c.obras[i], semReal = Object.assign({}, ob, { compraReal:undefined }), Rp = plcCalcBase(semReal, (plcSeqGet()||{byObra:{}}).byObra[ob.id]), R = plcCalc(ob);
-  const linhas = ob.fases.map(f=>{
-    const rp = Rp.resumo.find(x=>x.cod===f.cod) || {}, rs = R.resumo.find(x=>x.cod===f.cod) || {}, cr = (ob.compraReal||{})[f.cod] || {};
-    const desv = cr.entrega && rp.primeiroMaterial ? pliDiffDias(cr.entrega, rp.primeiroMaterial) : null;
-    return `<tr><td><b>${esc(f.cod)}</b> · ${esc(f.desc||'')}</td><td>${pliFmtData(Rp.lotes.filter(l=>l.fase===f.cod).map(l=>l.venc).sort()[0])}</td><td>${pliFmtData(rp.primeiroMaterial)}</td>
-      <td><input type="date" value="${cr.pedido||''}" onchange="plcSetCompraReal(${i},'${esc(f.cod)}','pedido',this.value)"></td>
-      <td><input type="date" value="${cr.entrega||''}" onchange="plcSetCompraReal(${i},'${esc(f.cod)}','entrega',this.value)"></td>
-      <td class="n" style="color:${desv>0?'#b00020':'#2e7d32'}"><b>${desv==null?'—':(desv>0?'+':'')+desv}</b></td><td>${pliFmtData(rs.iniFab)} → ${pliFmtData(rs.fimInst)}</td></tr>`; }).join('');
+  const pers = !!plcPersFluxo(ob);
+  const itens = pers ? [...new Map(R.lotes.map(l=>[l.fase+'@'+l.grupo, { cod:l.fase+'@'+l.grupo, rot:l.grupo+' · '+l.fase+(l.pct<0.999?' ('+Math.round(l.pct*100)+'%)':''), fase:l.fase, grupo:l.grupo }])).values()]
+                     : ob.fases.map(f=>({ cod:f.cod, rot:'<b>'+esc(f.cod)+'</b> · '+esc(f.desc||''), fase:f.cod }));
+  const linhas = itens.map(it=>{
+    const fl = (L)=>L.filter(l=>l.fase===it.fase && (!it.grupo || l.grupo===it.grupo));
+    const lp = fl(Rp.lotes), ls = fl(R.lotes), mn = (a,k)=>a.map(l=>l[k]).filter(Boolean).sort()[0], mx = (a,k)=>a.map(l=>l[k]).filter(Boolean).sort().slice(-1)[0];
+    const cr = (ob.compraReal||{})[it.cod] || {}, primeiro = mn(lp,'chegada');
+    const desv = cr.entrega && primeiro ? pliDiffDias(cr.entrega, primeiro) : null;
+    return `<tr><td>${pers?esc(it.rot):it.rot}</td><td>${pliFmtData(mn(lp,'venc'))}</td><td>${pliFmtData(primeiro)}</td>
+      <td><input type="date" value="${cr.pedido||''}" onchange="plcSetCompraReal(${i},'${esc(it.cod)}','pedido',this.value)"></td>
+      <td><input type="date" value="${cr.entrega||''}" onchange="plcSetCompraReal(${i},'${esc(it.cod)}','entrega',this.value)"></td>
+      <td class="n" style="color:${desv>0?'#b00020':'#2e7d32'}"><b>${desv==null?'—':(desv>0?'+':'')+desv}</b></td><td>${pliFmtData(mn(ls,'iniFab'))} → ${pliFmtData(mx(ls,'fimInst'))}</td></tr>`; }).join('');
   return `<div class="pli-card"><h3>Pedido real × planejado</h3>
     <div class="pli-note" style="margin-top:0;">Informe, por fase, a data real do pedido e a data real (ou prometida pelo fornecedor) de chegada do material na fábrica. O <b>cronograma de fabricação e instalação e o Recalcular prazos passam a partir da entrega real</b> dessa fase. Apague a data para voltar ao planejado. Desvio positivo = material chegando depois do plano.</div>
     <div class="pli-filtros"><label>Obra <select onchange="PLI_UI.realObra=+this.value;renderPlanejInt()">${c.obras.map((o,k)=>`<option value="${k}" ${k===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label></div>
-    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Fase</th><th>1º pedido planejado</th><th>Material na fábrica (plano)</th><th>Pedido real</th><th>Entrega real / prometida</th><th class="n">Desvio (d)</th><th>Fab. início → inst. fim (atual)</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
+    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>${pers?'Etapa · fase':'Fase'}</th><th>1º pedido planejado</th><th>Material na fábrica (plano)</th><th>Pedido real</th><th>Entrega real / prometida</th><th class="n">Desvio (d)</th><th>Fab. início → inst. fim (atual)</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
 }
 
 function pliHtmlOtimizador(){
@@ -11043,7 +11048,7 @@ function plcCalcBase(ob, ovr){
   let fimFabAnt = null, fimInstAnt = null;
   const mk = (par, f, kg, valor)=>{
     let chegada = pliAddDias(par.venc, p.entregaDias);
-    { const cr = ob.compraReal && ob.compraReal[f.cod]; if(cr && cr.entrega) chegada = cr.entrega; }
+    { const cr = ob.compraReal && (ob.compraReal[f.cod+'@'+par.grupo] || ob.compraReal[f.cod]); if(cr && cr.entrega) chegada = cr.entrega; }
     const liberado = pliAddDias(chegada, p.iniFabDias);
     const iniFab = (fimFabAnt && fimFabAnt > liberado) ? fimFabAnt : liberado;
     const diasFab = Math.round(kg/1000/p.capFab*p.diasMes);
@@ -11057,7 +11062,7 @@ function plcCalcBase(ob, ovr){
                  chegada, liberado, iniFab, diasFab, fimFab, iniInst, diasInst, fimInst });
   };
   if(FL.pers){
-    flux.forEach(par=>{ (par.itens||[]).forEach(it=>{ const f = fases.find(x=>x.cod===it.fase); if(f) mk(par, f, f.kg*it.pct, f.kg*it.pct*p.preco); }); });
+    flux.forEach(par=>{ (par.itens||[]).forEach(it=>{ const f = fases.find(x=>x.cod===it.fase); if(f){ mk(par, f, f.kg*it.pct, f.kg*it.pct*p.preco); const lt = lotes[lotes.length-1]; lt.etapa = par.grupo; lt.pct = it.pct; lt.expr = par.expr||''; } }); });
   }
   else if(FL.seq){
     // parcelas ~R$ 500 mil preenchendo as fases na ordem (kg = valor ÷ preço)
@@ -11663,7 +11668,7 @@ function pliHtmlCronFin(){
     <div class="pli-note">Componentes: ${pliFmtT(p.compPct*100,0)}% do valor do alumínio de cada grupo, faturados em 2 parcelas (${p.comp1} e ${p.comp2} dias após a 1ª parcela do grupo).</div></div>
    <div class="pli-card"><h3>Curva mensal — material, fábrica, instalação e efetivo</h3><div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot"></th>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
   const rel = `<div class="pli-card" style="background:transparent;border:0;padding:0;"><h3 style="margin:0 0 8px;">Relatório financeiro — ${esc(ob.nome)}</h3>${pliHtmlRelFin(ob)}</div>`;
-  return barra + pliHtmlEditor() + notaPl + kpi + pliHtmlMetaMO(ob, R, k) + pliHtmlCronFase(ob, R) + rel + prem + graf + resumo + lotes;
+  return barra + pliHtmlEditor() + notaPl + kpi + pliHtmlMetaMO(ob, R, k) + pliHtmlCronFase(ob, R) + pliHtmlFluxoEtapas(ob, R) + rel + prem + graf + resumo + lotes;
 }
 
 function pliEditarCarga(obra, ym, valor){
@@ -11923,24 +11928,30 @@ function pliHtmlRelFin(ob, soPagina){
 /* ---------- Cronograma completo de uma fase: lista → cotação → pagamento → entrega → fabricação → instalação ---------- */
 function plcCronFaseDados(ob, R, cod){
   const P = pliLoad(); const pz = (P && P.prazos) || {}; const dLista = pz.lista>=0?pz.lista:15, dCot = pz.cotacao>=0?pz.cotacao:30;
-  const fases = cod==='*' ? ob.fases : ob.fases.filter(f=>f.cod===cod);
   const mn = a=>a.filter(Boolean).sort()[0]||'', mx = a=>a.filter(Boolean).sort().slice(-1)[0]||'';
-  return fases.map(f=>{
-    const ls = R.lotes.filter(l=>l.fase===f.cod).sort((a,b)=>a.venc<b.venc?-1:1);
+  let unidades;
+  if(String(cod).indexOf('E:')===0){            // uma ETAPA (parcela do fluxo): todas as fases que ela paga
+    const g = cod.slice(2), lsE = R.lotes.filter(l=>l.grupo===g);
+    const fs = [...new Set(lsE.map(l=>l.fase))].map(c=>ob.fases.find(f=>f.cod===c)).filter(Boolean);
+    const prazos = fs.map(f=>plcPrazoFase(ob,f)).filter(Boolean).sort();
+    unidades = [{ f:{ cod:g, desc:(lsE[0]&&lsE[0].expr) || (R.fasesGrupo&&R.fasesGrupo[g]) || fs.map(f=>f.cod).join(' + '), kg:lsE.reduce((t,l)=>t+l.kg,0) }, ls:lsE, limite:prazos[0]||null, etapa:true }];
+  } else unidades = (cod==='*' ? ob.fases : ob.fases.filter(f=>f.cod===cod)).map(f=>({ f, ls:R.lotes.filter(l=>l.fase===f.cod) }));
+  return unidades.map(u=>{
+    const f = u.f, ls = u.ls.slice().sort((a,b)=>a.venc<b.venc?-1:1);
     if(!ls.length) return { f, ls, etapas:[], vazio:true };
     const pedido = mn(ls.map(l=>l.venc)), cot = pliAddDias(pedido, -dCot), lista = pliAddDias(cot, -dLista);
     const cr = ob.compraReal && ob.compraReal[f.cod];
     const etapas = [
       { k:'Emissão da lista p/ Suprimentos', ini:lista, fim:cot, cor:'#8a8d91' },
       { k:'Cotação / negociação', ini:cot, fim:pedido, cor:'#b8860b' },
-      { k:'Pedido / pagamento'+(ls.length>1?' ('+ls.length+' parcelas)':''), ini:pedido, fim:mx(ls.map(l=>l.venc)), cor:'#2f7fb8' },
+      { k:'Pedido / pagamento'+(ls.length>1?' ('+(new Set(ls.map(l=>l.grupo)).size>1?new Set(ls.map(l=>l.grupo)).size+' parcelas':ls.length+' lotes')+')':''), ini:pedido, fim:mx(ls.map(l=>l.venc)), cor:'#2f7fb8' },
       { k:'Entrega do fornecedor', ini:mn(ls.map(l=>pliAddDias(l.venc, 0))), fim:mx(ls.map(l=>l.chegada)), cor:'#7a5ea8' },
       { k:'Fabricação', ini:mn(ls.map(l=>l.iniFab)), fim:mx(ls.map(l=>l.fimFab)), cor:'#bd0c1d' },
       { k:'Instalação', ini:mn(ls.map(l=>l.iniInst)), fim:mx(ls.map(l=>l.fimInst)), cor:'#232323' }
     ];
     etapas[3].ini = pedido;
-    const limite = plcPrazoFase(ob, f), fimInst = etapas[5].fim;
-    return { f, ls, etapas, limite, fimInst, folga: (limite && fimInst) ? pliDiffDias(limite, fimInst) : null, cr, dLista, dCot };
+    const limite = u.limite!==undefined ? u.limite : plcPrazoFase(ob, f), fimInst = etapas[5].fim;
+    return { f, ls, etapas, etapa:!!u.etapa, limite, fimInst, folga: (limite && fimInst) ? pliDiffDias(limite, fimInst) : null, cr, dLista, dCot };
   });
 }
 function plcCronFaseSel(v){ PLI_UI.faseCron = v; renderPlanejInt(); }
@@ -11963,7 +11974,7 @@ function plcCronFaseHtml(ob, R, cod){
     if(D.vazio) return `<h4>${esc(D.f.cod)} — ${esc(D.f.desc)}</h4><div class="pli-note">Fase sem lotes no fluxo atual.</div>`;
     const fg = D.folga==null ? '' : (D.folga>=0 ? `<span style="color:#1c7c3e">folga de ${D.folga} dia(s) sobre o prazo limite (${pliFmtData(D.limite)})</span>` : `<span style="color:#b00020;font-weight:700">atrasa ${-D.folga} dia(s) sobre o prazo limite (${pliFmtData(D.limite)})</span>`);
     const dur = e => (e.ini&&e.fim) ? pliDiffDias(e.fim, e.ini) : 0;
-    return `<h4 style="margin:12px 0 4px;">${esc(D.f.cod)} — ${esc(D.f.desc)} · ${pliFmtT(D.f.kg,0)} kg</h4>
+    return `<h4 style="margin:12px 0 4px;">${D.etapa?'Etapa ':''}${esc(D.f.cod)} — ${esc(D.f.desc)} · ${pliFmtT(D.f.kg,0)} kg</h4>
       <div class="pli-note" style="margin:0 0 6px;">Lista → instalação: <b>${pliFmtData(D.etapas[0].ini)} → ${pliFmtData(D.fimInst)}</b> (${pliDiffDias(D.fimInst, D.etapas[0].ini)} dias) · ${fg}${D.cr?` · pedido real: ${esc(D.cr.pedido||'—')}`:''}</div>
       ${plcCronFaseGantt(D)}
       <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Etapa</th><th>Início</th><th>Fim</th><th class="n">Dias</th></tr></thead><tbody>${D.etapas.map(e=>`<tr><td>${esc(e.k)}</td><td>${pliFmtData(e.ini)}</td><td>${pliFmtData(e.fim)}</td><td class="n">${dur(e)}</td></tr>`).join('')}</tbody></table></div>
@@ -11971,16 +11982,17 @@ function plcCronFaseHtml(ob, R, cod){
   }).join('');
 }
 function pliHtmlCronFase(ob, R){
-  let cod = PLI_UI.faseCron; if(!cod || (cod!=='*' && !ob.fases.some(f=>f.cod===cod))) cod = ob.fases[0] ? ob.fases[0].cod : '*';
+  let cod = PLI_UI.faseCron; const gE = [...new Set(R.lotes.map(l=>l.grupo))];
+  if(!cod || (cod!=='*' && !ob.fases.some(f=>f.cod===cod) && !(cod.indexOf('E:')===0 && gE.includes(cod.slice(2))))) cod = ob.fases[0] ? ob.fases[0].cod : '*';
   return `<div class="pli-card"><h3>Cronograma completo por fase — ${esc(ob.nome)}</h3>
-    <div class="pli-filtros"><label>Fase <select onchange="plcCronFaseSel(this.value)">${ob.fases.map(f=>`<option value="${esc(f.cod)}" ${f.cod===cod?'selected':''}>${esc(f.cod)} — ${esc(f.desc)}</option>`).join('')}<option value="*" ${cod==='*'?'selected':''}>Todas as fases</option></select></label>
+    <div class="pli-filtros"><label>Fase <select onchange="plcCronFaseSel(this.value)">${ob.fases.map(f=>`<option value="${esc(f.cod)}" ${f.cod===cod?'selected':''}>${esc(f.cod)} — ${esc(f.desc)}</option>`).join('')}<option value="*" ${cod==='*'?'selected':''}>Todas as fases</option>${gE.length>1?`<optgroup label="Por etapa (parcela do fluxo)">${gE.map(g=>{ const l0 = R.lotes.find(l=>l.grupo===g); const rot = (l0 && l0.expr) || (R.fasesGrupo && R.fasesGrupo[g]) || ''; return `<option value="E:${esc(g)}" ${cod==='E:'+g?'selected':''}>Etapa ${esc(g)} — ${esc(rot)}</option>`; }).join('')}</optgroup>`:''}</select></label>
     <button class="btn small secondary" onclick="plcCronFaseImprimir()">Imprimir / PDF</button></div>
     <div class="pli-note" style="margin-top:0;">Da emissão da lista a Suprimentos até o fim da instalação, com os prazos de lista e cotação das premissas e as datas reais do fluxo desta obra. Muda sozinho quando o fluxo de pagamento ou as premissas mudam.</div>
     ${plcCronFaseHtml(ob, R, cod)}</div>`;
 }
 function plcCronFaseImprimir(){
   const c = plcLoad(), ob = c.obras[Math.min(PLI_UI.cronObra||0, c.obras.length-1)]; if(!ob) return;
-  const R = plcCalc(ob); const cod = PLI_UI.faseCron && (PLI_UI.faseCron==='*'||ob.fases.some(f=>f.cod===PLI_UI.faseCron)) ? PLI_UI.faseCron : (ob.fases[0]||{}).cod;
+  const R = plcCalc(ob); const cod = PLI_UI.faseCron && (PLI_UI.faseCron==='*'||PLI_UI.faseCron.indexOf('E:')===0||ob.fases.some(f=>f.cod===PLI_UI.faseCron)) ? PLI_UI.faseCron : (ob.fases[0]||{}).cod;
   document.getElementById('rdoPrintArea').innerHTML = `<div class="pli-print"><h1>Cronograma completo — ${esc(ob.nome)}${cod==='*'?' (todas as fases)':' — fase '+esc(cod)}</h1><div class="meta">Divisão de Alumínio · Calper · gerado em ${pliFmtData(todayISO())}</div>${plcCronFaseHtml(ob, R, cod)}</div>`;
   window.print();
 }
@@ -12011,9 +12023,9 @@ function plcMetaDados(ob, R){
   const funcs = load('funcionarios'), rat = sg ? load('rateiosMaoDeObra') : [];
   const part = tp => {
     const pesos = {};
-    rat.forEach(r=>(r.alocacoes||[]).forEach(a=>{ if(sg && a.obraId===sg.id){ const f = funcs.find(x=>x.id===r.funcionarioId); if(f && f.status!=='inativo' && moTipoFuncionario(f)===tp) pesos[f.id] = (pesos[f.id]||0) + (a.peso||1); } }));
+    rat.forEach(r=>(r.alocacoes||[]).forEach(a=>{ if(sg && a.obraId===sg.id){ const f = funcs.find(x=>x.id===r.funcionarioId); if(f && f.status!=='inativo' && f.tipoVinculo!=='pj' && moTipoFuncionario(f)===tp) pesos[f.id] = (pesos[f.id]||0) + (a.peso||1); } }));
     let ids = Object.keys(pesos);
-    if(!ids.length && tp==='fab'){ funcs.filter(f=>f.status==='ativo' && moTipoFuncionario(f)==='fab').forEach(f=>{ pesos[f.id] = 1; }); ids = Object.keys(pesos); }
+    if(!ids.length && tp==='fab'){ funcs.filter(f=>f.status==='ativo' && f.tipoVinculo!=='pj' && moTipoFuncionario(f)==='fab').forEach(f=>{ pesos[f.id] = 1; }); ids = Object.keys(pesos); }
     const tot = ids.reduce((s,i)=>s+pesos[i],0);
     return ids.map(i=>({ nome:(funcs.find(f=>f.id===i)||{}).nome||'', cargo:(funcs.find(f=>f.id===i)||{}).cargo||'', frac:tot>0?pesos[i]/tot:0 })).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   };
@@ -12040,9 +12052,9 @@ function plcMetaCorpo(ob, R){
     <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Linha de base${x.fixada?'':' (projeção de hoje)'}</th><th class="n">Meta (${pctRot})</th><th class="n">Realizado lançado</th><th class="n">Estimativa final</th><th class="n">Economia vs base</th><th>Meta</th><th class="n">Premiação (${D.M.repasse}% da economia)</th></tr></thead>
     <tbody><tr><td>${pliFmtR(x.base)}</td><td class="n">${pliFmtR(x.meta)}</td><td class="n">${pliFmtR(x.real)}</td><td class="n">${pliFmtR(x.est)}</td><td class="n" style="color:${x.eco>=0?'#1c7c3e':'#b00020'}">${pliFmtR(x.eco)}</td><td>${x.atingiu?'<b style="color:#1c7c3e">atingida</b>':'<span style="color:#b00020">não atingida</span>'}</td><td class="n"><b>${pliFmtR(x.pool)}</b></td></tr></tbody></table></div>
     ${x.part.length ? `<div class="pli-scroll" style="margin-top:6px;"><table class="pli-t"><thead><tr><th>Colaborador</th><th>Função</th><th class="n">Participação</th><th class="n">Premiação (pagar no fim da obra)</th></tr></thead><tbody>${x.part.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(p.cargo)}</td><td class="n">${(p.frac*100).toFixed(1).replace('.',',')}%</td><td class="n">${pliFmtR(x.pool*p.frac)}</td></tr>`).join('')}</tbody></table></div>`
-      : `<div class="pli-note">Nenhum colaborador deste setor com rateio de mão de obra nesta obra${D.sg?'':' (obra do cronograma não vinculada a uma obra do SGPT)'}. Lance o rateio do mês para formar a lista.</div>`}</div>`;
+      : `<div class="pli-note">Nenhum colaborador CLT deste setor com rateio de mão de obra nesta obra${D.sg?'':' (obra do cronograma não vinculada a uma obra do SGPT)'}. Lance o rateio do mês para formar a lista.</div>`}</div>`;
   return setor('Instalação (Obra)', D.inst, '−'+D.M.instPct+'%') + setor('Fábrica', D.fab, 'mesmo time produzindo +'+D.M.fabPct+'%')
-    + `<div class="pli-note">Pagamento previsto no encerramento da obra${D.fimObra?' (instalação termina em '+pliFmtData(D.fimObra)+')':''}. A economia só gera premiação se a estimativa final ficar dentro da meta.</div>`;
+    + `<div class="pli-note">Pagamento previsto no encerramento da obra${D.fimObra?' (instalação termina em '+pliFmtData(D.fimObra)+')':''}. A economia só gera premiação se a estimativa final ficar dentro da meta. Colaboradores PJ não participam da premiação.</div>`;
 }
 function pliHtmlMetaMO(ob, R, k){
   const M = plcMetaDef(ob);
@@ -12053,6 +12065,51 @@ function pliHtmlMetaMO(ob, R, k){
       <button class="btn small" onclick="plcMetaFixar(${k})">${M.baseInst||M.baseFab?'Refixar':'Fixar'} linha de base${M.baseEm?' ('+pliFmtData(M.baseEm)+')':''}</button>
       <button class="btn small secondary" onclick="plcMetaImprimir(${k})">Imprimir / PDF</button>${ob.metaMO?`<button class="btn small secondary" onclick="plcMetaLimpar(${k})">Remover meta</button>`:''}</div>
     ${plcMetaCorpo(ob, R)}</div>`;
+}
+
+/* ---------- Fluxo financeiro por etapa (parcela do fluxo de pagamento): alumínio, componentes, MO fábrica e MO instalação por mês ---------- */
+function plcFluxoEtapas(ob, R){
+  const meses = R.meses, idx = {}; meses.forEach((m,i)=>idx[m]=i); const z = ()=>meses.map(()=>0);
+  const grupos = [...new Set(R.lotes.map(l=>l.grupo))].sort((a,b)=>{ const va = R.fluxo.filter(x=>x.grupo===a).map(x=>x.venc).sort()[0]||'', vb = R.fluxo.filter(x=>x.grupo===b).map(x=>x.venc).sort()[0]||''; return va<vb?-1:(va>vb?1:0); });
+  const dist = (ini, fim, w)=>{ const o = z(); const dias = Math.max(1, pliDiffDias(fim, ini)); for(let d=0; d<dias; d++){ const k = idx[pliYM(pliAddDias(ini,d))]; if(k!==undefined) o[k] += w/dias; } return o; };
+  const fab = {}, ins = {}; // carga (kg e kg×fator) por lote e mês
+  const fabTot = z(), insTot = z();
+  const lotes = R.lotes.map(l=>{ const f = ob.fases.find(x=>x.cod===l.fase); const a = dist(l.iniFab, l.fimFab, l.kg), b = dist(l.iniInst, l.fimInst, l.kg*plcFatorInst(ob, f)); a.forEach((v,i)=>fabTot[i]+=v); b.forEach((v,i)=>insTot[i]+=v); return { l, a, b }; });
+  return grupos.map(g=>{
+    const ls = lotes.filter(x=>x.l.grupo===g), pag = z(), comp = z(), mf = z(), mi = z();
+    R.fluxo.filter(x=>x.grupo===g).forEach(x=>{ const k = idx[pliYM(x.venc)]; if(k!==undefined) pag[k] += x.valor; });
+    (R.compFat||[]).filter(c=>c.grupo===g).forEach(c=>{ const k = idx[pliYM(c.data)]; if(k!==undefined) comp[k] += c.valor; });
+    meses.forEach((m,i)=>{ const sa = ls.reduce((t,x)=>t+x.a[i],0), sb = ls.reduce((t,x)=>t+x.b[i],0);
+      if(fabTot[i]>0) mf[i] = R.custoFab[i]*sa/fabTot[i]; if(insTot[i]>0) mi[i] = R.custoInst[i]*sb/insTot[i]; });
+    const l0 = ls[0] && ls[0].l, rot = (l0 && l0.expr) || (R.fasesGrupo && R.fasesGrupo[g]) || '';
+    const S = a=>a.reduce((t,v)=>t+v,0), tot = meses.map((m,i)=>pag[i]+comp[i]+mf[i]+mi[i]);
+    return { grupo:g, rot, kg:ls.reduce((t,x)=>t+x.l.kg,0), pag, comp, mf, mi, tot, sPag:S(pag), sComp:S(comp), sMf:S(mf), sMi:S(mi), sTot:S(tot),
+      venc:R.fluxo.filter(x=>x.grupo===g).map(x=>x.venc).sort()[0]||'', fimInst:ls.map(x=>x.l.fimInst).sort().slice(-1)[0]||'' };
+  });
+}
+function plcFluxoEtapasHtml(ob, R){
+  const E = plcFluxoEtapas(ob, R), meses = R.meses, S = a=>a.reduce((t,v)=>t+v,0);
+  if(!E.length) return '';
+  const tot = k=>S(E.map(e=>e[k]));
+  const resumo = `<div class="pli-scroll"><table class="pli-t"><thead><tr><th>Etapa</th><th>Fases</th><th>Pagamento</th><th class="n">kg</th><th class="n">Alumínio</th><th class="n">Componentes</th><th class="n">MO fábrica</th><th class="n">MO instalação</th><th class="n">Total da etapa</th><th>Fim da instalação</th></tr></thead><tbody>
+    ${E.map(e=>`<tr><td><b>${esc(e.grupo)}</b></td><td>${esc(e.rot)}</td><td>${pliFmtData(e.venc)}</td><td class="n">${pliFmtT(e.kg,0)}</td><td class="n">${pliFmtR(e.sPag)}</td><td class="n">${pliFmtR(e.sComp)}</td><td class="n">${pliFmtR(e.sMf)}</td><td class="n">${pliFmtR(e.sMi)}</td><td class="n"><b>${pliFmtR(e.sTot)}</b></td><td>${pliFmtData(e.fimInst)}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="3"><b>Total</b></td><td class="n">${pliFmtT(S(E.map(e=>e.kg)),0)}</td><td class="n">${pliFmtR(tot('sPag'))}</td><td class="n">${pliFmtR(tot('sComp'))}</td><td class="n">${pliFmtR(tot('sMf'))}</td><td class="n">${pliFmtR(tot('sMi'))}</td><td class="n"><b>${pliFmtR(tot('sTot'))}</b></td><td></td></tr></tbody></table></div>`;
+  const mensal = `<div class="pli-scroll" style="margin-top:8px;"><table class="pli-t"><thead><tr><th>Desembolso por mês (R$)</th>${meses.map(m=>`<th class="n">${dashMesCurto(m)}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>
+    ${E.map(e=>`<tr><td><b>${esc(e.grupo)}</b> · ${esc(e.rot)}</td>${e.tot.map(v=>`<td class="n">${v>0.5?pliFmtR(v):''}</td>`).join('')}<td class="n"><b>${pliFmtR(e.sTot)}</b></td></tr>`).join('')}
+    <tr class="tot"><td><b>Total do mês</b></td>${meses.map((m,i)=>`<td class="n">${pliFmtR(S(E.map(e=>e.tot[i])))}</td>`).join('')}<td class="n"><b>${pliFmtR(tot('sTot'))}</b></td></tr>
+    <tr><td>Acumulado</td>${(()=>{ let a = 0; return meses.map((m,i)=>{ a += S(E.map(e=>e.tot[i])); return `<td class="n">${pliFmtR(a)}</td>`; }).join(''); })()}<td></td></tr></tbody></table></div>`;
+  return resumo + mensal;
+}
+function pliHtmlFluxoEtapas(ob, R){
+  return `<div class="pli-card"><h3>Fluxo financeiro por etapa — ${esc(ob.nome)}</h3>
+    <div class="pli-note" style="margin-top:0;">Cada etapa é uma parcela do fluxo de pagamento (ex.: P01 = B03 + BRI/5). Mostra o alumínio, os componentes e a mão de obra de fábrica e de instalação que cada etapa gera, mês a mês. A mão de obra é rateada pela carga que cada etapa ocupa na fábrica e na instalação.</div>
+    <div class="pli-filtros"><button class="btn small secondary" onclick="plcFluxoEtapasImprimir()">Imprimir / PDF</button></div>
+    ${plcFluxoEtapasHtml(ob, R)}</div>`;
+}
+function plcFluxoEtapasImprimir(){
+  const c = plcLoad(), ob = c.obras[Math.min(PLI_UI.cronObra||0, c.obras.length-1)]; if(!ob) return; const R = plcCalc(ob);
+  document.getElementById('rdoPrintArea').innerHTML = `<div class="pli-print"><h1>Fluxo financeiro por etapa — ${esc(ob.nome)}</h1><div class="meta">Divisão de Alumínio · Calper · gerado em ${pliFmtData(todayISO())}</div>${plcFluxoEtapasHtml(ob, R)}</div>`;
+  window.print();
 }
 
 function pliExportarRelFin(todas){
