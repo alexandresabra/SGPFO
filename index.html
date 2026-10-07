@@ -986,7 +986,7 @@
 
       <div class="nav-group-label" id="navGrpCoord" style="display:none;">Coordenação</div>
       <div class="nav-item" id="navPainel" data-section="painel" style="display:none;"><span class="ico">🚨</span><span class="label">Painel de Pendências</span><span id="navPainelBadge" style="display:none;margin-left:auto;background:#bd0c1d;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;font-weight:700"></span></div>
-      <div class="nav-item" id="navBackup" data-section="backup" style="display:none;"><span class="ico">💾</span><span class="label">Backup e Versões</span></div>
+      <div class="nav-item" id="navBackup" data-section="backup" style="display:none;"><span class="ico">💾</span><span class="label">Backup, Versões e Acessos</span></div>
 
       <div class="nav-group-label">Suprimentos</div>
       <div class="nav-item" data-section="materiaisgeral"><span class="ico">▧</span><span class="label">Materiais — Visão Geral</span></div>
@@ -7045,6 +7045,16 @@ async function fazerLogout(){
 function vincularUsuarioLogado(email){
   const emailLower = (email||'').trim().toLowerCase();
   const info = document.getElementById('loginInfo');
+  // Acesso total concedido explicitamente por e-mail (Coordenação › Backup, Versões e Acessos): vale como o Gerente,
+  // mesmo que o e-mail não esteja no cadastro de Funcionários/Responsáveis ou o papel cadastrado seja outro.
+  const conc = (load('acessosTotais')||[]).find(a => (a.email||'').trim().toLowerCase() === emailLower);
+  if(conc){
+    contaSemCadastroVinculado = false;
+    localStorage.setItem(CURRENT_USER_KEY, '');
+    try{ sessionStorage.setItem('sgpt_acessoNome', conc.nome||email); }catch(e){}
+    if(info){ info.style.display='block'; info.textContent = `Logado como ${conc.nome||email} (acesso total)`; }
+    return;
+  }
   const resp = load('responsaveis').find(r => (r.email||'').trim().toLowerCase() === emailLower);
   if(resp){
     contaSemCadastroVinculado = false;
@@ -7117,7 +7127,7 @@ const sectionTitles = {
   metas: ['Metas por Setor','Acompanhamento de metas por setor'],
   materiaisgeral: ['Materiais — Visão Geral','Todos os pedidos de material, agrupados por obra'],
   painel: ['Painel de Pendências','Atrasos e pendências de todas as áreas (Gerência e Coordenação)'],
-  backup: ['Backup e Versões','Cópia de segurança dos dados e versões do plano'],
+  backup: ['Backup, Versões e Acessos','Cópia de segurança, versões do plano e acessos totais'],
   planejint: ['Planejamento Integrado de Alumínio','Fábrica, instalação, compras e cronograma financeiro por obra (somente Gerência)'],
   rateiomdo: ['Rateio de Mão de Obra','Rateio mensal do custo de funcionários por obra (acesso restrito)'],
   chamados: ['Revisão de Esquadrias','Sistema de chamados de assistência técnica'],
@@ -7279,6 +7289,7 @@ function expUsuario(){
     const k = localStorage.getItem(CURRENT_USER_KEY)||'';
     if(k.startsWith('r:')){ const r = load('responsaveis').find(x=>x.id===k.slice(2)); if(r) return r.nome; }
     if(k.startsWith('f:')){ const f = load('funcionarios').find(x=>x.id===k.slice(2)); if(f) return f.nome; }
+    const n = sessionStorage.getItem('sgpt_acessoNome'); if(n) return n;
   }catch(e){}
   return 'Usuário';
 }
@@ -10305,9 +10316,10 @@ function plcPrimeiraCompra(ob, semAjuste){
 const PLC_RC_OPCOES = {
   rec:   { titulo:'Recomendado', desc:'Antecipa as compras só o necessário e, se preciso, sobe o efetivo de instalação. Menor custo financeiro que cumpre os prazos.' },
   cedo:  { titulo:'Compra o mais cedo possível', desc:'Começa a comprar já (data base) para ter a maior folga nos prazos; sobe o efetivo só se ainda faltar.' },
+  data:  { titulo:'1ª compra na data informada', desc:'Fixa a 1ª compra de cada obra na data informada (por padrão, a data do sistema — hoje) e refaz fabricação e instalação a partir dela; se não couber, comprime o ritmo dos pedidos e, por fim, sobe o efetivo de instalação.' },
   manter:{ titulo:'Manter a 1ª compra cadastrada', desc:'Não mexe na data da 1ª compra; só aumenta o efetivo de instalação. Mostra o que ainda não cabe.' }
 };
-function plcRecalcCenario(modo, escopo, idxObra){
+function plcRecalcCenario(modo, escopo, idxObra, dataIni){
   const C0 = plcLoad(), C = JSON.parse(JSON.stringify(C0));
   const comp = escopo!=='instalacao' && modo!=='manter', inst = escopo!=='compra';
   const noEscopo = i => idxObra==null || i===idxObra;
@@ -10318,6 +10330,8 @@ function plcRecalcCenario(modo, escopo, idxObra){
   cands.sort((a,b)=>a.custo-b.custo);
   if(escopo!=='instalacao') ordem.forEach(i=>{ delete C.obras[i].ajuste; });
   if(modo==='cedo' && escopo!=='instalacao') ordem.forEach(i=>{ C.obras[i].ajuste = { A:900, k:1 }; });
+  const A0 = {};
+  if(modo==='data' && escopo!=='instalacao') ordem.forEach(i=>{ const v0 = plcPrimeiraCompra(C0.obras[i], true); A0[i] = v0 ? pliDiffDias(v0, dataIni) : 0; C.obras[i].ajuste = { A:A0[i], k:1 }; });
   const t0 = Date.now(); let truncou = false;
   const ef0s = {}; ordem.forEach(i=>{ ef0s[i] = C0.obras[i].prem.efetivo; });
   const efetivoBusca = i=>{
@@ -10331,7 +10345,8 @@ function plcRecalcCenario(modo, escopo, idxObra){
     if(inst) ob.prem.efetivo = ef0s[i];
     if(comp){
       let melhor = null;
-      for(const cd of cands){
+      const lista = modo==='data' ? [1,0.85,0.7,0.55,0.4,0.3].map(k=>({ k, A:A0[i]||0 })) : cands;
+      for(const cd of lista){
         if(Date.now()-t0 > 150000){ truncou = true; break; }
         ob.ajuste = (cd.A===0 && cd.k===1) ? undefined : cd; if(ob.ajuste===undefined) delete ob.ajuste;
         r = aval(i);
@@ -10396,9 +10411,10 @@ function plcRecalcPrazos(escopo, idxObra){
   escopo = escopo || 'geral';
   const C0 = plcLoad();
   if(!C0.obras.length){ toast('Importe os cronogramas (ou crie uma obra) antes de recalcular.'); return null; }
-  const modos = escopo==='geral' ? ['rec','cedo','manter'] : ['rec'];
-  const opcoes = modos.map(m=>Object.assign({ id:m }, PLC_RC_OPCOES[m], plcRecalcCenario(m, escopo, idxObra)));
-  const r = { escopo, idxObra:idxObra==null?null:idxObra, opcoes, sel:'rec' };
+  const modos = escopo==='geral' ? ['data','rec','cedo','manter'] : ['rec'];
+  const dataIni = PLI_UI.recalcData || todayISO();
+  const opcoes = modos.map(m=>Object.assign({ id:m }, PLC_RC_OPCOES[m], m==='data' ? { titulo:'1ª compra em '+pliFmtData(dataIni) } : {}, plcRecalcCenario(m, escopo, idxObra, dataIni)));
+  const r = { escopo, idxObra:idxObra==null?null:idxObra, opcoes, sel: escopo==='geral' ? 'data' : 'rec', dataIni };
   PLI_UI.recalc = r; return r;
 }
 function plcRecalcExecutar(escopo, idxObra){
@@ -10441,9 +10457,11 @@ function pliHtmlRecalc(){
       <div class="pli-note">A fabricação segue a capacidade e a ordem da fábrica (Otimizador / Ordem de produção). O início da instalação aqui é o <b>real</b>: depende da 1ª compra + entrega do material + fabricação — diferente do início “de linha de balanço” usado na aba Compras.</div>`;
   }
   return `<div class="pli-card"><h3>Recalcular prazos</h3>
-    <div class="pli-note" style="margin-top:0;">Refaz a cadeia inteira — <b>1ª compra → entrega do material → fabricação → instalação</b> — a partir dos <b>deadlines</b> (prazo alvo, habite-se, investidor e obra, menos a folga) e das <b>premissas</b> de cada obra. Apresenta 3 opções (recomendada, compra o mais cedo possível e manter a 1ª compra cadastrada) com plano de ação; só grava ao clicar em Aplicar.</div>
+    <div class="pli-note" style="margin-top:0;">Refaz a cadeia inteira — <b>1ª compra → entrega do material → fabricação → instalação</b> — a partir dos <b>deadlines</b> (prazo alvo, habite-se, investidor e obra, menos a folga) e das <b>premissas</b> de cada obra. Apresenta 4 opções (1ª compra na data informada — padrão: data do sistema —, recomendada, compra o mais cedo possível e manter a 1ª compra cadastrada) com plano de ação; só grava ao clicar em Aplicar.</div>
     <div class="pli-filtros"><label>O que recalcular
       <select onchange="PLI_UI.recalcEscopo=this.value"><option value="geral" ${esc0==='geral'?'selected':''}>Geral — compra + fabricação + instalação (3 opções)</option><option value="compra" ${esc0==='compra'?'selected':''}>Só compras (calendário de pagamentos)</option><option value="instalacao" ${esc0==='instalacao'?'selected':''}>Só instalação (efetivo necessário)</option></select></label>
+      <label>1ª compra em <input type="date" value="${PLI_UI.recalcData||todayISO()}" onchange="PLI_UI.recalcData=this.value||null"></label>
+      <button class="btn small secondary" type="button" onclick="PLI_UI.recalcData=null;renderPlanejInt()" title="Volta para a data do sistema">Hoje</button>
       <label>Obra <select onchange="PLI_UI.recalcObra=this.value===''?null:+this.value"><option value="">Todas</option>${c.obras.map((o,i)=>`<option value="${i}" ${ob0===i?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>
       <button class="btn" onclick="plcRecalcExecutar(PLI_UI.recalcEscopo||'geral', PLI_UI.recalcObra==null?null:PLI_UI.recalcObra)">Recalcular prazos</button></div>${res}</div>`;
 }
@@ -10503,6 +10521,23 @@ function pliHtmlCurvaS(){
 /* ============================================================
    COORDENAÇÃO — Painel de pendências (alertas) · Backup · Versões do plano
    ============================================================ */
+function coordHtmlAcessos(){
+  const lista = load('acessosTotais') || [], pode = souGerente();
+  const sel = (function(){ try{ return getCurrentUserSelection(); }catch(e){ return null; } })();
+  const quem = sel ? ((sel.registro.nome||'—')+' ('+(sel.tipo==='responsavel' ? (sel.registro.papel||'Responsável') : (sel.registro.cargo||'Funcionário'))+')') : (contaSemCadastroVinculado ? 'conta SEM cadastro vinculado (acesso restrito)' : 'visão geral / acesso total');
+  return `<div class="panel"><div class="panel-head">Acessos totais (como o Gerente)</div><div class="panel-body">
+    <div class="step-note" style="margin-bottom:10px">O acesso vem do <b>e-mail</b> com que a pessoa entra: ele precisa estar no cadastro de Funcionários/Responsáveis (papel ou cargo Gerente/Coordenador, status ativo) <b>ou</b> na lista abaixo, que libera tudo — Financeiro, RH, Planejamento, salários, rateio e Coordenação — independentemente do cadastro.<br>Você está como: <b>${esc(quem)}</b>.</div>
+    ${pode ? `<div class="pli-filtros" style="display:flex;gap:8px;flex-wrap:wrap"><input type="text" id="acessoNome" placeholder="Nome (ex.: Luiz Claudio Lopes Durães)" style="min-width:260px"><input type="email" id="acessoEmail" placeholder="e-mail de login" style="min-width:240px"><button class="btn small" onclick="coordAddAcesso()">Liberar acesso total</button></div>` : '<div class="step-note">Somente o Gerente edita esta lista.</div>'}
+    ${lista.length ? `<table style="margin-top:10px"><thead><tr><th>Nome</th><th>E-mail</th><th></th></tr></thead><tbody>${lista.map((a,i)=>`<tr><td>${esc(a.nome||'—')}</td><td>${esc(a.email)}</td><td style="text-align:right">${pode?`<button class="btn small danger" onclick="coordRemoverAcesso(${i})">Remover</button>`:''}</td></tr>`).join('')}</tbody></table>` : '<div class="step-note" style="margin-top:10px">Nenhum acesso liberado por e-mail ainda.</div>'}
+    <div class="step-note" style="margin-top:8px">Depois de liberar, a pessoa precisa sair e entrar de novo no sistema.</div></div></div>`;
+}
+function coordAddAcesso(){
+  const nome = document.getElementById('acessoNome').value.trim(), email = document.getElementById('acessoEmail').value.trim().toLowerCase();
+  if(!email || email.indexOf('@')<1){ toast('Informe o e-mail de login da pessoa.'); return; }
+  const l = load('acessosTotais').filter(a=>(a.email||'').toLowerCase()!==email); l.push({ nome, email });
+  save('acessosTotais', l); toast('Acesso total liberado para '+(nome||email)+'.'); renderBackup();
+}
+function coordRemoverAcesso(i){ const l = load('acessosTotais'); if(!l[i] || !confirm('Remover o acesso total de '+(l[i].nome||l[i].email)+'?')) return; l.splice(i,1); save('acessosTotais', l); renderBackup(); }
 function coordTemAcesso(){ return pliTemAcesso() || (function(){ try{ return temAcessoFinanceiro(); }catch(e){ return false; } })(); }
 function coordAtualizarMenu(){
   const v = coordTemAcesso() ? '' : 'none';
@@ -10663,7 +10698,9 @@ function renderBackup(){
   if(!coordTemAcesso()){ el.innerHTML = '<div class="empty-state"><div class="big">🔒</div>Acesso restrito à Gerência e Coordenação.</div>'; return; }
   const ult = localStorage.getItem(BACKUP_LAST_KEY), hist = load(PLANO_HIST_KEY);
   let kb = 0; try{ for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && k.indexOf(DB_PREFIX)===0) kb += (localStorage.getItem(k)||'').length; } }catch(e){}
-  el.innerHTML = `<div class="panel"><div class="panel-head">Backup completo dos dados</div><div class="panel-body">
+  let acessos = '';
+  try{ acessos = coordHtmlAcessos(); }catch(e){ console.error('Acessos', e); acessos = '<div class="panel"><div class="panel-head">Acessos totais</div><div class="panel-body">Erro ao montar este card: '+esc(e.message)+'</div></div>'; }
+  el.innerHTML = acessos + `<div class="panel"><div class="panel-head">Backup completo dos dados</div><div class="panel-body">
       <div class="step-note" style="margin-bottom:10px">Os dados ficam no navegador deste computador; limpar os dados do navegador apaga tudo. Baixe um backup com frequência (o sistema lembra a cada 7 dias) e guarde em local seguro (OneDrive/Drive).<br>
         Último backup: <b>${ult?new Date(ult).toLocaleString('pt-BR'):'nunca'}</b> · tamanho dos dados: ${(kb/1024).toFixed(0)} KB</div>
       <button class="btn" onclick="backupExportar()">Baixar backup agora</button>
