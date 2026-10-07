@@ -2265,6 +2265,7 @@
               <select id="rateioFiltroObraRelatorio"><option value="">Todas as obras</option></select>
             </div>
             <div style="display:flex;gap:8px;">
+              <button class="btn small secondary" onclick="agruparLancamentosMOExistentes()" title="Reagrupa despesas de mão de obra por obra: fabricação / instalação / indireta">Agrupar lançamentos</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioResumo()">Relatório — Resumo</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioCompleto()">Relatório — Completo</button>
               <button class="btn small secondary" onclick="gerarRelatorioAnaliticoFrequencia()">Relatório Analítico — Frequência e Passagens</button>
@@ -3769,6 +3770,9 @@
         <div class="field">
           <label>Setor</label>
           <select id="funcSetor"></select>
+        </div>
+        <div class="field"><label>Tipo de mão de obra (despesa agrupada)</label>
+          <select id="funcTipoMO"><option value="">Automático (pelo setor/cargo)</option><option value="fab">Fabricação</option><option value="inst">Instalação</option><option value="ind">Indireta</option></select>
         </div>
         <div class="field"><label>Data de admissão</label><input type="date" id="funcAdmissao"></div>
         <div class="field"><label>Telefone</label><input type="tel" id="funcTelefone"></div>
@@ -9769,8 +9773,37 @@ function plcAplicaAjuste(fluxo, ob){
   let ini = pliAddDias(v0, -A); if(ini < db) ini = db;
   return fluxo.map(x=>Object.assign({}, x, { venc: pliAddDias(ini, Math.round(pliDiffDias(x.venc, v0)*k)) }));
 }
+/* ---- fluxo de pagamento personalizado: cada parcela = expressão de fases, ex.: "B03 + BRI/5" ---- */
+function plcPersParse(expr, fases){
+  const itens = [], erros = [];
+  String(expr||'').split('+').map(t=>t.trim()).filter(Boolean).forEach(t=>{
+    const m = t.match(/^([A-Za-z0-9._\-]+?)\s*(?:\/\s*(\d+(?:[.,]\d+)?)|\*\s*(\d+(?:[.,]\d+)?)|\s(\d+(?:[.,]\d+)?)\s*%|(\d+(?:[.,]\d+)?)\s*%)?$/);
+    if(!m){ erros.push('Não entendi "'+t+'"'); return; }
+    const cod = (fases||[]).map(f=>f.cod).find(c=>c.toUpperCase()===m[1].toUpperCase());
+    if(!cod){ erros.push('Fase "'+m[1]+'" não existe'); return; }
+    const n = x=>parseFloat(String(x).replace(',','.'));
+    let pct = 1;
+    if(m[2]) pct = 1/n(m[2]); else if(m[3]) pct = n(m[3]); else if(m[4]||m[5]) pct = n(m[4]||m[5])/100;
+    if(!(pct>0)){ erros.push('Fração inválida em "'+t+'"'); return; }
+    itens.push({ fase:cod, pct });
+  });
+  if(!itens.length && !erros.length) erros.push('Parcela vazia');
+  return { itens, erros };
+}
+function plcPersFluxo(ob){
+  const L = ob.fluxoPers; if(!L || !L.length) return null;
+  const p = ob.prem, venc0 = ob.fluxo.map(x=>x.venc).filter(Boolean).sort()[0]; if(!venc0) return null;
+  const fluxo = [];
+  for(let i=0; i<L.length; i++){
+    const r = plcPersParse(L[i].expr, ob.fases); if(r.erros.length) return null;
+    const valor = Math.round(r.itens.reduce((t,it)=>{ const f = ob.fases.find(x=>x.cod===it.fase); return t + f.kg*it.pct*p.preco; }, 0)*100)/100;
+    fluxo.push({ grupo:(L[i].grupo||('P'+String(i+1).padStart(2,'0'))), parcela:(i+1)+'/'+L.length, venc:L[i].venc || pliAddMeses(venc0, (L[i].off!=null && L[i].off!=='' && !isNaN(+L[i].off)) ? +L[i].off : i), valor, itens:r.itens });
+  }
+  return fluxo;
+}
 function plcFluxoEfetivo(ob, cfg){
   cfg = cfg || plcCfg();
+  { const pf = plcPersFluxo(ob); if(pf) return { fluxo:plcAplicaAjuste(pf, ob), seq:false, pers:true }; }
   if(!plcAplicaReparcela(ob, cfg)) return { fluxo:plcAplicaAjuste(plcJuntas(ob).fluxo, ob), seq:false };
   const p = ob.prem, total = ob.fases.reduce((s,f)=>s+f.kg*p.preco, 0);
   const venc0 = ob.fluxo.map(x=>x.venc).filter(Boolean).sort()[0];
@@ -10034,9 +10067,21 @@ function plcEdAbrir(idx){
     const ob = c.obras[idx]; if(!ob) return;
     PLI_UI.editor = { idx, manual:!!ob.manual, nome:ob.nome, preco:ob.prem.preco, efetivo:ob.prem.efetivo,
       inicio:ob.fluxo.map(x=>x.venc).filter(Boolean).sort()[0]||'', marcos:Object.assign({ inv:'', hab:'', obra:'' }, ob.marcos||{}),
-      fases:ob.fases.map(f=>({ cod:f.cod, desc:f.desc, kg:f.kg, nec:Object.assign({}, f.nec || { obra:true }), orig:f.cod })) };
+      fases:ob.fases.map(f=>({ cod:f.cod, desc:f.desc, kg:f.kg, nec:Object.assign({}, f.nec || { obra:true }), orig:f.cod })),
+      pers:(ob.fluxoPers||[]).map(x=>Object.assign({}, x)) };
   }
   PLI_UI.tab = 'cronfin'; renderPlanejInt();
+}
+function plcEdPers(i, campo, v){ const e = PLI_UI.editor; if(!e||!e.pers||!e.pers[i]) return; e.pers[i][campo] = v; }
+function plcEdPersAdd(){ const e = PLI_UI.editor; if(!e) return; e.pers = e.pers||[]; e.pers.push({ grupo:'P'+String(e.pers.length+1).padStart(2,'0'), expr:'', venc:'', off:e.pers.length }); renderPlanejInt(); }
+function plcEdPersDel(i){ const e = PLI_UI.editor; if(!e||!e.pers) return; e.pers.splice(i,1); e.pers.forEach((x,k)=>{ if(/^P\d\d$/.test(x.grupo)) x.grupo = 'P'+String(k+1).padStart(2,'0'); }); renderPlanejInt(); }
+function plcEdPersLimpar(){ const e = PLI_UI.editor; if(!e) return; e.pers = []; renderPlanejInt(); }
+function plcEdPersWay(){
+  const e = PLI_UI.editor; if(!e) return;
+  const has = c=>e.fases.some(f=>String(f.cod).toUpperCase()===c);
+  if(!['B01','B02','B03','B04','B05','BRI','TER'].every(has)){ toast('Esta obra não tem as fases B01–B05, BRI e TER.'); return; }
+  e.pers = [['B03 + BRI/5',0],['B02 + BRI/5',1],['B04 + BRI/5',4],['B01 + BRI/5',5],['B05 + BRI/5',6],['TER',7]].map((x,i)=>({ grupo:'P'+String(i+1).padStart(2,'0'), expr:x[0], venc:'', off:x[1] }));
+  renderPlanejInt();
 }
 function plcEdFechar(){ PLI_UI.editor = null; renderPlanejInt(); }
 function plcEdCampo(k, v){ const e = PLI_UI.editor; if(!e) return; e[k] = (k==='preco'||k==='efetivo') ? (parseFloat(String(v).replace(',','.'))||0) : v; }
@@ -10073,6 +10118,12 @@ function plcEdSalvar(){
     ob.fases = e.fases.map(f=>{ const o = antigas.find(x=>x.cod===(f.orig||f.cod)) || { grupo:'A', iniLB:null, fimLB:null, ref:'' };
       return Object.assign({}, o, { cod:String(f.cod).trim(), desc:ob.manual?f.desc:o.desc, kg:ob.manual?f.kg:o.kg, nec:nec(f) }); });
     if(temMarco) ob.marcos = marcos; else delete ob.marcos;
+    { const pers = (e.pers||[]).filter(x=>String(x.expr||'').trim());
+      if(pers.length){
+        const bad = pers.map(x=>plcPersParse(x.expr, ob.fases).erros).find(er=>er.length);
+        if(bad){ toast('Fluxo personalizado: '+bad[0]); return; }
+        ob.fluxoPers = pers.map((x,i)=>({ grupo:x.grupo||('P'+String(i+1).padStart(2,'0')), expr:String(x.expr).trim(), venc:x.venc||'', off:(x.off===''||x.off==null||isNaN(+x.off))?null:+x.off }));
+      } else delete ob.fluxoPers; }
     if(ob.manual){
       ob.nome = nome; ob.prem.preco = e.preco||ob.prem.preco; ob.prem.efetivo = e.efetivo||ob.prem.efetivo;
       const total = ob.fases.reduce((t,f)=>t+f.kg*ob.prem.preco,0);
@@ -10082,6 +10133,26 @@ function plcEdSalvar(){
     PLI_UI.cronObra = e.idx;
   }
   plcSave(c); PLI_UI.editor = null; toast('Obra salva.'); renderPlanejInt();
+}
+function pliHtmlPers(e){
+  const pers = e.pers||[], fases = e.fases.map(f=>({cod:String(f.cod).trim(), kg:f.kg}));
+  const ob = (plcLoad().obras||[])[e.idx], preco = ob?ob.prem.preco:e.preco;
+  const soma = {}; let totalV = 0;
+  const linhas = pers.map((x,i)=>{
+    const r = plcPersParse(x.expr, fases); let v = 0;
+    r.itens.forEach(it=>{ const f = fases.find(y=>y.cod===it.fase); v += f.kg*it.pct*preco; soma[it.fase] = (soma[it.fase]||0)+it.pct; }); totalV += v;
+    return `<tr><td><input type="text" value="${esc(x.grupo)}" style="width:56px;" onchange="plcEdPers(${i},'grupo',this.value)"></td>
+      <td><input type="text" value="${esc(x.expr)}" placeholder="ex.: B03 + BRI/5" style="width:260px;" onchange="plcEdPers(${i},'expr',this.value);renderPlanejInt()"></td>
+      <td><input type="number" min="0" step="1" value="${x.off!=null?x.off:i}" style="width:60px;" title="meses após a 1ª compra (0 = 1ª compra)" onchange="plcEdPers(${i},'off',this.value)"></td>
+      <td><input type="date" value="${x.venc||''}" title="opcional: data fixa (prevalece sobre o mês)" onchange="plcEdPers(${i},'venc',this.value)"></td>
+      <td class="n">${r.erros.length?'<span style="color:#b00">'+esc(r.erros[0])+'</span>':pliFmtR(v)}</td>
+      <td><button class="btn small secondary" onclick="plcEdPersDel(${i})">✕</button></td></tr>`; }).join('');
+  const dif = fases.filter(f=>pers.length && Math.abs((soma[f.cod]||0)-1)>0.001).map(f=>`${esc(f.cod)} ${Math.round((soma[f.cod]||0)*100)}%`);
+  return `<div class="pli-card" style="margin:10px 0;"><h4 style="margin:0 0 6px">Fluxo de pagamento personalizado (parcela → fases)</h4>
+    <div class="pli-note" style="margin-top:0;">Cada parcela é a soma das fases que ela paga, no formato <b>B03 + BRI/5</b> (BRI/5 = 1/5 da fase; também vale <b>BRI*0,2</b> ou <b>BRI 20%</b>). O valor da parcela vem do peso × preço, e o vencimento é a 1ª compra + N meses (coluna Mês; 0 = 1ª compra), ou uma data fixa se você informar. Deixe vazio para usar o fluxo normal.</div>
+    ${pers.length?`<div class="pli-scroll"><table class="pli-t"><thead><tr><th>Parcela</th><th>Fases</th><th>Mês (+)</th><th>Data fixa</th><th class="n">Valor</th><th></th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="4"><b>Total</b></td><td class="n"><b>${pliFmtR(totalV)}</b></td><td></td></tr></tfoot></table></div>`:''}
+    ${dif.length?`<div class="pli-alerta erro">Fases que não somam 100% nas parcelas: ${dif.join(', ')}.</div>`:''}
+    <div class="pli-filtros"><button class="btn small secondary" onclick="plcEdPersAdd()">+ Parcela</button><button class="btn small secondary" onclick="plcEdPersWay()">Modelo Way (P01=B03+BRI/5 … P06=TER)</button>${pers.length?'<button class="btn small secondary" onclick="plcEdPersLimpar()">Voltar ao fluxo normal</button>':''}</div></div>`;
 }
 function pliHtmlEditor(){
   const e = PLI_UI.editor; if(!e) return '';
@@ -10110,6 +10181,7 @@ function pliHtmlEditor(){
       <label>Deadline da obra <input type="date" value="${e.marcos.obra||''}" onchange="plcEdMarco('obra',this.value)"></label>
       <span class="pli-note" style="margin:0;">Instalação até: ${lim(e.marcos.inv)} · ${lim(e.marcos.hab)} · ${lim(e.marcos.obra)}</span>
     </div>
+    ${e.idx>=0?pliHtmlPers(e):''}
     <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Ordem</th><th>Fase</th><th>Descrição</th><th class="n">Peso (kg)</th><th>Investidor</th><th>Habite-se</th><th>Obra</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
     <div class="pli-filtros" style="margin-top:8px;">${e.manual?'<button class="btn small secondary" onclick="plcEdAdd()">+ Fase</button>':''}<button class="btn small" onclick="plcEdSalvar()">Salvar</button><button class="btn small secondary" onclick="plcEdFechar()">Cancelar</button></div></div>`;
 }
@@ -10896,7 +10968,10 @@ function plcCalcBase(ob, ovr){
     lotes.push({ n:lotes.length+1, grupo:par.grupo, parcela:par.parcela, fase:f.cod, desc:f.desc, venc:par.venc, valor, kg,
                  chegada, liberado, iniFab, diasFab, fimFab, iniInst, diasInst, fimInst });
   };
-  if(FL.seq){
+  if(FL.pers){
+    flux.forEach(par=>{ (par.itens||[]).forEach(it=>{ const f = fases.find(x=>x.cod===it.fase); if(f) mk(par, f, f.kg*it.pct, f.kg*it.pct*p.preco); }); });
+  }
+  else if(FL.seq){
     // parcelas ~R$ 500 mil preenchendo as fases na ordem (kg = valor ÷ preço)
     const rem = fases.map(f=>f.kg); let fi = 0;
     flux.forEach(par=>{
@@ -12624,38 +12699,13 @@ function saveRateio(){
   const totalPeso = calcularTotalPeso(alocacoesValidas);
 
   const id = document.getElementById('rateioId').value || uid();
-  let lancamentos = load('lancamentosFinanceiros');
-  const descricaoBase = `Rateio mão de obra — ${funcionario.nome} (${mesLabelCurto(mes)})`;
-
-  // Remove lançamentos de alocações que existiam antes e foram retiradas desta
-  // edição — compara com o que estava REALMENTE salvo, não com o estado em
-  // memória (que já reflete as edições que o usuário acabou de fazer).
   const registroExistente = load('rateiosMaoDeObra').find(r=>r.id===id);
-  const idsAntigos = (registroExistente ? registroExistente.alocacoes : []).map(a=>a.lancamentoId).filter(Boolean);
-  const idsNovos = alocacoesValidas.map(a=>a.lancamentoId).filter(Boolean);
-  const idsParaRemover = idsAntigos.filter(lid=>!idsNovos.includes(lid));
-  lancamentos = lancamentos.filter(l=>!idsParaRemover.includes(l.id));
-
+  const mesAntigo = registroExistente ? registroExistente.mes : null;
   const alocacoesFinal = alocacoesValidas.map(a=>{
     const peso = parseFloat(a.peso);
     const valor = totalPeso>0 ? encargos.totalComEncargos * (peso/totalPeso) : 0;
-    const obra = load('obras').find(o=>o.id===a.obraId);
-    if(a.lancamentoId && lancamentos.some(l=>l.id===a.lancamentoId)){
-      lancamentos = lancamentos.map(l=> l.id===a.lancamentoId ? {
-        ...l, obraId:a.obraId, categoria:'maoDeObra', tipo:'despesa',
-        descricao: `${descricaoBase} — ${obra?obra.nome:''}`, valor, data: mes+'-01'
-      } : l);
-      return { obraId:a.obraId, peso, valor, lancamentoId:a.lancamentoId };
-    } else {
-      const novoId = uid();
-      lancamentos.push({
-        id: novoId, obraId:a.obraId, tipo:'despesa', categoria:'maoDeObra',
-        descricao: `${descricaoBase} — ${obra?obra.nome:''}`, valor, data: mes+'-01'
-      });
-      return { obraId:a.obraId, peso, valor, lancamentoId:novoId };
-    }
+    return { obraId:a.obraId, peso, valor, lancamentoId:null };
   });
-  save('lancamentosFinanceiros', lancamentos);
 
   const record = {
     id, mes, funcionarioId,
@@ -12678,10 +12728,70 @@ function saveRateio(){
   const idx = rateios.findIndex(r=>r.id===id);
   if(idx>=0) rateios[idx] = record; else rateios.push(record);
   save('rateiosMaoDeObra', rateios);
+  if(mesAntigo && mesAntigo!==mes) sincronizarLancamentosMOAgrupados(mesAntigo);
+  sincronizarLancamentosMOAgrupados(mes);
 
   closeModal('modalRateio');
   renderRateioMaoDeObra();
-  toast('Rateio salvo — despesas de mão de obra atualizadas nas obras.');
+  toast('Rateio salvo — despesas lançadas agrupadas (mão de obra de fabricação / instalação) por obra.');
+}
+
+
+/* ===== Lançamento agrupado de mão de obra (fabricação / instalação / indireta) ===== */
+const MO_TIPO_LABEL = { fab:'Mão de obra de fabricação', inst:'Mão de obra de instalação', ind:'Mão de obra indireta (administrativa/técnica)' };
+function moTipoFuncionario(f){
+  if(!f) return 'inst';
+  if(f.tipoMO==='fab'||f.tipoMO==='inst'||f.tipoMO==='ind') return f.tipoMO;
+  const n = t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const setorObj = (load('setores')||[]).find(s=>s.id===f.setor);
+  const setor = n(setorObj&&setorObj.nome), cargo = n(f.cargo);
+  if(/instal|obra|campo|montag/.test(setor)) return 'inst';
+  if(/fabric|produ|serralh|metal/.test(setor)) return 'fab';
+  if(/coordenador|gerente|engenheir|administr|financeir|\brh\b|recursos humanos|almoxarif|tecnico|projet|comprador|orcament|planejament|assistente|analista/.test(cargo)) return 'ind';
+  if(/instalador|montador|ajudante de obra/.test(cargo)) return 'inst';
+  if(/serralh|soldador|cortador|usinador|fabricac|operador|auxiliar de produ|vidraceiro|polidor|montador de esquadria/.test(cargo)) return 'fab';
+  return f.obraAtualRef==='FAB' ? 'fab' : 'inst';
+}
+function sincronizarLancamentosMOAgrupados(mes){
+  const rateios = load('rateiosMaoDeObra').filter(r=>r.mes===mes);
+  const idsLegado = new Set();
+  rateios.forEach(r=>(r.alocacoes||[]).forEach(a=>{ if(a.lancamentoId) idsLegado.add(a.lancamentoId); }));
+  let lancs = load('lancamentosFinanceiros').filter(l=> !(idsLegado.has(l.id) || (l.origem==='rateioMO' && l.mes===mes)));
+  const funcs = load('funcionarios'), obras = load('obras');
+  const grupos = {};
+  rateios.forEach(r=>{
+    const f = funcs.find(x=>x.id===r.funcionarioId);
+    const tp = moTipoFuncionario(f);
+    (r.alocacoes||[]).forEach(a=>{
+      if(!a.obraId || !(a.valor>0)) return;
+      const k = a.obraId+'|'+tp;
+      (grupos[k] = grupos[k] || {obraId:a.obraId, tp, valor:0, det:[]});
+      grupos[k].valor += a.valor;
+      grupos[k].det.push({funcionarioId:r.funcionarioId, nome:f?f.nome:'', valor:a.valor});
+    });
+  });
+  const idPorChave = {};
+  Object.keys(grupos).forEach(k=>{
+    const g = grupos[k], obra = obras.find(o=>o.id===g.obraId);
+    const id = uid(); idPorChave[k] = id;
+    lancs.push({ id, obraId:g.obraId, tipo:'despesa', categoria:'maoDeObra', moTipo:g.tp, origem:'rateioMO', mes,
+      descricao: `${MO_TIPO_LABEL[g.tp]} — rateio ${mesLabelCurto(mes)} — ${obra?obra.nome:''} (${g.det.length} func.)`,
+      valor:g.valor, data:mes+'-01', detalhe:g.det });
+  });
+  save('lancamentosFinanceiros', lancs);
+  // referência de volta nas alocações (informativa)
+  const todos = load('rateiosMaoDeObra');
+  todos.forEach(r=>{ if(r.mes!==mes) return; const tp = moTipoFuncionario(funcs.find(x=>x.id===r.funcionarioId));
+    (r.alocacoes||[]).forEach(a=>{ a.lancamentoId = idPorChave[a.obraId+'|'+tp] || null; }); });
+  save('rateiosMaoDeObra', todos);
+}
+function agruparLancamentosMOExistentes(){
+  const meses = [...new Set(load('rateiosMaoDeObra').map(r=>r.mes))].sort();
+  if(!meses.length){ toast('Não há rateios de mão de obra lançados.'); return; }
+  if(!confirm('Reagrupar os lançamentos de mão de obra de '+meses.length+' mês(es) em "fabricação / instalação / indireta" por obra? Os lançamentos individuais por funcionário serão substituídos.')) return;
+  meses.forEach(sincronizarLancamentosMOAgrupados);
+  renderRateioMaoDeObra();
+  toast('Lançamentos agrupados em '+meses.length+' mês(es).');
 }
 
 function deleteRateio(funcionarioId, mes){
@@ -12690,9 +12800,8 @@ function deleteRateio(funcionarioId, mes){
   if(!confirm('Excluir este rateio? As despesas correspondentes em todas as obras alocadas também serão removidas.')) return;
   const rateio = load('rateiosMaoDeObra').find(r=>r.funcionarioId===funcionarioId && r.mes===mes);
   if(rateio){
-    const idsRemover = (rateio.alocacoes||[]).map(a=>a.lancamentoId).filter(Boolean);
-    save('lancamentosFinanceiros', load('lancamentosFinanceiros').filter(l=>!idsRemover.includes(l.id)));
     save('rateiosMaoDeObra', load('rateiosMaoDeObra').filter(r=>r.id!==rateio.id));
+    sincronizarLancamentosMOAgrupados(rateio.mes);
   }
   renderRateioMaoDeObra();
   toast('Rateio excluído.');
@@ -13313,26 +13422,13 @@ function ratearAdm(){
   const totalClt = chaves.reduce((s,id)=>s+cltPorObra[id],0);
   if(!chaves.length || totalClt<=0){ toast('Nenhuma outra obra tem mão de obra CLT alocada neste mês ainda.'); return; }
 
-  let lancamentos = load('lancamentosFinanceiros');
-  // Remove os lançamentos da alocação anterior desse rateio (a provisória
-  // ou de um rateio anterior), antes de criar os novos redistribuídos.
-  const idsAntigos = (rateioAdm.alocacoes||[]).map(a=>a.lancamentoId).filter(Boolean);
-  lancamentos = lancamentos.filter(l=>!idsAntigos.includes(l.id));
-
-  const funcionario = load('funcionarios').find(f=>f.id===admFuncionarioId);
-  const descricaoBase = `Rateio mão de obra — ${funcionario ? funcionario.nome : ''} (${mesLabelCurto(mes)})`;
-  const obras = load('obras');
   const novasAlocacoes = chaves.map(obraId=>{
     const valor = rateioAdm.totalComEncargos * (cltPorObra[obraId]/totalClt);
-    const obra = obras.find(o=>o.id===obraId);
-    const novoId = uid();
-    lancamentos.push({ id: novoId, obraId, tipo:'despesa', categoria:'maoDeObra', descricao: `${descricaoBase} — ${obra?obra.nome:''}`, valor, data: mes+'-01' });
-    return { obraId, peso: cltPorObra[obraId], valor, lancamentoId: novoId };
+    return { obraId, peso: cltPorObra[obraId], valor, lancamentoId: null };
   });
-  save('lancamentosFinanceiros', lancamentos);
-
   rateios[idx] = { ...rateioAdm, alocacoes: novasAlocacoes };
   save('rateiosMaoDeObra', rateios);
+  sincronizarLancamentosMOAgrupados(mes);
 
   renderRateioMaoDeObra();
   renderAdmRateio();
@@ -13808,6 +13904,7 @@ function openFuncionarioModal(id){
   document.getElementById('funcStatus').value = 'ativo';
   document.getElementById('funcGerente').value = 'nao';
   document.getElementById('funcSetor').value = '';
+  document.getElementById('funcTipoMO').value = '';
   document.getElementById('funcTipoVinculo').value = 'clt';
 
   const f = id ? load('funcionarios').find(x=>x.id===id) : null;
@@ -13831,6 +13928,7 @@ function openFuncionarioModal(id){
     document.getElementById('funcMatricula').value = f.matricula||'';
     document.getElementById('funcCargo').value = f.cargo||'';
     document.getElementById('funcSetor').value = f.setor||'';
+    document.getElementById('funcTipoMO').value = f.tipoMO||'';
     document.getElementById('funcAdmissao').value = f.dataAdmissao||'';
     document.getElementById('funcTelefone').value = f.telefone||'';
     document.getElementById('funcEmail').value = f.email||'';
@@ -13881,6 +13979,7 @@ function saveFuncionario(){
     matricula: document.getElementById('funcMatricula').value.trim(),
     cargo: document.getElementById('funcCargo').value.trim(),
     setor: document.getElementById('funcSetor').value,
+    tipoMO: document.getElementById('funcTipoMO').value,
     dataAdmissao: document.getElementById('funcAdmissao').value,
     telefone: document.getElementById('funcTelefone').value.trim(),
     email: document.getElementById('funcEmail').value.trim(),
