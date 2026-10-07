@@ -10004,6 +10004,9 @@ function pliAutoReajuste(){
 /* ---------- marcos (investidor · habite-se · obra), cenários e capacidade ---------- */
 const PLC_MARCOS = [['inv','Entrega ao investidor'],['hab','Habite-se'],['obra','Obra']];
 /* fator da mão de obra de instalação por fase (1 = 100%). Way: brise (BRI) = 50% por padrão. */
+/* Custo da instalação: 'fixa' = equipe cheia (efetivo) em todos os meses entre o 1º e o último dia de instalação (modelo da planilha);
+   'carga' = só as pessoas que a carga do mês exige (t instaladas ÷ produtividade), limitadas ao efetivo. Way: carga por padrão. */
+function plcModoCustoInst(ob){ return ob.custoInstModo || (/\bWAY\b/.test(pliNorm(ob.nome)) ? 'carga' : 'fixa'); }
 function plcFatorInst(ob, f){
   if(f && f.fatorInst!=null && isFinite(f.fatorInst)) return f.fatorInst;
   return (f && String(f.cod).toUpperCase()==='BRI' && /\bWAY\b/.test(pliNorm(ob.nome))) ? 0.5 : 1;
@@ -11101,12 +11104,15 @@ function plcCalcBase(ob, ovr){
   const efetivo = meses.map(m=> (minInst && pliAddDias(pliAddMeses(m+'-01',1),-1) >= minInst && m+'-01' <= maxInst) ? p.efetivo : 0);
   const instW = z();
   lotes.forEach(l=>{ const f = fases.find(x=>x.cod===l.fase); dist(instW, l.iniInst, l.fimInst, l.kg*plcFatorInst(ob, f)); });
-  const custoInst = efetivo.map((e,i)=> e*p.custoPessoa*(instalado[i]>0 ? instW[i]/instalado[i] : 1));
+  const modoCusto = plcModoCustoInst(ob);
+  const pessoasMes = instalado.map((k,i)=> efetivo[i] > 0 ? Math.min(efetivo[i], k/1000/Math.max(0.0001,p.prodInst)) : 0);
+  const custoInst = efetivo.map((e,i)=> (modoCusto==='carga' ? pessoasMes[i] : e)*p.custoPessoa*(instalado[i]>0 ? instW[i]/instalado[i] : 1));
+  const picoPessoas = Math.max(0, ...pessoasMes);
   const custoFab = fabricado.map(k=> k/1000*(p.folhaFab/p.prodRef));
   let aE=0, aF=0, aI=0;
   const acE = entregue.map(v=>aE+=v), acF = fabricado.map(v=>aF+=v), acI = instalado.map(v=>aI+=v);
   const totKg = fases.reduce((s,f)=>s+f.kg,0);
-  return { fluxo:flux, fasesGrupo, reparcelado:FL.seq, lotes, resumo, meses, pagto, comp, entregue, fabricado, instalado, acE, acF, acI, efetivo, custoInst, custoFab,
+  return { fluxo:flux, fasesGrupo, reparcelado:FL.seq, lotes, resumo, meses, pagto, comp, entregue, fabricado, instalado, acE, acF, acI, efetivo, pessoasMes, picoPessoas, modoCusto, custoInst, custoFab,
            ocup:fabricado.map(k=>k/1000/p.capFab), compFat, totKg, totalPago:flux.reduce((s,x)=>s+x.valor,0),
            capInst, minInst, maxInst, iniFab:mn(lotes,'iniFab'), fimFab:mx(lotes,'fimFab'),
            atendeAlvo: p.alvo ? maxInst <= p.alvo : null, totalComp:compFat.reduce((s,c)=>s+c.valor,0) };
@@ -11559,7 +11565,7 @@ function pliHtmlCronFin(){
     ${pliKpi('Alumínio', pliFmtT(R.totKg/1000,1)+' t', pliFmtT(R.totKg,0)+' kg')}
     ${pliKpi('Total a pagar (alumínio)', pliFmtR(R.totalPago), 'Componentes '+pliFmtR(R.totalComp))}
     ${pliKpi('Fábrica', pliFmtData(R.iniFab)+' → '+pliFmtData(R.fimFab), p.capFab+' t/mês')}
-    ${pliKpi('Instalação', pliFmtData(R.minInst)+' → '+pliFmtData(R.maxInst), p.efetivo+' pessoas · '+pliFmtT(R.capInst,1)+' t/mês')}
+    ${pliKpi('Instalação', pliFmtData(R.minInst)+' → '+pliFmtData(R.maxInst), p.efetivo+' pessoas · '+pliFmtT(R.capInst,1)+' t/mês · pico exigido '+Math.ceil(R.picoPessoas)+' pessoas')}
     ${pliKpi('Término da instalação × alvo', pliFmtData(R.maxInst), p.alvo?('Alvo '+pliFmtData(p.alvo)+(R.atendeAlvo?' ✔ atende':' ✘ não atende')):'', R.atendeAlvo===false?'var(--danger)':'var(--ok)')}
     ${pliKpi('Mão de obra (fab + inst)', pliFmtR(sFab+sInst), 'Fab '+pliFmtR(sFab)+' · Inst '+pliFmtR(sInst))}
    </div>`;
@@ -11573,6 +11579,8 @@ function pliHtmlCronFin(){
      <label>Início inst. após fim fab. (dias) ${ed('iniInstDias',p.iniInstDias,60)}</label>
      <label>Efetivo de instalação (pessoas) ${ed('efetivo',p.efetivo,60)}</label>
      <label>Produtividade inst. (t/pessoa/mês) ${ed('prodInst',p.prodInst,70)}</label>
+     <label>Custo da instalação <select onchange="plcModoCusto(${k},this.value)"><option value="fixa" ${plcModoCustoInst(ob)==='fixa'?'selected':''}>Equipe cheia (efetivo × meses)</option><option value="carga" ${plcModoCustoInst(ob)==='carga'?'selected':''}>Pela carga de trabalho</option></select></label>
+     <button class="btn small secondary" title="Reduz o efetivo ao menor valor que ainda cumpre todos os prazos" onclick="plcEfetivoMinimo(${k})">Efetivo mínimo que cumpre os prazos</button>
      <label>Custo por pessoa (R$/mês) ${ed('custoPessoa',p.custoPessoa,90)}</label>
      <label>Preço do alumínio (R$/kg) ${ed('preco',p.preco,70)}</label>
      <label>Folha da fábrica (R$/mês) ${ed('folhaFab',p.folhaFab,90)}</label>
@@ -11600,7 +11608,8 @@ function pliHtmlCronFin(){
     {rot:'Acum. fabricado (kg)', v:R.acF, fmt:v=>pliFmtT(v,0)},
     {rot:'Acum. instalado (kg)', v:R.acI, fmt:v=>pliFmtT(v,0)},
     {rot:'% instalado', v:R.acI.map(v=>v/R.totKg), fmt:pliFmtPct},
-    {rot:'Efetivo de instalação', v:R.efetivo, fmt:v=>v>0?String(v):''},
+    {rot:'Efetivo de instalação (equipe)', v:R.efetivo, fmt:v=>v>0?String(v):''},
+    {rot:'Pessoas exigidas pela carga', v:R.pessoasMes, fmt:v=>v>0?String(Math.ceil(v)):''},
     {rot:'Custo instalação (R$)', v:R.custoInst, fmt:v=>v>0?pliFmtR(v):''},
     {rot:'Custo fabricação (R$)', v:R.custoFab, fmt:v=>v>0?pliFmtR(v):''},
     {rot:'MO total (fab + inst)', v:R.custoFab.map((f,i)=>f+R.custoInst[i]), fmt:v=>v>0?pliFmtR(v):'', cls:'tot'}
@@ -11848,7 +11857,7 @@ function pliHtmlRelFin(ob, soPagina){
     ${pliKpi('Componentes', pliFmtR(T.comp), pliFmtT(p.compPct*100,0)+'% do alumínio')}
     ${pliKpi('Material (alumínio + componentes)', pliFmtR(T.mat), 'R$ '+pliFmtT(T.mat/(R.totKg||1),2)+' por kg de alumínio')}
     ${pliKpi('Mão de obra de fabricação', pliFmtR(T.fab), 'R$ '+pliFmtT(p.folhaFab/p.prodRef,0)+'/t')}
-    ${pliKpi('Mão de obra de instalação', pliFmtR(T.inst), p.efetivo+' pessoas · '+pliFmtR(p.custoPessoa)+'/pessoa')}
+    ${pliKpi('Mão de obra de instalação', pliFmtR(T.inst), p.efetivo+' pessoas (equipe) · '+(R.modoCusto==='carga'?'custo pela carga: pico '+Math.ceil(R.picoPessoas)+' pessoas':'custo da equipe cheia')+' · '+pliFmtR(p.custoPessoa)+'/pessoa')}
     ${T.ind>0?pliKpi('Mão de obra indireta rateada', pliFmtR(T.ind), 'RH/DP/administrativo, proporcional ao % da obra'):''}
     ${pliKpi('Desembolso total da obra', pliFmtR(T.geral), 'Instalação termina em '+pliFmtData(R.maxInst))}
   </div>`;
@@ -11947,6 +11956,17 @@ function pliExportarRelFin(todas){
   document.getElementById('rdoPrintArea').innerHTML = `<div class="pli-print"><h1>Relatório financeiro — alumínio${todas?' (todas as obras)':''}</h1>
     <div class="meta">Divisão de Alumínio · Calper · gerado em ${pliFmtData(todayISO())} · base: cronograma financeiro importado</div>${corpo}</div>`;
   window.print();
+}
+function plcModoCusto(i, v){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].custoInstModo = v; plcSave(c); renderPlanejInt(); }
+function plcEfetivoMinimo(i){
+  const c = plcLoad(), ob = c.obras[i]; if(!ob) return;
+  const ef0 = ob.prem.efetivo; const ok = e=>{ ob.prem.efetivo = e; const av = plcAvaliarObras(c); return av[ob.id].ok; };
+  let aprovado = ok(ef0) ? ef0 : null;
+  if(aprovado==null){ ob.prem.efetivo = ef0; toast('Com o efetivo atual ('+ef0+') a obra já não cumpre os prazos — use "Recalcular prazos" antes.'); return; }
+  let lo = 1, hi = ef0;               // menor efetivo que cumpre (busca binária; ok cresce com o efetivo)
+  while(lo < hi){ const mid = Math.floor((lo+hi)/2); if(ok(mid)) hi = mid; else lo = mid+1; }
+  ob.prem.efetivo = lo; plcSave(c);
+  toast(ob.nome+': efetivo ajustado de '+ef0+' para '+lo+' pessoas (mínimo que cumpre todos os prazos).'); renderPlanejInt();
 }
 function plcEditar(i, campo, valor){
   const c = plcLoad(); const v = parseFloat(String(valor).replace(',','.'));
