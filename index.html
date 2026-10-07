@@ -957,7 +957,7 @@
         <div class="word">SGPFO - Alumínio</div>
         <div class="tagline">Sistema de Gestão Projetos, Fábrica e Obra</div>
         <div class="sub">Construtora Calper</div>
-        <div id="syncIndicator" style="font-size:10.5px;margin-top:4px;color:var(--ink-soft);">● Modo local (Supabase não configurado)</div>
+        <div id="syncIndicator" onclick="diagnosticoSalvamento()" title="Clique para ver o diagnóstico de salvamento" style="font-size:10.5px;margin-top:4px;color:var(--ink-soft);cursor:pointer;">● Modo local (Supabase não configurado)</div>
         <div id="loginInfo" style="font-size:10.5px;margin-top:2px;color:var(--ink-soft);display:none;"></div>
       </div>
     </div>
@@ -6788,8 +6788,17 @@ var qrcode = function() {
    ============================================================ */
 
 const DB_PREFIX = 'sgpt_';
-function load(key){ try{ return JSON.parse(localStorage.getItem(DB_PREFIX+key)) || []; }catch(e){ return []; } }
-function save(key, data){ localStorage.setItem(DB_PREFIX+key, JSON.stringify(data)); }
+/* Se o navegador recusar a gravação local (armazenamento cheio), o dado fica em memória
+   (__memLS) para a tela continuar coerente, e segue para a nuvem. */
+window.__memLS = window.__memLS || {};
+function load(key){ try{ const k = DB_PREFIX+key; const raw = (k in window.__memLS) ? window.__memLS[k] : localStorage.getItem(k); return JSON.parse(raw) || []; }catch(e){ return []; } }
+function save(key, data){
+  try{ localStorage.setItem(DB_PREFIX+key, JSON.stringify(data)); return true; }
+  catch(e){
+    try{ toast('⚠ Não foi possível gravar "'+key+'" neste navegador (armazenamento cheio ou bloqueado). Os dados seguem para a nuvem — faça um backup e avise o suporte.'); }catch(_){}
+    console.error('Falha ao salvar', key, e); return false;
+  }
+}
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 // Ordenação alfabética (pt-BR, ignora acentos/maiúsculas) usada em toda
@@ -6947,23 +6956,51 @@ async function pullFromSupabase(){
   }catch(e){ console.error('Erro ao sincronizar do Supabase:', e); return false; }
 }
 
-async function pushToSupabase(key, value){
+const SYNC_STATE = { pend:{}, ultimoErro:'', falhas:0, ultimoOk:null };
+async function pushToSupabase(key, value, tent){
   if(!supabaseClient) return;
+  tent = tent||0; SYNC_STATE.pend[key] = value;
   try{
-    await supabaseClient.from('sgpt_kv').upsert({ key, value, updated_at: new Date().toISOString() });
-    marcarSincronizado(true);
+    // supabase-js NÃO lança exceção em erro (RLS, tamanho, rede): devolve { error } — por isso era ignorado.
+    const { error } = await supabaseClient.from('sgpt_kv').upsert({ key, value, updated_at: new Date().toISOString() });
+    if(error) throw error;
+    if(SYNC_STATE.pend[key] === value) delete SYNC_STATE.pend[key];
+    SYNC_STATE.ultimoOk = new Date().toISOString();
+    marcarSincronizado(Object.keys(SYNC_STATE.pend).length === 0);
   }catch(e){
+    SYNC_STATE.ultimoErro = key+': '+((e && (e.message || e.details || e.hint)) || String(e)); SYNC_STATE.falhas++;
     console.error('Erro ao enviar para o Supabase:', e);
     marcarSincronizado(false);
+    if(tent < 5 && SYNC_STATE.pend[key] === value) setTimeout(()=> pushToSupabase(key, value, tent+1), 2000*Math.pow(2, tent));
   }
+}
+window.addEventListener('online', ()=>{ Object.keys(SYNC_STATE.pend).forEach(k=> pushToSupabase(k, SYNC_STATE.pend[k], 0)); });
+window.addEventListener('beforeunload', e=>{ if(Object.keys(SYNC_STATE.pend).length){ e.preventDefault(); e.returnValue = ''; } });
+function diagnosticoSalvamento(){
+  let tot = 0; const itens = [];
+  try{ for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i), n = (localStorage.getItem(k)||'').length*2; tot += n; if(k.indexOf(DB_PREFIX)===0) itens.push([k.slice(DB_PREFIX.length), n]); } }catch(e){}
+  itens.sort((a,b)=>b[1]-a[1]);
+  let teste = 'ok'; try{ localStorage.setItem('__teste_sgpt','1'); localStorage.removeItem('__teste_sgpt'); }catch(e){ teste = 'FALHOU ('+(e&&e.name)+')'; }
+  const pend = Object.keys(SYNC_STATE.pend);
+  alert('Diagnóstico de salvamento\n\n'
+    +'Nuvem (Supabase): '+(supabaseReady?'ativa':'INATIVA — modo local/sem login')+'\n'
+    +'Internet: '+(navigator.onLine?'online':'OFFLINE')+'\n'
+    +'Gravação local: '+teste+'\n'
+    +'Uso do armazenamento local: '+(tot/1048576).toFixed(2)+' MB (limite típico ≈ 5 MB)\n'
+    +'Maiores itens: '+itens.slice(0,5).map(x=>x[0]+' '+(x[1]/1024).toFixed(0)+' KB').join(' · ')+'\n'
+    +'Pendentes de envio: '+(pend.length? pend.join(', ') : 'nenhum')+'\n'
+    +'Falhas nesta sessão: '+SYNC_STATE.falhas+(SYNC_STATE.ultimoErro?'\nÚltimo erro: '+SYNC_STATE.ultimoErro:'')+'\n'
+    +'Último envio com sucesso: '+(SYNC_STATE.ultimoOk||'—'));
 }
 
 function marcarSincronizado(ok){
   const el = document.getElementById('syncIndicator');
   if(!el) return;
   if(!supabaseReady){ el.textContent = '● Modo local (Supabase não configurado)'; el.style.color = 'var(--ink-soft)'; return; }
-  el.textContent = ok ? '● Sincronizado com o Supabase' : '● Falha ao sincronizar — dados salvos localmente';
+  const np = Object.keys(SYNC_STATE.pend).length;
+  el.textContent = ok ? '● Sincronizado com o Supabase' : '● Falha ao sincronizar'+(np?' ('+np+' pendente'+(np>1?'s':'')+')':'')+' — tentando de novo; clique para diagnóstico';
   el.style.color = ok ? '#1e7a4c' : '#b8590d';
+  el.style.cursor = 'pointer'; el.title = 'Clique para ver o diagnóstico de salvamento'; el.onclick = diagnosticoSalvamento;
 }
 
 // Intercepta localStorage.setItem só para as chaves do SGPT (prefixo sgpt_)
@@ -6971,10 +7008,14 @@ function marcarSincronizado(ok){
 // exigir nenhuma mudança nas funções save() já existentes no sistema.
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value){
-  _origSetItem(key, value);
+  let erro = null;
+  try{ _origSetItem(key, value); delete window.__memLS[key]; }
+  catch(e){ erro = e; if(typeof key === 'string' && key.indexOf(DB_PREFIX) === 0) window.__memLS[key] = value; }
+  // mesmo que a gravação local falhe, o dado ainda segue para a nuvem
   if(supabaseReady && typeof key === 'string' && key.indexOf(DB_PREFIX) === 0){
     pushToSupabase(key, value);
   }
+  if(erro) throw erro;
 };
 
 /* ---------------- Login (Supabase Auth) ----------------
