@@ -2302,6 +2302,7 @@
                   <input type="text" id="fabricaCustoTotal" readonly style="background:#f6f5f3;">
                 </div>
               </div>
+              <div id="opCustoWrap" style="margin-top:12px;"></div>
               <div id="fabricaKgWrap" style="margin-top:12px;"></div>
               <div class="form-actions">
                 <button class="btn" onclick="ratearFabrica()">Ratear Fábrica pelas obras</button>
@@ -13443,7 +13444,9 @@ function calcularRelatorioRateioPorObra(mes){
       const kgNum = parseFloat(kg) || 0;
       if(kgNum<=0) return;
       const prop = kgNum/totalKg;
-      const valor = rf.totalRateado * prop;
+      const opTotal = parseFloat(rf.totalOperacional) || 0;
+      const valorOp = opTotal * prop;
+      const valor = (rf.totalRateado - opTotal) * prop;
       if(!porObra[obraId]) porObra[obraId] = { obra: obras.find(o=>o.id===obraId), linhas: [], totalObra: 0 };
       porObra[obraId].linhas.push({
         funcionario: 'Rateio da Fábrica',
@@ -13455,9 +13458,10 @@ function calcularRelatorioRateioPorObra(mes){
         provisoes: 0, valeAlimentacao: 0, planoSaude: 0, valeTransporte: 0, beneficios: 0, alimentacao: 0,
         treinamentosExames: 0, treinamentosExamesDescricao: '',
         fabricaValor: valor,
-        total: valor, totalIndireto: 0
+        operacionalValor: valorOp,
+        total: valor + valorOp, totalIndireto: 0
       });
-      porObra[obraId].totalObra += valor;
+      porObra[obraId].totalObra += valor + valorOp;
     });
   });
   // A Fábrica em si não entra como obra neste relatório — o custo dela já
@@ -13489,7 +13493,7 @@ function gerarRelatorioRateioResumo(){
     return;
   }
 
-  let totalGeral = 0, totSalarios=0, totEncargos=0, totBeneficios=0, totAlimentacao=0, totTreinamentos=0, totProvisionamentos=0, totFabrica=0, totIndireto=0;
+  let totalGeral = 0, totSalarios=0, totEncargos=0, totBeneficios=0, totAlimentacao=0, totTreinamentos=0, totProvisionamentos=0, totFabrica=0, totOperacional=0, totIndireto=0;
   // % que cada obra representa do total da folha só dá pra calcular depois
   // de somar o total geral de todas as obras — por isso primeiro monta os
   // dados de cada linha (sem gerar HTML ainda) e só no fim, com totalGeral
@@ -13510,11 +13514,12 @@ function gerarRelatorioRateioResumo(){
     const treinamentos = linhasClt.reduce((s,l)=>s+(l.treinamentosExames||0),0);
     const provisionamentos = linhasClt.reduce((s,l)=>s+(l.provisoes||0),0);
     const fabrica = g.linhas.reduce((s,l)=>s+(l.fabricaValor||0),0);
+    const operacional = g.linhas.reduce((s,l)=>s+(l.operacionalValor||0),0);
     const indireto = g.linhas.reduce((s,l)=>s+(l.totalIndireto||0),0);
     totSalarios+=salarios; totEncargos+=encargos; totBeneficios+=beneficios; totAlimentacao+=alimentacao;
-    totTreinamentos+=treinamentos; totProvisionamentos+=provisionamentos; totFabrica+=fabrica; totIndireto+=indireto;
+    totTreinamentos+=treinamentos; totProvisionamentos+=provisionamentos; totFabrica+=fabrica; totOperacional+=operacional; totIndireto+=indireto;
     const temFabrica = g.linhas.some(l=>l.funcionario==='Rateio da Fábrica');
-    return { nome: g.obra ? g.obra.nome : 'Obra removida', temFabrica, salarios, encargos, beneficios, alimentacao, treinamentos, provisionamentos, fabrica, indireto, total: g.totalObra };
+    return { nome: g.obra ? g.obra.nome : 'Obra removida', temFabrica, salarios, encargos, beneficios, alimentacao, treinamentos, provisionamentos, fabrica, operacional, indireto, total: g.totalObra };
   });
   const linhas = dadosLinhas.map(d=>{
     const pct = totalGeral>0 ? (d.total/totalGeral*100) : 0;
@@ -13527,6 +13532,7 @@ function gerarRelatorioRateioResumo(){
       <td>${fmtMoeda(d.treinamentos)}</td>
       <td>${fmtMoeda(d.provisionamentos)}</td>
       <td>${fmtMoeda(d.fabrica)}</td>
+      <td>${fmtMoeda(d.operacional)}</td>
       <td>${fmtMoeda(d.indireto)}</td>
       <td><strong>${fmtMoeda(d.total)}</strong></td>
       <td>${pct.toFixed(1).replace('.',',')}%</td>
@@ -13547,14 +13553,14 @@ function gerarRelatorioRateioResumo(){
     <table>
       <thead><tr>
         <th>Obra</th><th>Salários (base+extra)</th><th>Encargos</th><th>Benefícios</th>
-        <th>Alimentação</th><th>Treinamentos e exames</th><th>Provisionamentos</th><th>Rateio Fábrica</th><th>Indireto</th><th>Total</th><th>%</th>
+        <th>Alimentação</th><th>Treinamentos e exames</th><th>Provisionamentos</th><th>Rateio Fábrica (M.O.)</th><th>Custo Operacional (rateado)</th><th>Indireto</th><th>Total</th><th>%</th>
       </tr></thead>
-      <tbody>${linhas || '<tr><td colspan="10">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
+      <tbody>${linhas || '<tr><td colspan="12">Nenhum rateio lançado neste mês.</td></tr>'}</tbody>
       <tfoot><tr>
         <td>TOTAL GERAL DA FOLHA NO MÊS</td>
         <td>${fmtMoeda(totSalarios)}</td><td>${fmtMoeda(totEncargos)}</td><td>${fmtMoeda(totBeneficios)}</td>
         <td>${fmtMoeda(totAlimentacao)}</td><td>${fmtMoeda(totTreinamentos)}</td><td>${fmtMoeda(totProvisionamentos)}</td>
-        <td>${fmtMoeda(totFabrica)}</td><td>${fmtMoeda(totIndireto)}</td>
+        <td>${fmtMoeda(totFabrica)}</td><td>${fmtMoeda(totOperacional)}</td><td>${fmtMoeda(totIndireto)}</td>
         <td>${fmtMoeda(totalGeral)}</td>
         <td>100,0%</td>
       </tr></tfoot>
@@ -13585,7 +13591,7 @@ function gerarRelatorioRateioCompleto(){
       const restrito = ehCargoSalarioRestrito(l.cargo) && !podeVerRestritos;
       if(restrito){
         return `<tr>
-          <td colspan="14" class="step-note">🔒 Salário de Coordenador/Gerente — visível apenas ao Gerente (valor incluído no total da obra acima)</td>
+          <td colspan="15" class="step-note">🔒 Salário de Coordenador/Gerente — visível apenas ao Gerente (valor incluído no total da obra acima)</td>
         </tr>`;
       }
       const treinamentosCell = l.treinamentosExamesDescricao
@@ -13606,6 +13612,7 @@ function gerarRelatorioRateioCompleto(){
         <td>${fmtMoeda(l.valeTransporte)}</td>
         <td>${fmtMoeda(l.alimentacao)}</td>
         <td>${fmtMoeda(l.fabricaValor)}</td>
+        <td>${fmtMoeda(l.operacionalValor||0)}</td>
         <td><strong>${fmtMoeda(l.total)}</strong></td>
       </tr>`;
     }).join('');
@@ -13613,7 +13620,7 @@ function gerarRelatorioRateioCompleto(){
       <table>
         <thead><tr>
           <th>Funcionário</th><th>% Alocado</th><th>Sal. Bruto</th><th>GPS (45%)</th><th>FGTS (12%)</th>
-          <th>SECONCI (1,5%)</th><th>Seguro+PCMSO</th><th>Provisões</th><th>Treinamentos/Exames</th><th>Benefícios</th><th>V. Transp.</th><th>Alimentação</th><th>Rateio Fábrica</th><th>Total</th>
+          <th>SECONCI (1,5%)</th><th>Seguro+PCMSO</th><th>Provisões</th><th>Treinamentos/Exames</th><th>Benefícios</th><th>V. Transp.</th><th>Alimentação</th><th>Rateio Fábrica (M.O.)</th><th>Custo Operacional (rateado)</th><th>Total</th>
         </tr></thead>
         <tbody>${linhasHtml}</tbody>
       </table>`;
@@ -13629,7 +13636,7 @@ function gerarRelatorioRateioCompleto(){
       Mês de referência: <strong>${esc(mesLabelCurto(mes))}</strong><br>
       Total geral da folha no mês: <strong>${fmtMoeda(totalGeral)}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}<br>
-      A linha "Rateio da Fábrica" mostra a fatia do custo de mão de obra da Fábrica alocada àquela obra, proporcional ao Kg produzido — o detalhamento de encargos dela pertence ao relatório da própria Fábrica, não é repetido aqui.
+      A linha "Rateio da Fábrica" mostra a fatia do custo de mão de obra da Fábrica e a do custo operacional mensal (energia, aluguel etc.) alocadas àquela obra, proporcional ao Kg produzido — o detalhamento de encargos dela pertence ao relatório da própria Fábrica, não é repetido aqui.
       ${!obraSelecionada ? '<br>Cada obra começa numa página nova na impressão, pra sair isolada (uma por página).' : ''}
     </div>
     ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}
@@ -13725,18 +13732,78 @@ function renderFabricaObraSelect(){
 // Soma o custo de mão de obra E o custo operacional da Fábrica no mês —
 // os dois juntos formam a base que é rateada pelas obras conforme o Kg
 // produzido por cada uma.
+function custoOperacionalMensalNoMes(mes){
+  if(!mes) return 0;
+  return load('custosOperacionais').filter(c=>c.mes===mes).reduce((t,c)=>t+(parseFloat(c.valor)||0),0);
+}
+// Detalhe da base de rateio da Fábrica: mão de obra x custo operacional (lançamentos "Custo Operacional da Fábrica" + custo operacional mensal cadastrado)
+function custoFabricaDetalhe(obraId, mes){
+  if(!obraId || !mes) return { mo:0, op:0, total:0, opMensal:0, opLanc:0 };
+  const lanc = load('lancamentosFinanceiros').filter(l=>l.obraId===obraId && l.tipo==='despesa' && (l.data||'').slice(0,7)===mes);
+  const mo = lanc.filter(l=>l.categoria==='maoDeObra').reduce((t,l)=>t+l.valor,0);
+  const opLanc = lanc.filter(l=>l.categoria==='custoOperacionalFabrica').reduce((t,l)=>t+l.valor,0);
+  const opMensal = custoOperacionalMensalNoMes(mes);
+  const op = opLanc + opMensal;
+  return { mo, op, total: mo+op, opMensal, opLanc };
+}
 function custoFabricaTotalNoMes(obraId, mes){
-  if(!obraId || !mes) return 0;
-  return load('lancamentosFinanceiros')
-    .filter(l=>l.obraId===obraId && (l.categoria==='maoDeObra' || l.categoria==='custoOperacionalFabrica') && l.tipo==='despesa' && (l.data||'').slice(0,7)===mes)
-    .reduce((s,l)=>s+l.valor,0);
+  return custoFabricaDetalhe(obraId, mes).total;
+}
+// Cadastro do custo operacional mensal (aluguel, energia, manutenção etc.) — entra na base de rateio da Fábrica
+function renderCustoOperacional(){
+  const wrap = document.getElementById('opCustoWrap');
+  if(!wrap) return;
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ wrap.innerHTML = '<div class="step-note">Selecione o mês de referência para lançar o custo operacional.</div>'; return; }
+  const itens = load('custosOperacionais').filter(c=>c.mes===mes);
+  const total = itens.reduce((t,c)=>t+(parseFloat(c.valor)||0),0);
+  wrap.innerHTML = `<div style="border:1px solid var(--line,#ddd);border-radius:8px;padding:12px;">
+    <strong>Custo operacional do mês (${esc(mesLabelCurto(mes))})</strong>
+    <div class="step-note" style="margin:4px 0 8px;">Despesas mensais da fábrica (energia, aluguel, manutenção, insumos etc.). O total é somado à mão de obra da Fábrica e rateado pelas obras conforme o Kg produzido.</div>
+    ${itens.length ? `<table><thead><tr><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>${itens.map(c=>`<tr><td>${esc(c.descricao||'Custo operacional')}</td><td>${fmtMoeda(parseFloat(c.valor)||0)}</td><td><button class="btn btn-ghost" onclick="removerCustoOperacional('${c.id}')">Remover</button></td></tr>`).join('')}<tr><td><strong>Total operacional</strong></td><td><strong>${fmtMoeda(total)}</strong></td><td></td></tr></tbody></table>` : '<div class="step-note">Nenhum custo operacional lançado neste mês.</div>'}
+    <div class="form-grid cols-3" style="margin-top:8px;">
+      <div class="field"><label>Descrição</label><input type="text" id="opDescricao" placeholder="Ex.: Energia, aluguel..."></div>
+      <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="opValor"></div>
+    </div>
+    <div class="form-actions"><button class="btn" onclick="adicionarCustoOperacional()">Adicionar custo operacional</button>
+    <button class="btn btn-ghost" onclick="copiarCustoOperacionalMesAnterior()">Copiar do mês anterior</button></div>
+  </div>`;
+}
+function adicionarCustoOperacional(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência.'); return; }
+  const valor = parseFloat(document.getElementById('opValor').value);
+  if(!(valor>0)){ toast('Informe o valor do custo operacional.'); return; }
+  const lista = load('custosOperacionais');
+  lista.push({ id: uid(), mes, descricao: (document.getElementById('opDescricao').value||'').trim() || 'Custo operacional', valor });
+  save('custosOperacionais', lista);
+  renderFabricaRateio();
+  toast('Custo operacional lançado. Rateie a Fábrica de novo para atualizar as obras.');
+}
+function removerCustoOperacional(id){
+  save('custosOperacionais', load('custosOperacionais').filter(c=>c.id!==id));
+  renderFabricaRateio();
+}
+function copiarCustoOperacionalMesAnterior(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência.'); return; }
+  const [a,m] = mes.split('-').map(Number);
+  const ant = m===1 ? (a-1)+'-12' : a+'-'+String(m-1).padStart(2,'0');
+  const lista = load('custosOperacionais');
+  const origem = lista.filter(c=>c.mes===ant);
+  if(!origem.length){ toast('Não há custo operacional lançado em '+mesLabelCurto(ant)+'.'); return; }
+  if(lista.some(c=>c.mes===mes) && !confirm('Já existem custos neste mês. Copiar mesmo assim (somando aos existentes)?')) return;
+  origem.forEach(c=> lista.push({ id: uid(), mes, descricao: c.descricao, valor: c.valor }));
+  save('custosOperacionais', lista);
+  renderFabricaRateio();
 }
 
 function renderFabricaRateio(){
   const mes = document.getElementById('rateioMesFiltro').value;
   const fabricaObraId = document.getElementById('fabricaObraId').value;
   const custoTotal = custoFabricaTotalNoMes(fabricaObraId, mes);
-  document.getElementById('fabricaCustoTotal').value = fmtMoeda(custoTotal);
+  { const d = custoFabricaDetalhe(fabricaObraId, mes); document.getElementById('fabricaCustoTotal').value = fmtMoeda(custoTotal)+'  (mão de obra '+fmtMoeda(d.mo)+' + operacional '+fmtMoeda(d.op)+')'; }
+  renderCustoOperacional();
 
   const wrap = document.getElementById('fabricaKgWrap');
   if(!fabricaObraId || !mes){
@@ -13771,7 +13838,8 @@ function ratearFabrica(){
   const fabricaObraId = document.getElementById('fabricaObraId').value;
   if(!mes){ toast('Selecione o mês de referência.'); return; }
   if(!fabricaObraId){ toast('Selecione a obra que representa a Fábrica.'); return; }
-  const custoTotal = custoFabricaTotalNoMes(fabricaObraId, mes);
+  const detCusto = custoFabricaDetalhe(fabricaObraId, mes);
+  const custoTotal = detCusto.total;
   if(!custoTotal){ toast('Não há custo de mão de obra nem custo operacional lançado na Fábrica para esse mês.'); return; }
 
   const outrasObras = load('obras').filter(o=>o.id!==fabricaObraId);
@@ -13788,23 +13856,29 @@ function ratearFabrica(){
   const existente = rateiosFabrica.find(r=>r.mes===mes && r.fabricaObraId===fabricaObraId);
   let lancamentos = load('lancamentosFinanceiros');
   if(existente){
-    const idsAntigos = Object.values(existente.lancamentoIdPorObra||{});
+    const idsAntigos = Object.values(existente.lancamentoIdPorObra||{}).concat(Object.values(existente.lancamentoOpIdPorObra||{}));
     lancamentos = lancamentos.filter(l=>!idsAntigos.includes(l.id));
   }
 
-  const lancamentoIdPorObra = {};
-  const descricaoBase = `Rateio Fábrica — mão de obra + operacional (${mesLabelCurto(mes)})`;
+  const lancamentoIdPorObra = {}, lancamentoOpIdPorObra = {};
   outrasObras.forEach(o=>{
     const kg = kgPorObra[o.id];
     if(kg<=0) return;
-    const valor = custoTotal * (kg/totalKg);
-    const novoId = uid();
-    lancamentos.push({ id: novoId, obraId:o.id, tipo:'despesa', categoria:'maoDeObra', descricao: descricaoBase, valor, data: mes+'-01' });
-    lancamentoIdPorObra[o.id] = novoId;
+    const fr = kg/totalKg;
+    if(detCusto.mo>0){
+      const novoId = uid();
+      lancamentos.push({ id: novoId, obraId:o.id, tipo:'despesa', categoria:'maoDeObra', descricao: `Rateio Fábrica — mão de obra (${mesLabelCurto(mes)})`, valor: detCusto.mo*fr, data: mes+'-01' });
+      lancamentoIdPorObra[o.id] = novoId;
+    }
+    if(detCusto.op>0){
+      const opId = uid();
+      lancamentos.push({ id: opId, obraId:o.id, tipo:'despesa', categoria:'custoOperacionalFabrica', descricao: `Rateio Fábrica — custo operacional (${mesLabelCurto(mes)})`, valor: detCusto.op*fr, data: mes+'-01' });
+      lancamentoOpIdPorObra[o.id] = opId;
+    }
   });
   save('lancamentosFinanceiros', lancamentos);
 
-  const record = { id: existente ? existente.id : uid(), mes, fabricaObraId, kgPorObra, totalRateado: custoTotal, lancamentoIdPorObra };
+  const record = { id: existente ? existente.id : uid(), mes, fabricaObraId, kgPorObra, totalRateado: custoTotal, totalOperacional: detCusto.op, lancamentoIdPorObra, lancamentoOpIdPorObra };
   const idx = rateiosFabrica.findIndex(r=>r.id===record.id);
   if(idx>=0) rateiosFabrica[idx] = record; else rateiosFabrica.push(record);
   save('rateiosFabrica', rateiosFabrica);
