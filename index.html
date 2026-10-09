@@ -6795,6 +6795,7 @@ function load(key){ try{ const k = DB_PREFIX+key; const raw = (k in window.__mem
 function save(key, data){
   try{ localStorage.setItem(DB_PREFIX+key, JSON.stringify(data)); return true; }
   catch(e){
+    if(e && e.message === 'SYNC_BLOQUEADO'){ try{ toast('⛔ Sem conexão com o Supabase — nada foi salvo. Aguarde a reconexão (o indicador no rodapé fica verde) e tente de novo.'); }catch(e2){} return false; }
     try{ window.__avisoQuota = window.__avisoQuota||{}; if(Date.now()-(window.__avisoQuota[key]||0) > 30000){ window.__avisoQuota[key] = Date.now(); toast('⚠ Não foi possível gravar "'+key+'" neste navegador (armazenamento cheio ou bloqueado). Os dados seguem para a nuvem — clique em "Sincronizado/Modo local" no menu lateral para o diagnóstico e faça um backup.'); } }catch(_){}
     console.error('Falha ao salvar', key, e); return false;
   }
@@ -6921,61 +6922,239 @@ function tamanhoAproximado(valor){
   }
 }
 
-async function pullFromSupabase(){
-  if(!supabaseClient) return false;
-  try{
-    const { data, error } = await supabaseClient.from('sgpt_kv').select('key,value');
-    if(error) throw error;
-    (data || []).forEach(row => {
-      const local = localStorage.getItem(row.key);
-      // ATENÇÃO — isto já causou itens excluídos "voltarem sozinhos":
-      // a regra antiga comparava só a QUANTIDADE de itens (tamanhoAproximado)
-      // e, se o local tivesse mais itens que o Supabase, assumia que o local
-      // era "mais completo" e reenviava ele por cima, desfazendo exclusões.
-      // Isso disparava toda vez que alguém abria o sistema num navegador com
-      // cópia desatualizada (ex.: aba antiga, outro computador que não
-      // sincronizou depois da exclusão) — o login/recarregamento chama
-      // pullFromSupabase() e, com dados locais obsoletos mas "maiores",
-      // ressuscitava o registro já excluído por outra pessoa.
-      //
-      // Correção: o Supabase só perde pro local quando realmente não tem
-      // NADA gravado ainda pra essa chave (tabela vazia/zerada — primeira
-      // sincronização deste navegador, ou reset do banco). Em qualquer outro
-      // caso — mesmo com menos itens — o Supabase é a fonte da verdade,
-      // porque "menos itens" é exatamente como fica depois de uma exclusão
-      // legítima feita por outra pessoa.
-      const supabaseVazio = tamanhoAproximado(row.value) === 0;
-      const localTemDados = tamanhoAproximado(local) > 0;
-      if(supabaseVazio && localTemDados){
-        setTimeout(()=> pushToSupabase(row.key, local), 0);
-        return;
-      }
-      localStorage.setItem(row.key, row.value);
-    });
-    return true;
-  }catch(e){ console.error('Erro ao sincronizar do Supabase:', e); return false; }
+/* ===================== SINCRONIZAÇÃO POR OPERAÇÕES (anti-perda de dados) =====================
+   Antes: cada gravação enviava a LISTA INTEIRA para a nuvem (último a gravar vence) e o login/recarga
+   sobrescrevia o local com a nuvem. Dois usuários (ou uma aba desatualizada) apagavam o trabalho um do outro.
+   Agora: cada gravação vira operações por registro (id): "alterei/criei o item X", "excluí o item Y".
+   O envio lê a versão atual da nuvem, aplica SÓ as minhas operações em cima dela e grava com
+   compare-and-set (se alguém gravou no meio, refaz). As operações pendentes ficam guardadas no navegador
+   (sobrevivem a fechar a aba/queda de internet) e só saem da fila quando a nuvem confirma. */
+const SYNC_PEND_KEY = 'sgptsync:pend', SYNC_TS_KEY = 'sgptsync:ts';
+let SYNC_PEND = {}, SYNC_TS = {}, SYNC_SEQ = Date.now()*1000, SYNC_APLICANDO = false, SYNC_NOVOS = false;
+const SYNC_BUSY = {}, SYNC_TIMERS = {}, SYNC_TENT = {};
+try{ SYNC_PEND = JSON.parse(Storage.prototype.getItem.call(localStorage, SYNC_PEND_KEY) || '{}') || {}; }catch(e){ SYNC_PEND = {}; }
+try{ SYNC_TS = JSON.parse(Storage.prototype.getItem.call(localStorage, SYNC_TS_KEY) || '{}') || {}; }catch(e){ SYNC_TS = {}; }
+function syncSalvarPend(){ try{ Storage.prototype.setItem.call(localStorage, SYNC_PEND_KEY, JSON.stringify(SYNC_PEND)); }catch(e){} }
+function syncSalvarTs(){ try{ Storage.prototype.setItem.call(localStorage, SYNC_TS_KEY, JSON.stringify(SYNC_TS)); }catch(e){} }
+function syncParse(r){ if(r === null || r === undefined) return null; try{ return JSON.parse(r); }catch(e){ return undefined; } }
+function syncEhLista(a){
+  if(!Array.isArray(a)) return false;
+  const ids = new Set();
+  for(const x of a){
+    if(!x || typeof x !== 'object' || Array.isArray(x) || x.id === undefined || x.id === null) return false;
+    const id = String(x.id); if(ids.has(id)) return false; ids.add(id);
+  }
+  return true;
 }
-
-const SYNC_STATE = { pend:{}, ultimoErro:'', falhas:0, ultimoOk:null };
-async function pushToSupabase(key, value, tent){
-  if(!supabaseClient) return;
-  tent = tent||0; SYNC_STATE.pend[key] = value;
+function syncLerRaw(key){ return (window.__memLS && key in window.__memLS) ? window.__memLS[key] : localStorage.getItem(key); }
+function syncVazio(p){ return !p || (!p.all && !Object.keys(p.up||{}).length && !Object.keys(p.del||{}).length); }
+// Compara o valor antigo e o novo e registra o que mudou
+function syncOps(key, oldRaw, newRaw){
+  if(oldRaw === newRaw) return;
+  let p = SYNC_PEND[key]; if(!p) p = SYNC_PEND[key] = { kind:'', up:{}, del:{} };
+  const seq = ++SYNC_SEQ;
+  if(p.all){ p.all = seq; return; }
+  const n = syncParse(newRaw); let o = syncParse(oldRaw);
+  const tudo = ()=>{ p.all = seq; p.up = {}; p.del = {}; };
+  if(n === undefined || o === undefined || n === null){ return tudo(); }
+  if(o === null) o = Array.isArray(n) ? [] : {};
+  if(Array.isArray(n) && Array.isArray(o)){
+    if(!syncEhLista(n) || !syncEhLista(o) || (p.kind && p.kind !== 'list')) return tudo();
+    p.kind = 'list';
+    const om = new Map(); o.forEach(x=> om.set(String(x.id), JSON.stringify(x)));
+    const ns = new Set();
+    n.forEach(x=>{ const id = String(x.id); ns.add(id); if(om.get(id) !== JSON.stringify(x)){ p.up[id] = seq; delete p.del[id]; } });
+    om.forEach((v,id)=>{ if(!ns.has(id)){ p.del[id] = seq; delete p.up[id]; } });
+  }else if(n && o && typeof n === 'object' && typeof o === 'object' && !Array.isArray(n) && !Array.isArray(o)){
+    if(p.kind && p.kind !== 'obj') return tudo();
+    p.kind = 'obj';
+    Object.keys(n).forEach(k=>{ if(JSON.stringify(n[k]) !== JSON.stringify(o[k])){ p.up[k] = seq; delete p.del[k]; } });
+    Object.keys(o).forEach(k=>{ if(!(k in n)){ p.del[k] = seq; delete p.up[k]; } });
+  }else return tudo();
+}
+// Aplica as operações pendentes (p) sobre o valor da nuvem, usando o valor local como fonte dos itens alterados
+function syncAplicar(remoteRaw, localRaw, p){
+  if(!p || p.all || remoteRaw === null || remoteRaw === undefined) return localRaw;
+  const r = syncParse(remoteRaw), l = syncParse(localRaw);
+  if(r === undefined || l === undefined || l === null) return localRaw;
+  if(r === null) return localRaw;
+  if(p.kind === 'list'){
+    if(!syncEhLista(r) || !Array.isArray(l)) return localRaw;
+    const lm = new Map(); l.forEach(x=>{ if(x && x.id !== undefined) lm.set(String(x.id), x); });
+    const out = [], vistos = new Set();
+    r.forEach(x=>{
+      const id = String(x.id);
+      if(p.del[id] !== undefined) return;
+      vistos.add(id);
+      out.push((p.up[id] !== undefined && lm.has(id)) ? lm.get(id) : x);
+    });
+    Object.keys(p.up).forEach(id=>{ if(!vistos.has(id) && lm.has(id)) out.push(lm.get(id)); });
+    return JSON.stringify(out);
+  }
+  if(p.kind === 'obj'){
+    if(!r || typeof r !== 'object' || Array.isArray(r) || typeof l !== 'object' || Array.isArray(l)) return localRaw;
+    const out = Object.assign({}, r);
+    Object.keys(p.up).forEach(k=>{ if(k in l) out[k] = l[k]; });
+    Object.keys(p.del).forEach(k=>{ delete out[k]; });
+    return JSON.stringify(out);
+  }
+  return localRaw;
+}
+function syncGravarLocal(key, valor){
+  SYNC_APLICANDO = true;
+  try{ localStorage.setItem(key, valor); }catch(e){ console.error('Não foi possível gravar localmente', key, e); }
+  finally{ SYNC_APLICANDO = false; }
+}
+function syncAgendar(key, atraso){
+  if(!supabaseReady || !supabaseClient) return;
+  clearTimeout(SYNC_TIMERS[key]);
+  SYNC_TIMERS[key] = setTimeout(()=> syncPush(key), atraso === undefined ? 400 : atraso);
+}
+async function syncPush(key){
+  if(!supabaseReady || !supabaseClient) return;
+  if(SYNC_BUSY[key]){ SYNC_BUSY[key] = 2; return; }
+  SYNC_BUSY[key] = 1;
   try{
-    // supabase-js NÃO lança exceção em erro (RLS, tamanho, rede): devolve { error } — por isso era ignorado.
-    const { error } = await supabaseClient.from('sgpt_kv').upsert({ key, value, updated_at: new Date().toISOString() });
-    if(error) throw error;
-    if(SYNC_STATE.pend[key] === value) delete SYNC_STATE.pend[key];
+    let concluido = false;
+    for(let t = 0; t < 8 && !concluido; t++){
+      const p = SYNC_PEND[key];
+      if(syncVazio(p)){ delete SYNC_PEND[key]; syncSalvarPend(); concluido = true; break; }
+      const snap = { kind:p.kind, all:p.all, up:Object.assign({}, p.up), del:Object.assign({}, p.del) };
+      const localRaw = syncLerRaw(key);
+      const sel = await supabaseClient.from('sgpt_kv').select('value,updated_at').eq('key', key).maybeSingle();
+      if(sel.error) throw sel.error;
+      const row = sel.data;
+      const merged = row ? syncAplicar(row.value, localRaw, snap) : localRaw;
+      let novoTs = null;
+      if(row){
+        if(merged === row.value){ novoTs = row.updated_at; }
+        else{
+          let q = supabaseClient.from('sgpt_kv').update({ value: merged }).eq('key', key);
+          q = row.updated_at ? q.eq('updated_at', row.updated_at) : q.is('updated_at', null);
+          const up = await q.select('updated_at');
+          if(up.error) throw up.error;
+          if(!up.data || !up.data.length) continue;      // alguém gravou no meio: refaz com a versão nova
+          novoTs = up.data[0].updated_at;
+        }
+      }else{
+        const ins = await supabaseClient.from('sgpt_kv').insert({ key, value: merged, updated_at: new Date().toISOString() }).select('updated_at');
+        if(ins.error){ if(ins.error.code === '23505') continue; throw ins.error; }
+        novoTs = ins.data && ins.data[0] && ins.data[0].updated_at;
+      }
+      // confirmado: tira da fila só o que foi enviado e não mudou desde então
+      const cur = SYNC_PEND[key];
+      if(cur){
+        if(snap.all && cur.all === snap.all) delete cur.all;
+        Object.keys(snap.up).forEach(id=>{ if(cur.up[id] === snap.up[id]) delete cur.up[id]; });
+        Object.keys(snap.del).forEach(id=>{ if(cur.del[id] === snap.del[id]) delete cur.del[id]; });
+        if(syncVazio(cur)) delete SYNC_PEND[key];
+      }
+      syncSalvarPend();
+      SYNC_TS[key] = novoTs; syncSalvarTs();
+      // traz para a tela local o que os outros usuários tinham gravado
+      if(!SYNC_PEND[key] && merged !== localRaw && syncLerRaw(key) === localRaw){
+        syncGravarLocal(key, merged); syncMostrarAviso();
+      }
+      concluido = true;
+    }
+    if(!concluido) throw new Error('conflito repetido ao gravar '+key);
+    SYNC_TENT[key] = 0;
     SYNC_STATE.ultimoOk = new Date().toISOString();
-    marcarSincronizado(Object.keys(SYNC_STATE.pend).length === 0);
+    marcarSincronizado(Object.keys(SYNC_PEND).length === 0);
   }catch(e){
-    SYNC_STATE.ultimoErro = key+': '+((e && (e.message || e.details || e.hint)) || String(e)); SYNC_STATE.falhas++;
+    SYNC_STATE.ultimoErro = key+': '+((e && (e.message || e.details || e.hint)) || String(e))+(e && e.code?' [código '+e.code+']':'')+(e && e.status?' [HTTP '+e.status+']':''); SYNC_STATE.falhas++;
     console.error('Erro ao enviar para o Supabase:', e);
+    try{ // sessão vencida é causa comum de "não sincronizado": renova o login e tenta de novo
+      const msg = String((e && (e.message||'')) + (e && e.code||'')).toLowerCase();
+      if(/jwt|expired|token|401|403|permission|row-level|rls|42501|pgrst30/.test(msg) && supabaseClient.auth && !SYNC_REFRESH){
+        SYNC_REFRESH = true; await supabaseClient.auth.refreshSession(); SYNC_REFRESH = false;
+      }
+    }catch(e3){ SYNC_REFRESH = false; SYNC_STATE.ultimoErro += ' | sessão: '+((e3&&e3.message)||e3); }
     marcarSincronizado(false);
-    if(tent < 5 && SYNC_STATE.pend[key] === value) setTimeout(()=> pushToSupabase(key, value, tent+1), 2000*Math.pow(2, tent));
+    SYNC_TENT[key] = (SYNC_TENT[key]||0) + 1;
+    syncAgendar(key, Math.min(60000, 2000*Math.pow(2, Math.min(SYNC_TENT[key], 5))));
+  }finally{
+    const again = SYNC_BUSY[key] === 2; SYNC_BUSY[key] = 0;
+    if(again && !SYNC_TIMERS[key]) syncAgendar(key, 50);
+    else if(again) syncAgendar(key, 50);
   }
 }
-window.addEventListener('online', ()=>{ Object.keys(SYNC_STATE.pend).forEach(k=> pushToSupabase(k, SYNC_STATE.pend[k], 0)); });
-window.addEventListener('beforeunload', e=>{ if(Object.keys(SYNC_STATE.pend).length){ e.preventDefault(); e.returnValue = ''; } });
+// Com a nuvem ativa, não deixa gravar sem conexão ou com envios falhando repetidamente (evita "salvou" que depois some)
+function syncBloqueado(){
+  if(!navigator.onLine) return true;
+  return false;
+}
+function syncMostrarAviso(){
+  SYNC_NOVOS = true;
+  let b = document.getElementById('syncAviso');
+  if(!b){
+    b = document.createElement('div'); b.id = 'syncAviso';
+    b.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;background:#1f3a5f;color:#fff;padding:10px 16px;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.3);font-size:13px;display:none;gap:12px;align-items:center';
+    b.innerHTML = '<span>Há dados novos de outros usuários.</span><button type="button" style="background:#fff;color:#1f3a5f;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600">Atualizar tela</button>';
+    b.querySelector('button').onclick = ()=>{
+      b.style.display = 'none'; SYNC_NOVOS = false;
+      try{ const a = document.querySelector('.nav-item.active'); showSection(a ? a.dataset.section : 'dashboard'); }catch(e){ location.reload(); }
+    };
+    document.body.appendChild(b);
+  }
+  b.style.display = 'flex';
+}
+function syncAbsorver(row, quieto){
+  const key = row.key;
+  if(key.indexOf(DB_PREFIX) !== 0){ SYNC_TS[key] = row.updated_at; return; }
+  const local = syncLerRaw(key), p = SYNC_PEND[key], temPend = !syncVazio(p);
+  let novo;
+  if(temPend){ novo = syncAplicar(row.value, local, p); syncAgendar(key, 200); }
+  else if(tamanhoAproximado(row.value) === 0 && tamanhoAproximado(local) > 0){
+    SYNC_PEND[key] = { kind:'', all:++SYNC_SEQ, up:{}, del:{} }; syncSalvarPend(); syncAgendar(key, 200); return;
+  }else novo = row.value;
+  if(novo !== null && novo !== undefined && novo !== local){
+    syncGravarLocal(key, novo);
+    if(!quieto) SYNC_NOVOS = true;
+  }
+  SYNC_TS[key] = row.updated_at;
+}
+let SYNC_PULLING = false, SYNC_REFRESH = false;
+async function pullFromSupabase(quieto){
+  if(!supabaseClient) return false;
+  if(SYNC_PULLING) return true;
+  SYNC_PULLING = true;
+  try{
+    const meta = await supabaseClient.from('sgpt_kv').select('key,updated_at');
+    if(meta.error) throw meta.error;
+    const linhas = meta.data || [], nuvem = new Set(linhas.map(m=>m.key));
+    const mudou = linhas.filter(m=> SYNC_TS[m.key] !== m.updated_at).map(m=>m.key);
+    for(let i = 0; i < mudou.length; i += 20){
+      const r = await supabaseClient.from('sgpt_kv').select('key,value,updated_at').in('key', mudou.slice(i, i+20));
+      if(r.error) throw r.error;
+      (r.data || []).forEach(row=> syncAbsorver(row, quieto));
+    }
+    // chaves que só existem aqui (nuvem ainda sem elas): enviar
+    try{ for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf(DB_PREFIX) === 0 && !nuvem.has(k) && tamanhoAproximado(syncLerRaw(k)) > 0 && syncVazio(SYNC_PEND[k])){
+        SYNC_PEND[k] = { kind:'', all:++SYNC_SEQ, up:{}, del:{} };
+      }
+    } }catch(e){}
+    syncSalvarPend(); syncSalvarTs();
+    Object.keys(SYNC_PEND).forEach(k=> syncAgendar(k, 200));
+    if(SYNC_NOVOS && !quieto) syncMostrarAviso();
+    return true;
+  }catch(e){ console.error('Erro ao sincronizar do Supabase:', e); SYNC_STATE.ultimoErro = 'leitura: '+((e&&e.message)||e); return false; }
+  finally{ SYNC_PULLING = false; }
+}
+// atualização automática dos dados dos outros usuários (sem redesenhar a tela sozinho)
+setInterval(()=>{ if(supabaseReady && !document.hidden && document.getElementById('app') && document.getElementById('app').style.display !== 'none') pullFromSupabase(false); }, 60000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && supabaseReady) pullFromSupabase(false); });
+window.addEventListener('focus', ()=>{ if(supabaseReady) pullFromSupabase(false); });
+
+const SYNC_STATE = { get pend(){ return SYNC_PEND; }, ultimoErro:'', falhas:0, ultimoOk:null };
+async function pushToSupabase(key){ // compatibilidade: reenvia o que estiver pendente da chave
+  if(!SYNC_PEND[key]) SYNC_PEND[key] = { kind:'', all:++SYNC_SEQ, up:{}, del:{} };
+  syncSalvarPend(); syncAgendar(key, 0);
+}
+window.addEventListener('online', ()=>{ Object.keys(SYNC_PEND).forEach(k=> syncAgendar(k, 0)); pullFromSupabase(false); });
+window.addEventListener('beforeunload', e=>{ if(Object.keys(SYNC_PEND).length){ e.preventDefault(); e.returnValue = ''; } });
 function diagnosticoSalvamento(){
   let tot = 0; const itens = [];
   try{ for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i), n = (Storage.prototype.getItem.call(localStorage,k)||'').length*2; tot += n; if(k.indexOf(DB_PREFIX)===0) itens.push([k.slice(DB_PREFIX.length), n]); } }catch(e){}
@@ -6988,7 +7167,7 @@ function diagnosticoSalvamento(){
     +'Gravação local: '+teste+'\n'
     +'Uso do armazenamento local: '+(tot/1048576).toFixed(2)+' MB (limite típico ≈ 5 MB)\n'
     +'Maiores itens: '+itens.slice(0,5).map(x=>x[0]+' '+(x[1]/1024).toFixed(0)+' KB').join(' · ')+'\n'
-    +'Pendentes de envio: '+(pend.length? pend.join(', ') : 'nenhum')+'\n'
+    +'Pendentes de envio: '+(pend.length? pend.map(k=>{const p=SYNC_PEND[k]; return k.replace(DB_PREFIX,'')+(p.all?' (tudo)':' ('+(Object.keys(p.up||{}).length+Object.keys(p.del||{}).length)+' itens)');}).join(', ') : 'nenhum')+'\n'
     +'Falhas nesta sessão: '+SYNC_STATE.falhas+(SYNC_STATE.ultimoErro?'\nÚltimo erro: '+SYNC_STATE.ultimoErro:'')+'\n'
     +'Último envio com sucesso: '+(SYNC_STATE.ultimoOk||'—'));
 }
@@ -6998,7 +7177,7 @@ function marcarSincronizado(ok){
   if(!el) return;
   if(!supabaseReady){ el.textContent = '● Modo local (Supabase não configurado)'; el.style.color = 'var(--ink-soft)'; return; }
   const np = Object.keys(SYNC_STATE.pend).length;
-  el.textContent = ok ? '● Sincronizado com o Supabase' : '● Falha ao sincronizar'+(np?' ('+np+' pendente'+(np>1?'s':'')+')':'')+' — tentando de novo; clique para diagnóstico';
+  el.textContent = ok ? '● Sincronizado com o Supabase' : '● Falha ao sincronizar'+(np?' ('+np+' pendente'+(np>1?'s':'')+')':'')+(SYNC_STATE.ultimoErro?' — '+String(SYNC_STATE.ultimoErro).slice(0,90):'')+' — tentando de novo; clique para diagnóstico';
   el.style.color = ok ? '#1e7a4c' : '#b8590d';
   el.style.cursor = 'pointer'; el.title = 'Clique para ver o diagnóstico de salvamento'; el.onclick = diagnosticoSalvamento;
 }
@@ -7024,6 +7203,9 @@ localStorage.getItem = function(key){
 localStorage.setItem = function(key, value){
   let erro = null;
   const doSgpt = (typeof key === 'string' && key.indexOf(DB_PREFIX) === 0);
+  if(doSgpt && supabaseReady && !SYNC_APLICANDO && syncBloqueado()) throw new Error('SYNC_BLOQUEADO');
+  let antes = null;
+  if(doSgpt && supabaseReady && !SYNC_APLICANDO){ try{ antes = syncLerRaw(key); }catch(e){} }
   try{
     let gravar = value;
     if(doSgpt && typeof value === 'string' && value.length > LZ_MIN && window.LZString){
@@ -7033,8 +7215,8 @@ localStorage.setItem = function(key, value){
   }
   catch(e){ erro = e; if(doSgpt) window.__memLS[key] = value; }
   // mesmo que a gravação local falhe, o dado ainda segue para a nuvem
-  if(supabaseReady && doSgpt){
-    pushToSupabase(key, value);
+  if(supabaseReady && doSgpt && !SYNC_APLICANDO){
+    try{ syncOps(key, antes, value); syncSalvarPend(); syncAgendar(key); }catch(e2){ console.error('Falha ao registrar alteração para sincronizar', e2); }
   }
   if(erro) throw erro;
 };
@@ -7090,7 +7272,7 @@ async function fazerLogin(){
   try{
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
     if(error) throw error;
-    await pullFromSupabase();
+    await pullFromSupabase(true);
     vincularUsuarioLogado(data.user.email);
     esconderTelaLogin();
     toggleS1Fields(); toggleOrigemPressaoPerfil(); toggleOrigemPressaoVidro(); renderDashboard();
@@ -18817,29 +18999,40 @@ function renderDashboard(){
       <tbody>${recentObras.map(o=>`<tr><td>${esc(o.nome)}</td><td>${statusPill(o.status)}</td><td>${fmtDate(o.dataInicio)}</td><td style="text-align:right;"><button class="btn small secondary" onclick="openObraWorkspace('${o.id}')">Abrir</button></td></tr>`).join('')}</tbody></table>
     ` : `<div class="empty-state"><div class="big">▤</div>Nenhuma obra cadastrada ainda.</div>`;
 
-    const recentCalcs = [
-      ...cVento.map(c=>({...c, tipo:'Pressão de vento', valor: c.pressaoKn.toFixed(3)+' kN/m²'})),
-      ...cPerfil.map(c=>({...c, tipo:'Cálculo de perfil', valor: (c.ok?'Atende':'Excede')+' — '+c.flechaCalc.toFixed(1)+'mm'})),
-      ...cVidro.map(c=>({...c, tipo:'Cálculo de vidro', valor: (c.vidroEspessura?c.vidroEspessura+' mm':'—')}))
-    ].sort((a,b)=> (b.data||'').localeCompare(a.data||'')).slice(0,6);
+    // Cada painel é isolado: um registro incompleto (ex.: cálculo sem flecha/pressão) não derruba os painéis seguintes.
+    const fx = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(d) : '—';
+    try{
+      const recentCalcs = [
+        ...cVento.map(c=>({...c, tipo:'Pressão de vento', valor: fx(c.pressaoKn,3)+' kN/m²'})),
+        ...cPerfil.map(c=>({...c, tipo:'Cálculo de perfil', valor: (c.ok?'Atende':'Excede')+' — '+fx(c.flechaCalc,1)+'mm'})),
+        ...cVidro.map(c=>({...c, tipo:'Cálculo de vidro', valor: (c.vidroEspessura?c.vidroEspessura+' mm':'—')}))
+      ].sort((a,b)=> String(b.data||'').localeCompare(String(a.data||''))).slice(0,6);
 
-    document.getElementById('dashCalcRecentes').innerHTML = recentCalcs.length ? `
-      <table><thead><tr><th>Tipo</th><th>Identificação</th><th>Resultado</th><th>Data</th></tr></thead>
-      <tbody>${recentCalcs.map(c=>`<tr><td><span class="tag">${c.tipo}</span></td><td>${esc(c.nome)}</td><td><strong>${c.valor}</strong></td><td>${fmtDate(c.data)}</td></tr>`).join('')}</tbody></table>
-    ` : `<div class="empty-state"><div class="big">↝</div>Nenhum cálculo realizado ainda.</div>`;
+      document.getElementById('dashCalcRecentes').innerHTML = recentCalcs.length ? `
+        <table><thead><tr><th>Tipo</th><th>Identificação</th><th>Resultado</th><th>Data</th></tr></thead>
+        <tbody>${recentCalcs.map(c=>`<tr><td><span class="tag">${c.tipo}</span></td><td>${esc(c.nome)}</td><td><strong>${c.valor}</strong></td><td>${fmtDate(c.data)}</td></tr>`).join('')}</tbody></table>
+      ` : `<div class="empty-state"><div class="big">↝</div>Nenhum cálculo realizado ainda.</div>`;
+    }catch(e){ console.error('Últimos cálculos', e); try{ document.getElementById('dashCalcRecentes').innerHTML = '<div class="empty-state">Não foi possível montar este painel (veja o console).</div>'; }catch(_){} }
 
-    renderStatusExecucaoDashboard();
+    try{ renderStatusExecucaoDashboard(); }catch(e){ console.error('Status de execução', e); try{ document.getElementById('dashStatusExecucao').innerHTML = '<div class="empty-state">Não foi possível montar este painel (veja o console).</div>'; }catch(_){} }
     try{ const _e = document.getElementById('dashEvolucaoObras'); if(_e) _e.innerHTML = dashEvolucaoObras(); }catch(e){ console.error('Evolução das obras', e); }
 
-    const todasOrdenadas = tarefas.slice().sort((a,b)=>(a.prazo||'').localeCompare(b.prazo||''));
-    document.getElementById('dashTodasTarefas').innerHTML = todasOrdenadas.length ? `
+    try{
+    // Muitas tarefas (milhares) travavam o painel: mostra primeiro as não concluídas, limitado a 300 linhas.
+    const ordPrazo = (a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||''));
+    const abertas = tarefas.filter(t=>t.status!=='concluida').sort(ordPrazo), fechadas = tarefas.filter(t=>t.status==='concluida').sort(ordPrazo);
+    const todasTotal = tarefas.length, LIM_DASH = 300;
+    const todasOrdenadas = abertas.concat(fechadas).slice(0, LIM_DASH);
+    const setorPorId = Object.fromEntries(setores.map(s=>[s.id,s])), funcPorId = Object.fromEntries(funcionarios.map(f=>[f.id,f]));
+    document.getElementById('dashTodasTarefas').innerHTML = (todasTotal>LIM_DASH ? `<div class="step-note" style="padding:6px 10px;">Mostrando ${LIM_DASH} de ${todasTotal} tarefas (não concluídas primeiro, por prazo). Veja todas em "Tarefas por Setor".</div>` : '') + (todasOrdenadas.length ? `
       <table><thead><tr><th>Tarefa</th><th>Setor</th><th>Responsável</th><th>Prazo</th><th>Prioridade</th><th>Status</th></tr></thead>
       <tbody>${todasOrdenadas.map(t=>{
-        const setorNome = (setores.find(s=>s.id===t.setor)||{}).nome || '—';
-        const respNome = (funcionarios.find(f=>f.id===t.responsavel)||{}).nome || '— Não atribuído —';
+        const setorNome = (setorPorId[t.setor]||{}).nome || '—';
+        const respNome = (funcPorId[t.responsavel]||{}).nome || '— Não atribuído —';
         return `<tr><td><strong>${esc(t.titulo)}</strong></td><td><span class="tag">${esc(setorNome)}</span></td><td>${esc(respNome)}</td><td>${fmtDate(t.prazo)}</td><td>${prioridadePill(t.prioridade)}</td><td>${statusTarefaPill(t.status)}</td></tr>`;
       }).join('')}</tbody></table>
-    ` : `<div class="empty-state"><div class="big">✓</div>Nenhuma tarefa cadastrada ainda.</div>`;
+    ` : `<div class="empty-state"><div class="big">✓</div>Nenhuma tarefa cadastrada ainda.</div>`);
+    }catch(e){ console.error('Todas as tarefas', e); try{ document.getElementById('dashTodasTarefas').innerHTML = '<div class="empty-state">Não foi possível montar este painel (veja o console).</div>'; }catch(_){} }
   } else {
     const minhas = tarefas.filter(t=>t.responsavel===currentUser.id);
     document.getElementById('kpiMinhasTotal').textContent = minhas.length;
@@ -22763,8 +22956,8 @@ const FUNCIONARIOS_PLANILHA_SEED = [
     }
     const el = document.getElementById('syncIndicator');
     if(el){ el.textContent = '● Sincronizando...'; el.style.color = 'var(--ink-soft)'; }
-    const ok = await pullFromSupabase();
-    marcarSincronizado(ok);
+    const ok = await pullFromSupabase(true);
+    marcarSincronizado(ok && Object.keys(SYNC_PEND).length===0);
     esconderTelaLogin();
   }
   toggleS1Fields();
