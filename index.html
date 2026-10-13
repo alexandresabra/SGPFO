@@ -1037,9 +1037,6 @@
             <div class="kpi"><div class="num" id="kpiFuncionarios">0</div><div class="lbl">Funcionários ativos</div></div>
             <div class="kpi"><div class="num" id="kpiTecnicos">0</div><div class="lbl">Técnicos ativos</div></div>
             <div class="kpi"><div class="num" id="kpiSetores">0</div><div class="lbl">Setores</div></div>
-            <div class="kpi"><div class="num" id="kpiCalcVento">0</div><div class="lbl">Cálculos de vento</div></div>
-            <div class="kpi"><div class="num" id="kpiCalcPerfil">0</div><div class="lbl">Cálculos de perfil</div></div>
-            <div class="kpi"><div class="num" id="kpiCalcVidro">0</div><div class="lbl">Cálculos de vidro</div></div>
             <div class="kpi"><div class="num" id="kpiTarefasPend">0</div><div class="lbl">Tarefas pendentes</div></div>
             <div class="kpi"><div class="num" id="kpiPedidosAtraso">0</div><div class="lbl">Pedidos em atraso</div></div>
           </div>
@@ -1050,13 +1047,13 @@
           </div>
 
           <div class="panel">
-            <div class="panel-head">Últimos cálculos técnicos</div>
-            <div class="panel-body" id="dashCalcRecentes"></div>
+            <div class="panel-head">Evolução das obras — Projeto · Produção · Instalação (%, kg e m²)</div>
+            <div class="panel-body" id="dashEvolucaoObras"></div>
           </div>
 
           <div class="panel">
-            <div class="panel-head">Evolução das obras — Projeto · Produção · Instalação (%, kg e m²)</div>
-            <div class="panel-body" id="dashEvolucaoObras"></div>
+            <div class="panel-head">Financeiro das obras — Gasto + Previsto × Tendência</div>
+            <div class="panel-body" id="dashFinanceiroObras"></div>
           </div>
 
           <div class="panel">
@@ -1064,10 +1061,6 @@
             <div class="panel-body" id="dashStatusExecucao"></div>
           </div>
 
-          <div class="panel">
-            <div class="panel-head">Todas as tarefas — todos os setores</div>
-            <div class="panel-body" id="dashTodasTarefas"></div>
-          </div>
         </div>
 
         <div id="dashUserView" style="display:none;">
@@ -1952,8 +1945,15 @@
               <div class="panel-body">
                 <div class="step-note" style="margin-bottom:12px;">Tendência é informada manualmente pelo Planejamento em "Valores por categoria". Saldo x Orçado e Saldo x Tendência mostram quanto ainda dá pra gastar em cada categoria antes de estourar cada um desses limites. Alumínio e Acessórios compõem Material; Mão de obra e Vidro são categorias independentes.</div>
                 <div id="finComparativo"></div>
-                <div class="form-actions" style="border-top:none;padding-top:0;margin-top:14px;">
-                  <button class="btn small secondary" onclick="gerarRelatorioDespesasPorCategoria()">Relatório de Despesas por Categoria</button>
+                <div class="form-grid cols-3" style="margin-top:14px;align-items:end;">
+                  <div class="field"><label>Filtrar por mês</label><input type="month" id="finRelMes" oninput="document.getElementById('finRelDe').value='';document.getElementById('finRelAte').value=''"></div>
+                  <div class="field"><label>ou período: de</label><input type="date" id="finRelDe" oninput="document.getElementById('finRelMes').value=''"></div>
+                  <div class="field"><label>até</label><input type="date" id="finRelAte" oninput="document.getElementById('finRelMes').value=''"></div>
+                </div>
+                <div class="step-note">Vale para os relatórios "Despesas por Categoria". Em branco = todo o período.</div>
+                <div class="form-actions" style="border-top:none;padding-top:0;margin-top:8px;">
+                  <button class="btn small secondary" onclick="gerarRelatorioDespesasPorCategoria('resumo')">Despesas por Categoria — Resumido</button>
+                  <button class="btn small secondary" onclick="gerarRelatorioDespesasPorCategoria('completo')">Despesas por Categoria — Completo</button>
                   <button class="btn small secondary" onclick="gerarRelatorioCustoVidro()">Relatório de Custo de Vidro</button>
                   <button class="btn small secondary" onclick="gerarHistoricoPrecoKgAluminio()">Histórico de R$/Kg — Alumínio</button>
                 </div>
@@ -1969,7 +1969,7 @@
                 <div class="form-grid cols-3">
                   <div class="field">
                     <label>Categoria</label>
-                    <select id="finPrevisaoCategoria">
+                    <select id="finPrevisaoCategoria" onchange="finCategoriaChange(this)">
                       <option value="aluminio">Material — Alumínio</option>
                       <option value="acessorios">Material — Acessórios</option>
                       <option value="maoDeObra">Mão de obra</option>
@@ -2026,7 +2026,7 @@
                   </div>
                   <div class="field">
                     <label>Categoria</label>
-                    <select id="finCategoria" onchange="toggleObraRelacionadaLancamento()">
+                    <select id="finCategoria" onchange="finCategoriaChange(this);toggleObraRelacionadaLancamento()">
                       <option value="aluminio">Material — Alumínio</option>
                       <option value="acessorios">Material — Acessórios</option>
                       <option value="maoDeObra">Mão de obra</option>
@@ -2267,6 +2267,7 @@
             <div style="display:flex;gap:8px;">
               <button class="btn small secondary" onclick="agruparLancamentosMOExistentes()" title="Reagrupa despesas de mão de obra por obra: fabricação / instalação / indireta">Agrupar lançamentos</button>
               <button class="btn small secondary" onclick="recalcularTotaisRateioMO()" title="Corrige rateios gravados com total diferente da soma das colunas (ex.: gravados antes de alimentação/treinamentos entrarem na fórmula)">Recalcular totais do mês</button>
+              <button class="btn small secondary" onclick="auditarAlimentacaoRateio()" title="Lista quem tem alimentação lançada no mês e em qual coluna do relatório ela cai">Auditar alimentação</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioResumo()">Relatório — Resumo</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioCompleto()">Relatório — Completo</button>
               <button class="btn small secondary" onclick="gerarRelatorioAnaliticoFrequencia()">Relatório Analítico — Frequência e Passagens</button>
@@ -3854,6 +3855,8 @@
         <div class="field"><label>Hora prêmio (R$)</label><input type="number" id="rateioHoraPremio" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Vale transporte (R$)</label><input type="number" id="rateioValeTransporte" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Passagem de hora extra — sáb/dom/feriado (R$)</label><input type="number" id="rateioPassagemHoraExtra" step="0.01" oninput="atualizarPreviewRateio()"></div>
+        <div class="field" id="rateioDiasTrabWrap"><label>Dias trabalhados (nº) — café R$ 7,50 + almoço R$ 17,00 por dia</label><input type="number" id="rateioDiasTrab" step="1" min="0" oninput="this.dataset.manual='1';aplicarAlimentacaoPadraoCLT()"></div>
+        <div class="field" id="rateioDiasHEWrap"><label>Dias de hora extra (nº) — lanche R$ 7,50 por dia</label><input type="number" id="rateioDiasHE" step="1" min="0" oninput="aplicarAlimentacaoPadraoCLT()"></div>
         <div class="field"><label>Café da manhã (R$)</label><input type="number" id="rateioCafeManha" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Almoço (R$)</label><input type="number" id="rateioAlmoco" step="0.01" oninput="atualizarPreviewRateio()"></div>
         <div class="field"><label>Lanche (R$)</label><input type="number" id="rateioLanche" step="0.01" oninput="atualizarPreviewRateio()"></div>
@@ -3867,8 +3870,8 @@
       <div class="step-note" style="margin-bottom:10px;">Não entra no cálculo dos encargos — fica registrado para acompanhamento e para o Relatório Analítico de Frequência.</div>
       <div class="form-grid">
         <div class="field"><label>Horas descontadas por atraso</label><input type="number" id="rateioHorasAtraso" step="0.5" placeholder="Ex.: 2"></div>
-        <div class="field"><label>Faltas justificadas (nº)</label><input type="number" id="rateioFaltasJustificadas" step="1" placeholder="Ex.: 1"></div>
-        <div class="field"><label>Faltas não justificadas (nº)</label><input type="number" id="rateioFaltasNaoJustificadas" step="1" placeholder="Ex.: 0"></div>
+        <div class="field"><label>Faltas justificadas (nº)</label><input type="number" id="rateioFaltasJustificadas" step="1" placeholder="Ex.: 1" oninput="recalcularDiasTrabalhadosRateio()"></div>
+        <div class="field"><label>Faltas não justificadas (nº)</label><input type="number" id="rateioFaltasNaoJustificadas" step="1" placeholder="Ex.: 0" oninput="recalcularDiasTrabalhadosRateio()"></div>
         <div class="field full">
           <label>Atestado (faltas justificadas)</label>
           <input type="file" id="rateioAtestadoInput" accept="image/*,application/pdf" onchange="uploadAtestadoRateio(this)">
@@ -9049,45 +9052,52 @@ function gerarRelatorioPrevisaoGastos(){
 // Relatório impresso das despesas reais (lançamentos) desta obra, agrupadas
 // por categoria — mostra o valor e o % que cada categoria representa do
 // total gasto até agora.
-function gerarRelatorioDespesasPorCategoria(){
+function gerarRelatorioDespesasPorCategoria(modo){
+  try{ finRefreshCategorias(); }catch(e){}
+  const completo = modo === 'completo';
   const obra = load('obras').find(o=>o.id===currentObraId) || {};
-  const despesas = load('lancamentosFinanceiros').filter(l=>l.obraId===currentObraId && l.tipo==='despesa');
+  const fMes = (document.getElementById('finRelMes')||{}).value || '', fDe = (document.getElementById('finRelDe')||{}).value || '', fAte = (document.getElementById('finRelAte')||{}).value || '';
+  const de = fMes ? fMes+'-01' : fDe, ate = fMes ? fMes+'-31' : fAte;
+  const periodoTxt = fMes ? mesLabelCurto(fMes) : (de||ate) ? ((de?fmtDate(de):'início')+' a '+(ate?fmtDate(ate):'hoje')) : 'Todo o período';
+  const despesas = load('lancamentosFinanceiros').filter(l=>l.obraId===currentObraId && l.tipo==='despesa' && (!de || (l.data||'') >= de) && (!ate || (l.data||'') <= ate));
+  if(!despesas.length){ toast((de||ate) ? 'Nenhuma despesa lançada nesta obra no período selecionado.' : 'Nenhuma despesa lançada nesta obra ainda.'); return; }
 
-  if(!despesas.length){
-    toast('Nenhuma despesa lançada nesta obra ainda.');
-    return;
+  const grupos = {}; let totalGeral = 0;
+  despesas.forEach(l=>{ (grupos[l.categoria] = grupos[l.categoria] || { total:0, itens:[] }); grupos[l.categoria].total += l.valor; grupos[l.categoria].itens.push(l); totalGeral += l.valor; });
+  const cats = Object.keys(grupos).sort((a,b)=> grupos[b].total - grupos[a].total);
+  const pc = v => (totalGeral>0 ? (v/totalGeral*100) : 0).toFixed(1).replace('.',',')+'%';
+  const lab = c => esc(FIN_CATEGORIA_LABEL[c]||c);
+
+  let corpo;
+  if(!completo){
+    corpo = `<table>
+      <thead><tr><th>Categoria</th><th>Lançamentos</th><th>Valor</th><th>% do total</th></tr></thead>
+      <tbody>${cats.map(c=>`<tr><td>${lab(c)}</td><td>${grupos[c].itens.length}</td><td>${fmtMoeda(grupos[c].total)}</td><td>${pc(grupos[c].total)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>TOTAL</td><td>${despesas.length}</td><td>${fmtMoeda(totalGeral)}</td><td>100,0%</td></tr></tfoot>
+    </table>`;
+  } else {
+    corpo = cats.map(c=>{
+      const g = grupos[c], itens = g.itens.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+      return `<h2>${lab(c)} — ${fmtMoeda(g.total)} (${pc(g.total)} do total)</h2>
+      <table>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Nota fiscal</th><th>Valor</th><th>% da categoria</th><th>% do total</th></tr></thead>
+        <tbody>${itens.map(l=>`<tr><td>${esc(fmtDate(l.data))}</td><td>${esc(l.descricao||'')}</td><td>${esc(l.notaFiscal||'')}</td><td>${fmtMoeda(l.valor)}</td><td>${(g.total>0?l.valor/g.total*100:0).toFixed(1).replace('.',',')}%</td><td>${pc(l.valor)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="3">Subtotal — ${lab(c)}</td><td>${fmtMoeda(g.total)}</td><td>100,0%</td><td>${pc(g.total)}</td></tr></tfoot>
+      </table>`;
+    }).join('') + `<h2>Resumo geral</h2><table>
+      <thead><tr><th>Categoria</th><th>Valor</th><th>% do total</th></tr></thead>
+      <tbody>${cats.map(c=>`<tr><td>${lab(c)}</td><td>${fmtMoeda(grupos[c].total)}</td><td>${pc(grupos[c].total)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>TOTAL</td><td>${fmtMoeda(totalGeral)}</td><td>100,0%</td></tr></tfoot></table>`;
   }
 
-  const porCategoria = {};
-  let totalGeral = 0;
-  despesas.forEach(l=>{
-    porCategoria[l.categoria] = (porCategoria[l.categoria]||0) + l.valor;
-    totalGeral += l.valor;
-  });
-
-  const categoriasOrdenadas = Object.keys(porCategoria).sort((a,b)=> porCategoria[b]-porCategoria[a]);
-  const linhas = categoriasOrdenadas.map(cat=>{
-    const valor = porCategoria[cat];
-    const pct = totalGeral>0 ? (valor/totalGeral*100) : 0;
-    return `<tr>
-      <td>${FIN_CATEGORIA_LABEL[cat]||cat}</td>
-      <td>${fmtMoeda(valor)}</td>
-      <td>${pct.toFixed(1)}%</td>
-    </tr>`;
-  }).join('');
-
   document.getElementById('rdoPrintArea').innerHTML = `
-    <h1>Relatório de Despesas por Categoria</h1>
+    <h1>Relatório de Despesas por Categoria — ${completo?'Completo':'Resumido'}</h1>
     <div class="meta">
       Obra: <strong>${esc(obra.nome||'—')}</strong><br>
-      Total de despesas lançadas: <strong>${fmtMoeda(totalGeral)}</strong><br>
+      Período: <strong>${esc(periodoTxt)}</strong><br>
+      Total de despesas no período: <strong>${fmtMoeda(totalGeral)}</strong><br>
       Gerado em: ${esc(new Date().toLocaleString('pt-BR'))}
-    </div>
-    <table>
-      <thead><tr><th>Categoria</th><th>Valor</th><th>% do total</th></tr></thead>
-      <tbody>${linhas}</tbody>
-      <tfoot><tr><td>TOTAL</td><td>${fmtMoeda(totalGeral)}</td><td>100,0%</td></tr></tfoot>
-    </table>`;
+    </div>${corpo}`;
   window.print();
 }
 
@@ -12555,6 +12565,37 @@ function deleteLancamentoFinanceiro(id){
   renderPrevisoesGastos();
 }
 
+/* ---- categorias financeiras personalizadas (criadas pelo usuário em Lançamentos/Previsões) ---- */
+let FIN_CAT_BASE = null;
+function finRefreshCategorias(){
+  const custom = load('categoriasFinanceiras');
+  custom.forEach(c=>{ FIN_CATEGORIA_LABEL[c.id] = c.nome; });
+  ['finCategoria','finPrevisaoCategoria'].forEach(id=>{
+    const sel = document.getElementById(id); if(!sel) return;
+    if(!FIN_CAT_BASE) FIN_CAT_BASE = {};
+    if(!FIN_CAT_BASE[id]) FIN_CAT_BASE[id] = [...sel.options].filter(o=>o.value!=='__nova__' && !/^cx_/.test(o.value)).map(o=>[o.value,o.textContent]);
+    const atual = sel.value;
+    sel.innerHTML = FIN_CAT_BASE[id].map(([v,t])=>`<option value="${v}">${esc(t)}</option>`).join('')
+      + custom.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')
+      + '<option value="__nova__">＋ Nova categoria…</option>';
+    if(atual && atual!=='__nova__' && [...sel.options].some(o=>o.value===atual)) sel.value = atual;
+    sel.dataset.prev = sel.value;
+  });
+}
+function finCategoriaChange(sel){
+  if(sel.value !== '__nova__'){ sel.dataset.prev = sel.value; return; }
+  const nome = (prompt('Nome da nova categoria:') || '').trim();
+  if(!nome){ sel.value = sel.dataset.prev || 'outros'; return; }
+  const norm = t=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  let id = Object.keys(FIN_CATEGORIA_LABEL).find(k=>norm(FIN_CATEGORIA_LABEL[k])===norm(nome));
+  if(!id){
+    id = 'cx_' + uid();
+    const lista = load('categoriasFinanceiras'); lista.push({ id, nome }); save('categoriasFinanceiras', lista);
+    toast('Categoria "'+nome+'" criada.');
+  }
+  finRefreshCategorias();
+  sel.value = id; sel.dataset.prev = id;
+}
 const FIN_CATEGORIA_LABEL = { material:'Material', aluminio:'Material — Alumínio', acessorios:'Material — Acessórios', maoDeObra:'Mão de obra', vidro:'Vidro', sucata:'Sucata', vendaObra:'Venda/Transferência entre Obras', equipamento:'Equipamentos', administrativo:'Administrativo', custoOperacionalFabrica:'Custo Operacional da Fábrica', outros:'Outros' };
 
 /* ---------------- Vidro (itens de pedido de material do tipo vidro) ---------------- */
@@ -12665,6 +12706,7 @@ function salvarParametrosCustoKg(){
 }
 
 function renderFinanceiro(){
+  try{ finRefreshCategorias(); }catch(e){ console.error('Categorias financeiras', e); }
   const semAcesso = document.getElementById('finSemAcesso');
   const conteudo = document.getElementById('finConteudo');
   if(!temAcessoFinanceiro()){
@@ -12687,7 +12729,7 @@ function renderFinanceiro(){
   let gastoTotal = 0, receitaTotal = 0;
   lancamentos.forEach(l=>{
     if(l.tipo==='despesa'){
-      gastoPorCategoria[l.categoria] = (gastoPorCategoria[l.categoria]||0) + l.valor;
+      { const ck = (l.categoria in gastoPorCategoria) ? l.categoria : 'outros'; gastoPorCategoria[ck] += l.valor; }   // categoria personalizada entra em "Outros" no comparativo
       gastoTotal += l.valor;
     } else {
       receitaTotal += l.valor;
@@ -12709,7 +12751,7 @@ function renderFinanceiro(){
   const previsaoPorCategoria = { material:0, aluminio:0, acessorios:0, maoDeObra:0, vidro:0, equipamento:0, administrativo:0, custoOperacionalFabrica:0, outros:0 };
   let previsaoTotal = 0;
   previsoes.forEach(p=>{
-    previsaoPorCategoria[p.categoria] = (previsaoPorCategoria[p.categoria]||0) + p.valor;
+    { const ck = (p.categoria in previsaoPorCategoria) ? p.categoria : 'outros'; previsaoPorCategoria[ck] += p.valor; }
     previsaoTotal += p.valor;
   });
   previsaoPorCategoria.material += previsaoPorCategoria.aluminio + previsaoPorCategoria.acessorios;
@@ -13101,6 +13143,33 @@ function atualizarPreviewRateio(){
 // Rateio agora aceita duas origens de pessoa: Funcionários CLT (cadastro
 // próprio da Divisão Alumínio) e Responsáveis (Gerente/Engenheiro/Adm/RH-DP
 // — os indiretos). Cada rateio guarda qual das duas listas usar.
+/* Alimentação padrão do CLT (por dia): café da manhã + almoço nos dias trabalhados; lanche nos dias de hora extra. Continua editável. */
+const ALIM_CLT_PADRAO = { cafe:7.5, almoco:17, lanche:7.5 };
+function diasUteisDoMes(mes){
+  if(!mes) return 0; const [a,m] = mes.split('-').map(Number); let n = 0;
+  for(let d = 1, f = new Date(a, m, 0).getDate(); d <= f; d++){ const w = new Date(a, m-1, d).getDay(); if(w!==0 && w!==6) n++; }
+  return n;
+}
+function rateioFuncionarioEhCLT(){
+  const f = load('funcionarios').find(x=>x.id===document.getElementById('rateioFuncionarioId').value);
+  return !!f && f.tipoVinculo !== 'pj';
+}
+function aplicarAlimentacaoPadraoCLT(){
+  if(!rateioFuncionarioEhCLT()) return;
+  const dias = parseFloat(document.getElementById('rateioDiasTrab').value) || 0, he = parseFloat(document.getElementById('rateioDiasHE').value) || 0;
+  const r2 = v=> v>0 ? String(Math.round(v*100)/100) : '';
+  document.getElementById('rateioCafeManha').value = r2(dias*ALIM_CLT_PADRAO.cafe);
+  document.getElementById('rateioAlmoco').value = r2(dias*ALIM_CLT_PADRAO.almoco);
+  document.getElementById('rateioLanche').value = r2(he*ALIM_CLT_PADRAO.lanche);
+  atualizarPreviewRateio();
+}
+function recalcularDiasTrabalhadosRateio(){
+  const el = document.getElementById('rateioDiasTrab');
+  if(!rateioFuncionarioEhCLT() || el.dataset.manual==='1') return;
+  const faltas = (parseInt(document.getElementById('rateioFaltasJustificadas').value)||0) + (parseInt(document.getElementById('rateioFaltasNaoJustificadas').value)||0);
+  el.value = Math.max(0, diasUteisDoMes(document.getElementById('rateioMes').value) - faltas);
+  aplicarAlimentacaoPadraoCLT();
+}
 function openRateioModal(funcionarioId){
   const mes = document.getElementById('rateioMesFiltro').value;
   if(!mes){ toast('Selecione o mês de referência antes de lançar o rateio.'); return; }
@@ -13116,6 +13185,8 @@ function openRateioModal(funcionarioId){
   document.getElementById('rateioId').value = '';
   tempAlocacoesRateio = [];
   tempAtestadoRateio = null;
+  document.getElementById('rateioDiasTrab').value = ''; document.getElementById('rateioDiasTrab').dataset.manual = ''; document.getElementById('rateioDiasHE').value = '';
+  document.getElementById('rateioDiasTrabWrap').style.display = document.getElementById('rateioDiasHEWrap').style.display = ehPJ ? 'none' : '';
 
   const campos = ['rateioSalarioBase','rateioHoraExtra','rateioHoraPremio','rateioValeTransporte','rateioPassagemHoraExtra','rateioCafeManha','rateioAlmoco','rateioLanche','rateioTreinamentosExames','rateioTreinamentosExamesDescricao','rateioHorasAtraso','rateioFaltasJustificadas','rateioFaltasNaoJustificadas'];
 
@@ -13130,6 +13201,8 @@ function openRateioModal(funcionarioId){
     document.getElementById('rateioCafeManha').value = existente.cafeManha || '';
     document.getElementById('rateioAlmoco').value = existente.almoco || '';
     document.getElementById('rateioLanche').value = existente.lanche || '';
+    if(existente.diasTrabalhados != null){ document.getElementById('rateioDiasTrab').value = existente.diasTrabalhados; document.getElementById('rateioDiasTrab').dataset.manual = '1'; }
+    document.getElementById('rateioDiasHE').value = existente.diasHoraExtra || '';
     document.getElementById('rateioTreinamentosExames').value = existente.treinamentosExames || '';
     document.getElementById('rateioTreinamentosExamesDescricao').value = existente.treinamentosExamesDescricao || '';
     document.getElementById('rateioHorasAtraso').value = existente.horasAtraso || '';
@@ -13150,6 +13223,7 @@ function openRateioModal(funcionarioId){
     } else {
       if(funcionario.salarioBaseReferencia) document.getElementById('rateioSalarioBase').value = funcionario.salarioBaseReferencia;
       if(funcionario.valeTransporteReferencia) document.getElementById('rateioValeTransporte').value = funcionario.valeTransporteReferencia;
+      recalcularDiasTrabalhadosRateio();   // CLT: alimentação padrão (dias úteis do mês × café + almoço)
     }
   }
   document.getElementById('rateioAtestadoInput').value = '';
@@ -13205,6 +13279,8 @@ function saveRateio(){
     cafeManha: parseFloat(dados.cafeManha)||0,
     almoco: parseFloat(dados.almoco)||0,
     lanche: parseFloat(dados.lanche)||0,
+    diasTrabalhados: document.getElementById('rateioDiasTrab').value === '' ? null : (parseFloat(document.getElementById('rateioDiasTrab').value)||0),
+    diasHoraExtra: parseFloat(document.getElementById('rateioDiasHE').value)||0,
     treinamentosExames: parseFloat(dados.treinamentosExames)||0,
     treinamentosExamesDescricao: (dados.treinamentosExamesDescricao||'').trim(),
     horasAtraso: parseFloat(document.getElementById('rateioHorasAtraso').value)||0,
@@ -13517,6 +13593,29 @@ function avisoDivergenciaRelatorio(mes){
       m.insertAdjacentHTML('afterbegin','<div style="color:#b00020;font-weight:600;margin-bottom:6px;">⚠ '+dv.length+' rateio(s) com total gravado diferente da soma das colunas (diferença '+fmtMoeda(dif)+'). Use "Recalcular totais do mês" antes de emitir.</div>');
     }
   }catch(e){}
+}
+// Auditoria: quem tem alimentação lançada no mês, o vínculo (PJ/CLT) e em qual coluna do relatório ela entra
+function auditarAlimentacaoRateio(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência.'); return; }
+  const funcs = load('funcionarios'), obras = load('obras');
+  const linhas = [];
+  load('rateiosMaoDeObra').filter(r=>r.mes===mes).forEach(r=>{
+    const al = (parseFloat(r.cafeManha)||0)+(parseFloat(r.almoco)||0)+(parseFloat(r.lanche)||0);
+    if(!(al>0)) return;
+    const f = funcs.find(x=>x.id===r.funcionarioId); if(!f) return;
+    linhas.push({ nome:f.nome, cargo:f.cargo||'', vinculo:(f.tipoVinculo||'clt')==='pj'?'PJ':'CLT', cafe:parseFloat(r.cafeManha)||0, almoco:parseFloat(r.almoco)||0, lanche:parseFloat(r.lanche)||0, total:al,
+      obras:(r.alocacoes||[]).map(a=>{ const o = obras.find(x=>x.id===a.obraId); return o?o.nome:'—'; }).join(', ') });
+  });
+  linhas.sort((a,b)=> (a.vinculo===b.vinculo ? b.total-a.total : a.vinculo==='CLT'?-1:1));
+  const tClt = linhas.filter(l=>l.vinculo==='CLT').reduce((t,l)=>t+l.total,0), tPj = linhas.filter(l=>l.vinculo==='PJ').reduce((t,l)=>t+l.total,0);
+  document.getElementById('rdoPrintArea').innerHTML = `<div class="rdo-landscape-wrap">
+    <h1>Auditoria de Alimentação — ${esc(mesLabelCurto(mes))}</h1>
+    <div class="meta">Alimentação CLT (cai na coluna <strong>Alimentação</strong>): <strong>${fmtMoeda(tClt)}</strong> · Alimentação PJ (cai em <strong>Indireto</strong>): <strong>${fmtMoeda(tPj)}</strong><br>
+    Se aparecer alguém que é PJ marcado como CLT, corrija o tipo de vínculo no cadastro dele (Funcionários) e gere o relatório de novo.</div>
+    <table><thead><tr><th>Funcionário</th><th>Cargo</th><th>Vínculo</th><th>Café</th><th>Almoço</th><th>Lanche</th><th>Total</th><th>Obra(s)</th><th>Entra em</th></tr></thead>
+    <tbody>${linhas.map(l=>`<tr><td>${esc(l.nome)}</td><td>${esc(l.cargo)}</td><td><strong>${l.vinculo}</strong></td><td>${fmtMoeda(l.cafe)}</td><td>${fmtMoeda(l.almoco)}</td><td>${fmtMoeda(l.lanche)}</td><td><strong>${fmtMoeda(l.total)}</strong></td><td>${esc(l.obras)}</td><td>${l.vinculo==='PJ'?'Indireto':'Alimentação'}</td></tr>`).join('') || '<tr><td colspan="9">Nenhuma alimentação lançada neste mês.</td></tr>'}</tbody></table></div>`;
+  window.print();
 }
 function ordenarChavesPorNomeObra(porObra){
   return Object.keys(porObra).sort((a,b)=>{
@@ -18321,6 +18420,39 @@ function dashEsperadoObras(){
   }catch(e){ console.error('Avanço esperado', e); }
   return out;
 }
+/* ---------- Dashboard: financeiro das obras (mesmo princípio da evolução: cinza = dentro; vermelho = acima da tendência) ---------- */
+function dashFinanceiroObras(){
+  const obras = load('obras'), lanc = load('lancamentosFinanceiros'), prevs = load('previsoesGastos').filter(p=>p.status!=='paga');
+  const fmt = v => (+v).toLocaleString('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 });
+  const dados = obras.map(o=>{
+    const fc = o.financeiroCategorias || {};
+    const soma = campo => FIN_CATEGORIAS_ORCAMENTO.reduce((t,c)=> t + ((fc[c.key]||{})[campo]||0) + (c.key==='material' && !fc.material ? ((fc.aluminio||{})[campo]||0)+((fc.acessorios||{})[campo]||0) : 0), 0);
+    const gasto = lanc.filter(l=>l.obraId===o.id && l.tipo==='despesa').reduce((t,l)=>t+l.valor,0);
+    const prev = prevs.filter(p=>p.obraId===o.id).reduce((t,p)=>t+p.valor,0);
+    return { nome:o.nome, gasto, prev, tend:soma('tendencia'), orc:soma('orcado') };
+  }).filter(d=>d.gasto>0 || d.prev>0 || d.tend>0 || d.orc>0);
+  if(!dados.length) return '<div class="step-note">Nenhuma obra com lançamentos, previsões ou tendência informada ainda.</div>';
+  const tot = dados.reduce((a,d)=>({ nome:'TODAS AS OBRAS', gasto:a.gasto+d.gasto, prev:a.prev+d.prev, tend:a.tend+d.tend, orc:a.orc+d.orc }), { gasto:0, prev:0, tend:0, orc:0 });
+  const card = (d, destaque) => {
+    const atual = d.gasto + d.prev, temTend = d.tend > 0, ref = temTend ? d.tend : (d.orc > 0 ? d.orc : 0);
+    const acima = temTend && atual > d.tend;
+    const escala = Math.max(ref, atual) || 1;
+    const wG = Math.min(100, d.gasto/escala*100), wP = Math.min(100 - wG, d.prev/escala*100);
+    const cG = acima ? '#c62828' : '#4a5560', cP = acima ? '#e57373' : '#9aa5b1';
+    const pct = ref > 0 ? atual/ref*100 : null;
+    const rotulo = temTend ? 'Tendência' : (d.orc > 0 ? 'Orçado' : '');
+    return `<div style="border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;margin:8px 0;${destaque?'background:#fafafa;border-color:#bd0c1d':''}">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b>${esc(d.nome)}</b><span class="step-note">${acima?'<b style="color:#c62828">ACIMA DA TENDÊNCIA</b>':(temTend?'dentro da tendência':(ref?'sem tendência — referência: orçado':'sem tendência/orçado informado'))}</span></div>
+      <div style="position:relative;background:#eee;border-radius:5px;height:24px;overflow:hidden;margin-top:6px" title="Gasto ${fmt(d.gasto)} + Previsto ${fmt(d.prev)} = ${fmt(atual)}${rotulo?' · '+rotulo+' '+fmt(ref):''}">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:${wG.toFixed(1)}%;background:${cG}"></div>
+        <div style="position:absolute;left:${wG.toFixed(1)}%;top:0;bottom:0;width:${wP.toFixed(1)}%;background:${cP}"></div>
+        ${ref>0?`<div style="position:absolute;top:0;bottom:0;left:${Math.min(100,ref/escala*100).toFixed(1)}%;width:2px;background:#111;opacity:.55"></div>`:''}
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:11.5px;font-weight:600;color:#111;text-shadow:0 0 3px #fff,0 0 3px #fff">
+          <span>${pct!==null?pct.toFixed(1).replace('.',',')+'%':'—'}</span><span>Gasto ${fmt(d.gasto)} · Previsto ${fmt(d.prev)}${rotulo?' / '+rotulo+' '+fmt(ref):''}</span></div></div></div>`;
+  };
+  return card(tot, true) + dados.map(d=>card(d)).join('') +
+    '<div class="step-note">Barra escura = gasto lançado; clara = previsto (ainda não pago). Traço preto = tendência (ou orçado, se não houver tendência). <b style="color:#c62828">Vermelho</b> = Gasto + Previsto acima da tendência.</div>';
+}
 function dashEvolucaoObras(){
   const itens = load('itensObra').filter(itemAtivo), obras = load('obras');
   const fmt = (v, d) => (+v).toLocaleString('pt-BR', { minimumFractionDigits:d||0, maximumFractionDigits:d||0 });
@@ -19130,7 +19262,7 @@ function renderDashboard(){
   document.getElementById('dashManagerView').style.display = isManager ? 'block' : 'none';
   document.getElementById('dashUserView').style.display = isManager ? 'none' : 'block';
   document.getElementById('currentUserHint').textContent = isManager
-    ? 'Visão 360° — todos os indicadores, obras, cálculos e tarefas de todos os setores.'
+    ? 'Visão 360° — indicadores, evolução e financeiro das obras.'
     : `Mostrando apenas as tarefas atribuídas a ${currentUser.nome}.`;
 
   if(isManager){
@@ -19138,9 +19270,6 @@ function renderDashboard(){
     document.getElementById('kpiFuncionarios').textContent = funcionarios.filter(f=>f.status==='ativo').length;
     document.getElementById('kpiTecnicos').textContent = tecnicos.filter(t=>t.status==='ativo').length;
     document.getElementById('kpiSetores').textContent = setores.length;
-    document.getElementById('kpiCalcVento').textContent = cVento.length;
-    document.getElementById('kpiCalcPerfil').textContent = cPerfil.length;
-    document.getElementById('kpiCalcVidro').textContent = cVidro.length;
     document.getElementById('kpiTarefasPend').textContent = tarefas.filter(t=>t.status==='pendente'||t.status==='atrasada').length;
     document.getElementById('kpiPedidosAtraso').textContent = materiais.filter(m=>calcularStatusPedido(m)==='atrasado').length;
 
@@ -19150,40 +19279,10 @@ function renderDashboard(){
       <tbody>${recentObras.map(o=>`<tr><td>${esc(o.nome)}</td><td>${statusPill(o.status)}</td><td>${fmtDate(o.dataInicio)}</td><td style="text-align:right;"><button class="btn small secondary" onclick="openObraWorkspace('${o.id}')">Abrir</button></td></tr>`).join('')}</tbody></table>
     ` : `<div class="empty-state"><div class="big">▤</div>Nenhuma obra cadastrada ainda.</div>`;
 
-    // Cada painel é isolado: um registro incompleto (ex.: cálculo sem flecha/pressão) não derruba os painéis seguintes.
-    const fx = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(d) : '—';
-    try{
-      const recentCalcs = [
-        ...cVento.map(c=>({...c, tipo:'Pressão de vento', valor: fx(c.pressaoKn,3)+' kN/m²'})),
-        ...cPerfil.map(c=>({...c, tipo:'Cálculo de perfil', valor: (c.ok?'Atende':'Excede')+' — '+fx(c.flechaCalc,1)+'mm'})),
-        ...cVidro.map(c=>({...c, tipo:'Cálculo de vidro', valor: (c.vidroEspessura?c.vidroEspessura+' mm':'—')}))
-      ].sort((a,b)=> String(b.data||'').localeCompare(String(a.data||''))).slice(0,6);
-
-      document.getElementById('dashCalcRecentes').innerHTML = recentCalcs.length ? `
-        <table><thead><tr><th>Tipo</th><th>Identificação</th><th>Resultado</th><th>Data</th></tr></thead>
-        <tbody>${recentCalcs.map(c=>`<tr><td><span class="tag">${c.tipo}</span></td><td>${esc(c.nome)}</td><td><strong>${c.valor}</strong></td><td>${fmtDate(c.data)}</td></tr>`).join('')}</tbody></table>
-      ` : `<div class="empty-state"><div class="big">↝</div>Nenhum cálculo realizado ainda.</div>`;
-    }catch(e){ console.error('Últimos cálculos', e); try{ document.getElementById('dashCalcRecentes').innerHTML = '<div class="empty-state">Não foi possível montar este painel (veja o console).</div>'; }catch(_){} }
-
     try{ renderStatusExecucaoDashboard(); }catch(e){ console.error('Status de execução', e); try{ document.getElementById('dashStatusExecucao').innerHTML = '<div class="empty-state">Não foi possível montar este painel (veja o console).</div>'; }catch(_){} }
     try{ const _e = document.getElementById('dashEvolucaoObras'); if(_e) _e.innerHTML = dashEvolucaoObras(); }catch(e){ console.error('Evolução das obras', e); }
 
-    try{
-    // Muitas tarefas (milhares) travavam o painel: mostra primeiro as não concluídas, limitado a 300 linhas.
-    const ordPrazo = (a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||''));
-    const abertas = tarefas.filter(t=>t.status!=='concluida').sort(ordPrazo), fechadas = tarefas.filter(t=>t.status==='concluida').sort(ordPrazo);
-    const todasTotal = tarefas.length, LIM_DASH = 300;
-    const todasOrdenadas = abertas.concat(fechadas).slice(0, LIM_DASH);
-    const setorPorId = Object.fromEntries(setores.map(s=>[s.id,s])), funcPorId = Object.fromEntries(funcionarios.map(f=>[f.id,f]));
-    document.getElementById('dashTodasTarefas').innerHTML = (todasTotal>LIM_DASH ? `<div class="step-note" style="padding:6px 10px;">Mostrando ${LIM_DASH} de ${todasTotal} tarefas (não concluídas primeiro, por prazo). Veja todas em "Tarefas por Setor".</div>` : '') + (todasOrdenadas.length ? `
-      <table><thead><tr><th>Tarefa</th><th>Setor</th><th>Responsável</th><th>Prazo</th><th>Prioridade</th><th>Status</th></tr></thead>
-      <tbody>${todasOrdenadas.map(t=>{
-        const setorNome = (setorPorId[t.setor]||{}).nome || '—';
-        const respNome = (funcPorId[t.responsavel]||{}).nome || '— Não atribuído —';
-        return `<tr><td><strong>${esc(t.titulo)}</strong></td><td><span class="tag">${esc(setorNome)}</span></td><td>${esc(respNome)}</td><td>${fmtDate(t.prazo)}</td><td>${prioridadePill(t.prioridade)}</td><td>${statusTarefaPill(t.status)}</td></tr>`;
-      }).join('')}</tbody></table>
-    ` : `<div class="empty-state"><div class="big">✓</div>Nenhuma tarefa cadastrada ainda.</div>`);
-    }catch(e){ console.error('Todas as tarefas', e); try{ document.getElementById('dashTodasTarefas').innerHTML = '<div class="empty-state">Não foi possível montar este painel (veja o console).</div>'; }catch(_){} }
+    try{ const _f = document.getElementById('dashFinanceiroObras'); if(_f) _f.innerHTML = dashFinanceiroObras(); }catch(e){ console.error('Financeiro das obras', e); }
   } else {
     const minhas = tarefas.filter(t=>t.responsavel===currentUser.id);
     document.getElementById('kpiMinhasTotal').textContent = minhas.length;
