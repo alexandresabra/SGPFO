@@ -13663,7 +13663,9 @@ function gerarRelatorioRateioCompleto(){
         <td><strong>${fmtMoeda(l.total)}</strong></td>
       </tr>`;
     }).join('');
+    const subInd = g.linhas.reduce((t,l)=>t+(l.totalIndireto||0),0), subFab = g.linhas.reduce((t,l)=>t+(l.fabricaValor||0)+(l.operacionalValor||0),0), subClt = g.totalObra - subInd - subFab;
     return `<h2>${esc(g.obra ? g.obra.nome : 'Obra removida')} — Total: ${fmtMoeda(g.totalObra)}</h2>
+      <div class="step-note" style="margin:-4px 0 6px;">CLT: <strong>${fmtMoeda(subClt)}</strong> · Indireto (PJ, já com alimentação e treinamentos): <strong>${fmtMoeda(subInd)}</strong>${subFab?` · Rateio da Fábrica: <strong>${fmtMoeda(subFab)}</strong>`:''}</div>
       <table>
         <thead><tr>
           <th>Funcionário</th><th>% Alocado</th><th>Sal. Bruto</th><th>GPS (45%)</th><th>FGTS (12%)</th>
