@@ -2266,6 +2266,7 @@
             </div>
             <div style="display:flex;gap:8px;">
               <button class="btn small secondary" onclick="agruparLancamentosMOExistentes()" title="Reagrupa despesas de mão de obra por obra: fabricação / instalação / indireta">Agrupar lançamentos</button>
+              <button class="btn small secondary" onclick="recalcularTotaisRateioMO()" title="Corrige rateios gravados com total diferente da soma das colunas (ex.: gravados antes de alimentação/treinamentos entrarem na fórmula)">Recalcular totais do mês</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioResumo()">Relatório — Resumo</button>
               <button class="btn small secondary" onclick="gerarRelatorioRateioCompleto()">Relatório — Completo</button>
               <button class="btn small secondary" onclick="gerarRelatorioAnaliticoFrequencia()">Relatório Analítico — Frequência e Passagens</button>
@@ -13416,9 +13417,11 @@ function calcularRelatorioRateioPorObra(mes){
         planoSaude: encargos.planoSaude*prop,
         valeTransporte: (encargos.valeTransporte+encargos.passagemHoraExtra)*prop,
         beneficios: encargos.beneficios*prop,
-        alimentacao: encargos.alimentacao*prop,
-        treinamentosExames: encargos.treinamentosExames*prop,
-        treinamentosExamesDescricao: encargos.treinamentosExamesDescricao,
+        alimentacao: ehPJ ? 0 : encargos.alimentacao*prop,   // PJ: alimentação não vai na coluna, fica só no custo total
+        alimentacaoPJ: ehPJ ? encargos.alimentacao*prop : 0,
+        treinamentosExames: ehPJ ? 0 : encargos.treinamentosExames*prop,   // PJ: fica só no custo total
+        treinamentosPJ: ehPJ ? encargos.treinamentosExames*prop : 0,
+        treinamentosExamesDescricao: ehPJ ? '' : encargos.treinamentosExamesDescricao,
         fabricaValor: 0,
         total: valorLinha,
         totalIndireto: ehPJ ? valorLinha : 0
@@ -13472,6 +13475,49 @@ function calcularRelatorioRateioPorObra(mes){
   return porObra;
 }
 
+// Rateios gravados com a fórmula antiga (ex.: antes de alimentação/treinamentos entrarem no total) ficam com
+// "total gravado" diferente da soma das colunas do relatório. Estas funções detectam e corrigem.
+function divergenciasTotaisRateioMO(mes){
+  const funcs = load('funcionarios'), res = [];
+  load('rateiosMaoDeObra').filter(r=>r.mes===mes).forEach(r=>{
+    const f = funcs.find(x=>x.id===r.funcionarioId); if(!f) return;
+    const enc = calcularEncargosMaoDeObra(f, r);
+    const antigo = r.totalComEncargos || 0, soma = (r.alocacoes||[]).reduce((t,a)=>t+(a.valor||0),0);
+    if(Math.abs(enc.totalComEncargos - antigo) > 0.5 || Math.abs(soma - antigo) > 0.5)
+      res.push({ r, f, antigo, novo: enc.totalComEncargos, soma, rateioManual: Math.abs(soma - antigo) > 0.5 });
+  });
+  return res;
+}
+function recalcularTotaisRateioMO(){
+  const mes = document.getElementById('rateioMesFiltro').value;
+  if(!mes){ toast('Selecione o mês de referência.'); return; }
+  const dv = divergenciasTotaisRateioMO(mes);
+  if(!dv.length){ toast('Todos os totais de '+mesLabelCurto(mes)+' já batem com a soma das colunas.'); return; }
+  const corrigiveis = dv.filter(d=>!d.rateioManual), manuais = dv.length - corrigiveis.length;
+  const dif = corrigiveis.reduce((t,d)=>t+(d.novo-d.antigo),0);
+  if(!confirm('Recalcular '+corrigiveis.length+' rateio(s) de '+mesLabelCurto(mes)+'? Diferença total: '+fmtMoeda(dif)+'.'+(manuais?'\n'+manuais+' rateio(s) com distribuição manual (ex.: ADM) serão mantidos como estão.':'')+'\nAs despesas de mão de obra das obras serão reagrupadas.')) return;
+  const todos = load('rateiosMaoDeObra');
+  corrigiveis.forEach(d=>{
+    const r = todos.find(x=>x.id===d.r.id); if(!r) return;
+    const totalPeso = calcularTotalPeso(r.alocacoes||[]);
+    r.totalComEncargos = d.novo;
+    (r.alocacoes||[]).forEach(a=>{ a.valor = totalPeso>0 ? d.novo*((parseFloat(a.peso)||0)/totalPeso) : 0; });
+  });
+  save('rateiosMaoDeObra', todos);
+  sincronizarLancamentosMOAgrupados(mes);
+  renderRateioMaoDeObra();
+  toast(corrigiveis.length+' rateio(s) recalculado(s). Diferença: '+fmtMoeda(dif)+'.');
+}
+function avisoDivergenciaRelatorio(mes){
+  try{
+    const dv = divergenciasTotaisRateioMO(mes).filter(d=>!d.rateioManual);
+    const m = document.querySelector('#rdoPrintArea .meta');
+    if(dv.length && m){
+      const dif = dv.reduce((t,d)=>t+(d.novo-d.antigo),0);
+      m.insertAdjacentHTML('afterbegin','<div style="color:#b00020;font-weight:600;margin-bottom:6px;">⚠ '+dv.length+' rateio(s) com total gravado diferente da soma das colunas (diferença '+fmtMoeda(dif)+'). Use "Recalcular totais do mês" antes de emitir.</div>');
+    }
+  }catch(e){}
+}
 function ordenarChavesPorNomeObra(porObra){
   return Object.keys(porObra).sort((a,b)=>{
     const na = (porObra[a].obra ? porObra[a].obra.nome : '') || '';
@@ -13566,6 +13612,7 @@ function gerarRelatorioRateioResumo(){
       </tr></tfoot>
     </table>
     </div>`;
+  avisoDivergenciaRelatorio(mes);
   window.print();
 }
 
@@ -13599,7 +13646,7 @@ function gerarRelatorioRateioCompleto(){
         : fmtMoeda(l.treinamentosExames);
       return `
       <tr>
-        <td>${esc(l.funcionario)}${l.cargo?' — '+esc(l.cargo):''} <span class="tag">${(l.tipoMaoDeObra||'direta')==='indireta'?'Indireta':'Direta'}</span></td>
+        <td>${esc(l.funcionario)}${l.cargo?' — '+esc(l.cargo):''} <span class="tag">${(l.tipoMaoDeObra||'direta')==='indireta'?'Indireta':'Direta'}</span>${(l.alimentacaoPJ>0||l.treinamentosPJ>0)?`<div class="step-note">Inclui no total: ${[l.alimentacaoPJ>0?'alimentação '+fmtMoeda(l.alimentacaoPJ):'',l.treinamentosPJ>0?'treinamentos/exames '+fmtMoeda(l.treinamentosPJ):''].filter(Boolean).join(' + ')}</div>`:''}</td>
         <td>${(l.proporcao*100).toFixed(1)}%</td>
         <td>${fmtMoeda(l.salarioBruto)}</td>
         <td>${fmtMoeda(l.gps)}</td>
@@ -13641,6 +13688,7 @@ function gerarRelatorioRateioCompleto(){
     </div>
     ${secoes || '<div class="empty">Nenhum rateio lançado neste mês.</div>'}
     </div>`;
+  avisoDivergenciaRelatorio(mes);
   window.print();
 }
 
@@ -13827,7 +13875,7 @@ function renderFabricaRateio(){
   </table>`;
 
   if(rateioExistente){
-    document.getElementById('fabricaRateioResultado').innerHTML = `<div class="step-note">Já existe um rateio da Fábrica lançado para este mês (total distribuído: ${fmtMoeda(rateioExistente.totalRateado)}). Ratear de novo atualiza os valores.</div>`;
+    document.getElementById('fabricaRateioResultado').innerHTML = `<div class="step-note">Já existe um rateio da Fábrica lançado para este mês (total distribuído: ${fmtMoeda(rateioExistente.totalRateado)}${(()=>{const kg=Object.values(rateioExistente.kgPorObra||{}).reduce((t,v)=>t+(parseFloat(v)||0),0);return kg>0?' · '+kg.toLocaleString('pt-BR')+' kg · '+fmtMoeda(rateioExistente.totalRateado/kg)+'/kg':'';})()}). Ratear de novo atualiza os valores.</div>`;
   } else {
     document.getElementById('fabricaRateioResultado').innerHTML = '';
   }
