@@ -18297,10 +18297,33 @@ function miniProgressBar(pct){
 }
 
 /* ---------- Dashboard: evolução de todas as obras (barras horizontais, %, kg e m²) ---------- */
+// Avanço ESPERADO hoje (%), por obra e fase, segundo o cronograma do Planejamento Integrado (ponderado por kg).
+// Produção/Instalação: progresso linear entre início e fim de cada lote. Projeto: deve estar pronto 30 dias antes de iniciar a fabricação do lote.
+function dashEsperadoObras(){
+  const out = {};
+  try{
+    const hoje = Date.parse(new Date().toLocaleDateString('sv'));
+    const frac = (ini, fim)=>{ const a = Date.parse(ini), b = Date.parse(fim); if(isNaN(a)||isNaN(b)) return null; return hoje>=b ? 1 : hoje<=a ? 0 : (hoje-a)/(b-a); };
+    (plcLoad().obras||[]).forEach(ob=>{
+      try{
+        const sg = plcObraSgptDoCron(ob); if(!sg || out[sg.id]) return;
+        const ls = (plcCalc(ob).lotes||[]).filter(l=>l.kg>0); if(!ls.length) return;
+        const med = fn=>{ let s=0, w=0; ls.forEach(l=>{ const f = fn(l); if(f==null) return; s += f*l.kg; w += l.kg; }); return w>0 ? s/w*100 : null; };
+        out[sg.id] = {
+          projeto: med(l=> l.iniFab ? frac(pliAddDias(l.iniFab,-90), pliAddDias(l.iniFab,-30)) : null),
+          producao: med(l=> frac(l.iniFab, l.fimFab)),
+          instalacao: med(l=> frac(l.iniInst, l.fimInst))
+        };
+      }catch(e){}
+    });
+  }catch(e){ console.error('Avanço esperado', e); }
+  return out;
+}
 function dashEvolucaoObras(){
   const itens = load('itensObra').filter(itemAtivo), obras = load('obras');
   const fmt = (v, d) => (+v).toLocaleString('pt-BR', { minimumFractionDigits:d||0, maximumFractionDigits:d||0 });
-  const fases = [['projeto','Projeto','#6a1b9a'], ['producao','Produção','#bd0c1d'], ['instalacao','Instalação','#1565c0']];
+  const fases = [['projeto','Projeto','#4a5560'], ['producao','Produção','#4a5560'], ['instalacao','Instalação','#4a5560']];
+  const ESP = dashEsperadoObras();
   const calc = lista => {
     const r = { kg:0, m2:0, un:0 }; fases.forEach(([k])=>{ r[k] = { kg:0, m2:0 }; });
     lista.forEach(it=>{
@@ -18311,23 +18334,27 @@ function dashEvolucaoObras(){
     });
     return r;
   };
-  const barra = (r, k, nome, cor) => {
+  const barra = (r, k, nome, cor, esp) => {
     const pct = r.kg > 0 ? r[k].kg/r.kg*100 : (r.m2 > 0 ? r[k].m2/r.m2*100 : 0);
+    const atras = esp != null && esp !== undefined && pct < esp - 2;   // vermelho só se estiver abaixo do previsto no cronograma
+    if(atras) cor = '#c62828';
     return `<div style="display:grid;grid-template-columns:86px 1fr;gap:8px;align-items:center;margin:4px 0">
       <div style="font-size:12px;color:#555">${nome}</div>
-      <div style="position:relative;background:#eee;border-radius:5px;height:24px;overflow:hidden">
+      <div style="position:relative;background:#eee;border-radius:5px;height:24px;overflow:hidden" title="${esp!=null?'Previsto até hoje: '+fmt(esp,1)+'%'+(atras?' — ATRASADO':' — no prazo'):'Sem cronograma de planejamento vinculado'}">
         <div style="width:${Math.min(100,pct).toFixed(1)}%;background:${cor};height:100%"></div>
+        ${esp!=null?`<div style="position:absolute;top:0;bottom:0;left:${Math.min(100,esp).toFixed(1)}%;width:2px;background:#111;opacity:.55"></div>`:''}
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:11.5px;font-weight:600;color:#111;text-shadow:0 0 3px #fff,0 0 3px #fff">
           <span>${fmt(pct,1)}%</span><span>${fmt(r[k].kg,0)} / ${fmt(r.kg,0)} kg · ${fmt(r[k].m2,1)} / ${fmt(r.m2,1)} m²</span></div></div></div>`;
   };
-  const card = (nome, r, destaque) => `<div style="border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;margin:8px 0;${destaque?'background:#fafafa;border-color:#bd0c1d':''}">
+  const card = (nome, r, destaque, esp) => `<div style="border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;margin:8px 0;${destaque?'background:#fafafa;border-color:#bd0c1d':''}">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b>${esc(nome)}</b><span class="step-note">${fmt(r.un,0)} un · ${fmt(r.kg/1000,1)} t · ${fmt(r.m2,1)} m²</span></div>
-      ${fases.map(([k,n,c])=>barra(r,k,n,c)).join('')}</div>`;
+      ${fases.map(([k,n,c])=>barra(r,k,n,c,esp?esp[k]:null)).join('')}</div>`;
   const porObra = obras.map(o=>({ o, r:calc(itens.filter(it=>it.obraId===o.id)) })).filter(x=>x.r.un>0);
   if(!porObra.length) return '<div class="step-note">Nenhum item cadastrado nas obras ainda.</div>';
   const tot = calc(itens.filter(it=>obras.some(o=>o.id===it.obraId)));
-  return card('TODAS AS OBRAS', tot, true) + porObra.map(x=>card(x.o.nome, x.r)).join('') +
-    '<div class="step-note">Avanço ponderado pelo peso (kg) de cada item; m² = largura × altura × quantidade. Itens cancelados não entram.</div>';
+  const espTot = {}; fases.forEach(([k])=>{ let sm=0, w=0; porObra.forEach(x=>{ const e = ESP[x.o.id]; if(e && e[k]!=null){ sm += e[k]*x.r.kg; w += x.r.kg; } }); espTot[k] = w>0 ? sm/w : null; });
+  return card('TODAS AS OBRAS', tot, true, espTot) + porObra.map(x=>card(x.o.nome, x.r, false, ESP[x.o.id])).join('') +
+    '<div class="step-note">Avanço ponderado pelo peso (kg) de cada item; m² = largura × altura × quantidade. Itens cancelados não entram. Barras cinza = no prazo; <b style="color:#c62828">vermelha</b> = abaixo do previsto no cronograma do Planejamento Integrado (traço preto = previsto até hoje; tolerância de 2 pontos). Obras sem cronograma vinculado ficam sempre cinza.</div>';
 }
 
 function renderStatusExecucaoDashboard(){
