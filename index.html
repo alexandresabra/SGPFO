@@ -2074,10 +2074,15 @@
           <div class="form-grid" style="margin-bottom:10px;">
             <div class="field"><label>Obra</label><select id="cfObra" onchange="CF_UI.obra=this.value;renderCronogramaFinanceiro()"></select></div>
             <div class="field"><label>Janela</label><select id="cfJanela" onchange="CF_UI.meses=parseInt(this.value,10);renderCronogramaFinanceiro()"><option value="6">Últimos 6 meses + futuro</option><option value="12">Últimos 12 meses + futuro</option><option value="24">Últimos 24 meses + futuro</option><option value="0">Tudo</option></select></div>
-            <div class="field" style="align-self:end;"><button class="btn small secondary" onclick="cfExportarCSV()">Exportar CSV</button> <button class="btn small secondary" onclick="window.print()">Imprimir</button></div>
+            <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn small secondary" style="width:auto;" onclick="cfExportarCSV()">Exportar CSV</button><button class="btn small secondary" style="width:auto;" onclick="cfImprimir()">Imprimir</button></div>
           </div>
           <div class="kpi-row" id="cfKpis"></div>
           <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Curva S financeira</h3><div id="cfGrafico"></div></div>
+          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Curva S de execução da obra (físico)</h3><div id="cfExecucao"></div></div>
+          <div id="cfGrupos" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:10px;margin:10px 0;">
+            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Curva S — Materiais</h3><div id="cfGraficoMat"></div></div>
+            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Curva S — Mão de obra</h3><div id="cfGraficoMdo"></div></div>
+          </div>
           <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Fluxo mensal por grupo de custo</h3><div id="cfTabela"></div></div>
         </div>
       </section>
@@ -2090,7 +2095,7 @@
             <h2 id="pcpMesTit" style="margin:0;min-width:200px;text-align:center;"></h2>
             <button class="btn small secondary" onclick="pcpMudarMes(1)">›</button>
             <input type="month" id="pcpMesInput" onchange="pcpIrMes(this.value)">
-            <button class="btn small secondary" onclick="window.print()">Imprimir</button>
+            <button class="btn small secondary" onclick="pcpImprimir()">Imprimir</button>
           </div>
           <div class="kpi-row" id="pcpKpis"></div>
           <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Panorama da fábrica (t/mês)</h3><div id="pcpPanorama"></div></div>
@@ -9190,7 +9195,7 @@ function exportarDashboardCSV(){
    ===================================================================== */
 const PLI_KEY = 'planejIntegrado';
 const PLC_KEY = 'planejCronFin';
-const PLI_UI = { tab:'resumo', cronObra:0, filtroCompras:'', filtroObraCompras:'' };
+const PLI_UI = { tab:'premissas', cronObra:0, filtroCompras:'', filtroObraCompras:'' };
 
 function pliNomeObra(n){ const x = String(n==null?'':n).trim().toUpperCase(); const m = x.match(/^ADS\s*\((.+)\)$/); return m ? m[1].trim() : x; }
 function pliMigrarNomes(P){
@@ -9941,7 +9946,8 @@ function plcMoverObra(i, d){
 }
 
 /* ---------- editor de obra (criar manualmente / editar fases, marcos e ordem das compras) ---------- */
-function plcEdAbrir(idx){
+function plcEdAbrir(idx){ plcEdPreparar(idx); PLI_UI.tab = 'cronfin'; renderPlanejInt(); }
+function plcEdPreparar(idx){
   const c = plcLoad(), P = pliLoad();
   if(idx < 0){
     PLI_UI.editor = { idx:-1, manual:true, nome:'', preco:43.5, efetivo:30, inicio:(P?P.dataBase:todayISO()), marcos:{ inv:'', hab:'', obra:'' },
@@ -9953,7 +9959,6 @@ function plcEdAbrir(idx){
       fases:ob.fases.map(f=>({ cod:f.cod, desc:f.desc, kg:f.kg, kgCad:f.kgCad, fatorInst:Math.round(plcFatorInst(ob,f)*100), nec:Object.assign({}, f.nec || { obra:true }), orig:f.cod })),
       pers:(ob.fluxoPers||[]).map(x=>Object.assign({}, x)) };
   }
-  PLI_UI.tab = 'cronfin'; renderPlanejInt();
 }
 function plcEdPers(i, campo, v){ const e = PLI_UI.editor; if(!e||!e.pers||!e.pers[i]) return; e.pers[i][campo] = v; }
 function plcEdPersAdd(){ const e = PLI_UI.editor; if(!e) return; e.pers = e.pers||[]; e.pers.push({ grupo:'P'+String(e.pers.length+1).padStart(2,'0'), expr:'', venc:'', off:e.pers.length }); renderPlanejInt(); }
@@ -9987,8 +9992,9 @@ function plcEdSalvar(){
   const nec = f => { const n = Object.assign({}, f.nec); if(!n.inv && !n.hab && !n.obra) n.obra = true; return n; };
   if(e.idx < 0){
     if(c.obras.some(o=>o.nome.toLowerCase()===nome.toLowerCase())){ toast('Já existe uma obra com esse nome.'); return; }
-    const p = { entregaDias:15, iniFabDias:20, capFab:30, iniInstDias:20, diasMes:30.4, prodInst:0.433, custoPessoa:9333.33, preco:e.preco||43.5,
-      folhaFab:740000, prodRef:30, efetivo:e.efetivo||30, alvo: marcos.obra ? pliAddMeses(marcos.obra, -folga) : '', compPct:0.3, comp1:28, comp2:56 };
+    const p = Object.assign({ entregaDias:15, iniFabDias:20, capFab:30, iniInstDias:20, diasMes:30.4, prodInst:0.433, custoPessoa:9333.33, preco:e.preco||43.5,
+      folhaFab:740000, prodRef:30, efetivo:e.efetivo||30, alvo: marcos.obra ? pliAddMeses(marcos.obra, -folga) : '', compPct:0.3, comp1:28, comp2:56 }, e.refPrem||{},
+      { preco:e.preco||43.5, efetivo:e.efetivo||30, alvo: marcos.obra ? pliAddMeses(marcos.obra, -folga) : '' });
     const fases = e.fases.map(f=>({ cod:String(f.cod).trim(), desc:f.desc||'', kg:f.kg, grupo:'A', iniLB:null, fimLB:null, ref:'', nec:nec(f) }));
     const total = fases.reduce((t,f)=>t+f.kg*p.preco,0);
     c.obras.push({ id:uid(), nome, arquivo:'Criada manualmente', importadoEm:new Date().toISOString(), prem:p, fases,
@@ -10053,7 +10059,7 @@ function pliHtmlEditor(){
     <td class="n"><input type="number" min="0" max="200" step="5" value="${f.fatorInst!=null?f.fatorInst:100}" style="width:64px;" onchange="plcEdFase(${r},'fatorInst',this.value)"></td>
     ${PLC_MARCOS.map(([k])=>`<td style="text-align:center"><input type="checkbox" ${f.nec[k]?'checked':''} onchange="plcEdNec(${r},'${k}',this.checked)"></td>`).join('')}
     <td>${bloqueado?'':`<button class="btn small secondary" onclick="plcEdDel(${r})">✕</button>`}</td></tr>`).join('');
-  return `<div class="pli-card" style="border:2px solid #bd0c1d;"><h3>${e.idx<0?'Nova obra (criação manual)':'Editar fases e marcos — '+esc(e.nome)}</h3>
+  return `<div class="pli-card" style="border:2px solid #bd0c1d;"><h3>${e.idx<0?(e.refDe?'Faseamento de '+esc(e.nome)+' — copiado da obra de referência '+esc(e.refDe):'Nova obra (criação manual)'):'Faseamento, marcos e valor do kg — '+esc(e.nome)}</h3>
     <div class="pli-note" style="margin-top:0;">A ordem das fases é a <b>ordem das compras</b> (▲▼ para mudar). Marque, em cada fase, para quais marcos ela é necessária. A instalação dessas fases precisa terminar <b>${folga} mês(es) antes</b> de cada marco.${bloqueado?' <br>Obra importada: você pode editar o <b>peso</b> e a descrição — o sistema passa a usar o peso informado e guarda o peso da planilha (coluna "Cadastrado"). Reimportar a planilha mantém os pesos editados.':''}</div>
     <div class="pli-filtros">
       <label>Nome <input type="text" value="${esc(e.nome)}" ${bloqueado?'disabled':''} style="width:180px;" onchange="plcEdCampo('nome',this.value)"></label>
@@ -10973,7 +10979,7 @@ function pliAtualizarMenu(){
 
 /* ---------- interface ---------- */
 const PLI_TABS = [
-  ['resumo','Resumo'], ['premissas','Premissas'], ['fabrica','Ocupação da fábrica'], ['instalacao','Instalação e efetivo'],
+  ['premissas','Premissas'], ['resumo','Resumo'], ['fabrica','Ocupação da fábrica'], ['instalacao','Instalação e efetivo'],
   ['custo','Custo × Orçado'], ['compras','Compras'], ['gantt','Gantt por obra'], ['cruz','Cruzamento'], ['cronfin','Cronograma financeiro']
 ];
 
@@ -10997,6 +11003,7 @@ function renderPlanejInt(){
     document.getElementById('pliCenario').value = P.cenario;
     document.getElementById('pliProdModo').value = P.prodModo;
   }
+  if(PLI_UI.tab==='premissas'){ try{ area.innerHTML = pliHtmlPremissasTudo(P); }catch(err){ console.error(err); area.innerHTML = `<div class="pli-card"><h3>Erro ao montar as premissas</h3><div class="pli-note">${esc(err.message||String(err))}</div></div>`; } return; }
   if(PLI_UI.tab==='cronfin'){ area.innerHTML = pliHtmlCronFin(); return; }
   if(PLI_UI.tab==='cruz'){ try { area.innerHTML = pliHtmlCruzamento(); } catch(err){ console.error(err); area.innerHTML = `<div class="pli-card"><h3>Erro no cruzamento</h3><div class="pli-note">${esc(err.message||String(err))}</div></div>`; } return; }
   if(!P){
@@ -11009,7 +11016,7 @@ function renderPlanejInt(){
   const fn = { resumo:pliHtmlResumo, premissas:pliHtmlPremissas, fabrica:pliHtmlFabrica, instalacao:pliHtmlInstalacao, custo:pliHtmlCusto, compras:pliHtmlCompras, gantt:pliHtmlGantt }[PLI_UI.tab] || pliHtmlResumo;
   try { area.innerHTML = fn(P, R); } catch(err){ console.error(err); area.innerHTML = `<div class="pli-card"><h3>Erro ao montar a aba</h3><div class="pli-note">${esc(err.message||String(err))}<br><small>${esc(String(err.stack||'').split('\n').slice(1,4).join(' | '))}</small></div></div>`; }
 }
-function pliSetTab(t){ PLI_UI.tab = t; renderPlanejInt(); }
+function pliSetTab(t){ if(t!=='premissas' && PLI_UI.editor && PLI_UI.editor.auto) PLI_UI.editor = null; PLI_UI.tab = t; renderPlanejInt(); }
 
 function pliGarantirXLSX(){
   if(typeof XLSX !== 'undefined') return Promise.resolve(true);
@@ -11389,29 +11396,72 @@ function pliExportarComprasCSV(){
 }
 
 /* ---- Cronograma financeiro por obra ---- */
-function pliHtmlCronFin(){
-  const c = plcLoad();
-  const barra = `<div class="pli-filtros"><label class="btn small" style="cursor:pointer;">Importar cronogramas / planejamento (.xlsx, vários de uma vez)<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label><button class="btn small secondary" onclick="plcEdAbrir(-1)">+ Criar obra manualmente</button>${c.obras.length?`<button class="btn small secondary" onclick="pliExportarRelFin(false)">Relatório financeiro da obra (PDF)</button><button class="btn small secondary" onclick="pliExportarRelFin(true)">Relatório de todas as obras (PDF)</button><button class="btn small secondary" onclick="plcEdAbrir(PLI_UI.cronObra)">Editar fases e marcos</button><label>Obra <select onchange="PLI_UI.cronObra=parseInt(this.value,10);renderPlanejInt()">${c.obras.map((o,i)=>`<option value="${i}" ${i===PLI_UI.cronObra?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>`:''}</div>`;
-  const obSel = c.obras[PLI_UI.cronObra]; const notaPl = (obSel && obSel.modoPlanilha) ? '<div class="pli-note">Esta obra usa o modelo de parcelas em sequência: as datas de fábrica e instalação vêm da aba LOTES da planilha importada (reimporte para atualizar).</div>' : '';
-  if(!c.obras.length) return barra+pliHtmlEditor()+`<div class="empty-state"><div class="big">▤</div>Nenhum cronograma financeiro importado.<br><div class="step-note" style="margin-top:6px;">Importe uma planilha no modelo "Cronograma Arte Jardim" (abas PREMISSAS, LOTES e CURVA MENSAL). Cada obra fica salva separadamente.</div></div>`;
-  if(PLI_UI.cronObra >= c.obras.length) PLI_UI.cronObra = 0;
-  const k = PLI_UI.cronObra, ob = c.obras[k], p = ob.prem, R = plcCalc(ob);
+/* ---------- aba Premissas: tudo num lugar (globais + por obra + sem faseamento) ---------- */
+function pliHtmlPremissasTudo(P){
+  let glob = '';
+  if(P){ const R = pliCalc(P); glob = pliHtmlPremissas(P, R); }
+  else glob = '<div class="pli-card"><div class="pli-note" style="margin:0;">Premissas gerais (capacidade da fábrica, prazos de compra, tonelagem, folha indireta) aparecem depois de importar a planilha <b>Planejamento Integrado de Alumínio</b> (botão no topo). As premissas por obra abaixo funcionam sem ela.</div></div>';
+  return pliHtmlPremObras(P) + glob;
+}
+function pliPremObra(i){ PLI_UI.cronObra = i; if(PLI_UI.editor && PLI_UI.editor.idx>=0) PLI_UI.editor = null; renderPlanejInt(); }
+function pliHtmlPremObras(P){
+  const c = plcLoad(), sem = pliHtmlSemFase(P, c);
+  if(!c.obras.length) return (PLI_UI.editor && PLI_UI.editor.idx<0 ? pliHtmlEditor() : '') + `<div class="pli-card"><h3>Premissas por obra</h3><div class="pli-note" style="margin:0;">Nenhuma obra com faseamento ainda. Importe um cronograma financeiro (aba Cronograma financeiro) ou crie o faseamento abaixo.</div></div>` + sem;
+  if(PLI_UI.cronObra >= c.obras.length || PLI_UI.cronObra < 0) PLI_UI.cronObra = 0;
+  const k = PLI_UI.cronObra;
+  if(!PLI_UI.editor || (PLI_UI.editor.idx>=0 && PLI_UI.editor.idx!==k)){ plcEdPreparar(k); if(PLI_UI.editor) PLI_UI.editor.auto = true; }
+  const ed = PLI_UI.editor && PLI_UI.editor.idx<0;
+  const sel = `<div class="pli-card"><h3>Premissas por obra</h3><div class="pli-note" style="margin:0 0 8px;">Faseamento (ordem das compras, peso e marcos de cada fase), valor do kg, mão de obra, entrega ao investidor, habite-se, deadline e teto de material (à gastar). Escolha a obra:</div>
+    <div class="pli-filtros">${c.obras.map((o,i)=>`<button class="btn small ${(!ed&&i===k)?'':'secondary'}" onclick="pliPremObra(${i})">${esc(o.nome)}</button>`).join('')}</div></div>`;
+  return sel + (ed ? pliHtmlEditor() : pliHtmlEditor() + pliHtmlPremObraCard(k)) + pliHtmlGasto() + sem;
+}
+function pliSemFaseLista(P, c){
+  const out = [], vistos = new Set();
+  if(P) P.obras.forEach(o=>{ if(!pliCronDaObra(o.nome, c.obras)){ out.push({ nome:o.nome, ton:o.ton||0 }); vistos.add(pliNorm(o.nome)); } });
+  load('obras').forEach(o=>{
+    if(vistos.has(pliNorm(o.nome))) return;
+    if(c.obras.some(x=>{ const sg = plcObraSgptDoCron(x); return sg && sg.id===o.id; })) return;
+    if(pliCronDaObra(o.nome, c.obras)) return;
+    out.push({ nome:o.nome, ton:0 });
+  });
+  return out;
+}
+function pliHtmlSemFase(P, c){
+  const lista = pliSemFaseLista(P, c); PLI_UI.semLista = lista; PLI_UI.refSel = PLI_UI.refSel || {};
+  if(!lista.length) return '';
+  const refs = c.obras.map((o,i)=>({ o, i }));
+  const linhas = lista.map((x,n)=>`<tr><td><b>${esc(x.nome)}</b></td><td class="n">${x.ton>0?pliFmtT(x.ton,1)+' t':'—'}</td>
+    <td>${refs.length ? `<select onchange="PLI_UI.refSel[${n}]=+this.value">${refs.map(r=>`<option value="${r.i}" ${(+PLI_UI.refSel[n]||0)===r.i?'selected':''}>${esc(r.o.nome)} (${pliFmtT(r.o.fases.reduce((a,f)=>a+f.kg,0)/1000,0)} t · ${r.o.fases.length} fases)</option>`).join('')}</select>` : '<span class="pli-note">importe um cronograma para usar como referência</span>'}</td>
+    <td>${refs.length?`<button class="btn small" onclick="plcFaseDeRef(${n})">Criar faseamento pela referência</button>`:''} <button class="btn small secondary" onclick="plcFaseManual(${n})">Criar do zero</button></td></tr>`).join('');
+  return `<div class="pli-card"><h3>Obras sem faseamento</h3><div class="pli-note" style="margin:0 0 8px;">Estas obras ainda não têm fases (cronograma). Escolha uma obra de <b>referência</b>: o sistema copia as fases, a ordem das compras, os marcos exigidos e as premissas dela, e ajusta o peso de cada fase proporcionalmente à tonelagem da obra. Você revisa e edita tudo antes de salvar.</div>
+    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Obra</th><th class="n">Tonelagem</th><th>Obra de referência</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
+}
+function plcFaseDeRef(n){
+  const x = (PLI_UI.semLista||[])[n]; if(!x) return;
+  const c = plcLoad(), ref = c.obras[+((PLI_UI.refSel||{})[n])||0]; if(!ref){ toast('Escolha a obra de referência.'); return; }
+  const totRef = ref.fases.reduce((a,f)=>a+f.kg,0) || 1, alvoKg = x.ton>0 ? x.ton*1000 : totRef, k = alvoKg/totRef, P = pliLoad();
+  const refPrem = Object.assign({}, ref.prem); delete refPrem.alvo;
+  PLI_UI.editor = { idx:-1, manual:true, nome:x.nome, preco:ref.prem.preco, efetivo:ref.prem.efetivo, inicio:(P?P.dataBase:todayISO()), marcos:{ inv:'', hab:'', obra:'' },
+    fases: ref.fases.map(f=>({ cod:f.cod, desc:f.desc, kg:Math.round(f.kg*k), nec:Object.assign({}, f.nec||{ obra:true }), fatorInst:Math.round(plcFatorInst(ref,f)*100) })),
+    refDe:ref.nome, refPrem };
+  PLI_UI.tab = 'premissas'; renderPlanejInt();
+  toast(x.ton>0 ? `Fases copiadas de ${ref.nome} e ajustadas para ${pliFmtT(x.ton,1)} t. Revise os pesos, informe os marcos e salve.` : `Fases copiadas de ${ref.nome} (sem tonelagem cadastrada: pesos iguais aos da referência — ajuste). Revise e salve.`);
+}
+function plcFaseManual(n){
+  const x = (PLI_UI.semLista||[])[n]; if(!x) return;
+  plcEdPreparar(-1); PLI_UI.editor.nome = x.nome; if(x.ton>0) PLI_UI.editor.fases[0].kg = Math.round(x.ton*1000);
+  PLI_UI.tab = 'premissas'; renderPlanejInt();
+}
+function pliHtmlPremObraCard(k){
+  const c = plcLoad(), ob = c.obras[k]; if(!ob) return '';
+  const p = ob.prem;
   const Pl = pliLoadX();
   const infoPrev0 = plcInfoPrevisoes(ob); const obSG = Object.assign({}, ob); delete obSG.obraSgptId;
   const infoPrev = Object.assign({}, infoPrev0, { autoNome:(plcObraSgptDoCron(obSG)||{}).nome });
   const obSemVinc = Object.assign({}, ob); delete obSemVinc.vinculo;
   const auto = Pl ? (Pl.obras.find(o=>pliCronDaObra(o.nome,[obSemVinc]))||{}).nome : '';
-  const sFab = R.custoFab.reduce((s,v)=>s+v,0), sInst = R.custoInst.reduce((s,v)=>s+v,0);
   const ed = (campo, v, w)=>`<input type="number" step="any" value="${v}" style="width:${w||80}px;" onchange="plcEditar(${k},'${campo}',this.value)">`;
-  const kpi = `<div class="pli-kpis">
-    ${pliKpi('Alumínio', pliFmtT(R.totKg/1000,1)+' t', pliFmtT(R.totKg,0)+' kg')}
-    ${pliKpi('Total a pagar (alumínio)', pliFmtR(R.totalPago), 'Componentes '+pliFmtR(R.totalComp))}
-    ${pliKpi('Fábrica', pliFmtData(R.iniFab)+' → '+pliFmtData(R.fimFab), p.capFab+' t/mês')}
-    ${pliKpi('Instalação', pliFmtData(R.minInst)+' → '+pliFmtData(R.maxInst), p.efetivo+' pessoas · '+pliFmtT(R.capInst,1)+' t/mês · pico exigido '+Math.ceil(R.picoPessoas)+' pessoas')}
-    ${pliKpi('Término da instalação × alvo', pliFmtData(R.maxInst), p.alvo?('Alvo '+pliFmtData(p.alvo)+(R.atendeAlvo?' ✔ atende':' ✘ não atende')):'', R.atendeAlvo===false?'var(--danger)':'var(--ok)')}
-    ${pliKpi('Mão de obra (fab + inst)', pliFmtR(sFab+sInst), 'Fab '+pliFmtR(sFab)+' · Inst '+pliFmtR(sInst))}
-   </div>`;
-  const prem = `<div class="pli-card"><h3>Premissas — ${esc(ob.nome)} <span class="pli-note" style="font-weight:400">(importado de ${esc(ob.arquivo||'')})</span></h3>
+  let prem = `<div class="pli-card"><h3>Premissas — ${esc(ob.nome)} <span class="pli-note" style="font-weight:400">(importado de ${esc(ob.arquivo||'')})</span></h3>
     <div class="pli-prem">
      <label>Nome da obra <input type="text" value="${esc(ob.nome)}" style="width:150px;" onchange="plcRenomear(${k},this.value)"></label>
      ${Pl?`<label>Alimenta a obra do plano <select onchange="plcVincular(${k},this.value)"><option value="" ${ob.vinculo===undefined?'selected':''}>Automático${auto?' ('+esc(auto)+')':' (nenhuma encontrada)'}</option>${Pl.obras.map(o=>`<option value="${esc(o.nome)}" ${ob.vinculo===o.nome?'selected':''}>${esc(o.nome)}</option>`).join('')}<option value="-" ${ob.vinculo==='-'?'selected':''}>Nenhuma (só consulta)</option></select></label>`:''}
@@ -11438,6 +11488,32 @@ function pliHtmlCronFin(){
      <button class="btn small secondary" onclick="plcSincronizarAgora(${k})">Sincronizar agora</button>
     </div>
     <div style="margin-top:8px;"><button class="btn small secondary" onclick="plcExcluir(${k})">Excluir este cronograma</button></div></div>`;
+  if(ob.manual){ prem = prem.split('\n').filter(l=>!/Efetivo de instalação \(pessoas\)|Preço do alumínio/.test(l)).join('\n'); }
+  return prem;
+}
+function pliHtmlCronFin(){
+  const c = plcLoad();
+  const barra = `<div class="pli-filtros"><label class="btn small" style="cursor:pointer;">Importar cronogramas / planejamento (.xlsx, vários de uma vez)<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label><button class="btn small secondary" onclick="plcEdAbrir(-1)">+ Criar obra manualmente</button>${c.obras.length?`<button class="btn small secondary" onclick="pliExportarRelFin(false)">Relatório financeiro da obra (PDF)</button><button class="btn small secondary" onclick="pliExportarRelFin(true)">Relatório de todas as obras (PDF)</button><button class="btn small secondary" onclick="plcEdAbrir(PLI_UI.cronObra)">Editar fases e marcos</button><label>Obra <select onchange="PLI_UI.cronObra=parseInt(this.value,10);renderPlanejInt()">${c.obras.map((o,i)=>`<option value="${i}" ${i===PLI_UI.cronObra?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label>`:''}</div>`;
+  const obSel = c.obras[PLI_UI.cronObra]; const notaPl = (obSel && obSel.modoPlanilha) ? '<div class="pli-note">Esta obra usa o modelo de parcelas em sequência: as datas de fábrica e instalação vêm da aba LOTES da planilha importada (reimporte para atualizar).</div>' : '';
+  if(!c.obras.length) return barra+pliHtmlEditor()+`<div class="empty-state"><div class="big">▤</div>Nenhum cronograma financeiro importado.<br><div class="step-note" style="margin-top:6px;">Importe uma planilha no modelo "Cronograma Arte Jardim" (abas PREMISSAS, LOTES e CURVA MENSAL). Cada obra fica salva separadamente.</div></div>`;
+  if(PLI_UI.cronObra >= c.obras.length) PLI_UI.cronObra = 0;
+  const k = PLI_UI.cronObra, ob = c.obras[k], p = ob.prem, R = plcCalc(ob);
+  const Pl = pliLoadX();
+  const infoPrev0 = plcInfoPrevisoes(ob); const obSG = Object.assign({}, ob); delete obSG.obraSgptId;
+  const infoPrev = Object.assign({}, infoPrev0, { autoNome:(plcObraSgptDoCron(obSG)||{}).nome });
+  const obSemVinc = Object.assign({}, ob); delete obSemVinc.vinculo;
+  const auto = Pl ? (Pl.obras.find(o=>pliCronDaObra(o.nome,[obSemVinc]))||{}).nome : '';
+  const sFab = R.custoFab.reduce((s,v)=>s+v,0), sInst = R.custoInst.reduce((s,v)=>s+v,0);
+  const ed = (campo, v, w)=>`<input type="number" step="any" value="${v}" style="width:${w||80}px;" onchange="plcEditar(${k},'${campo}',this.value)">`;
+  const kpi = `<div class="pli-kpis">
+    ${pliKpi('Alumínio', pliFmtT(R.totKg/1000,1)+' t', pliFmtT(R.totKg,0)+' kg')}
+    ${pliKpi('Total a pagar (alumínio)', pliFmtR(R.totalPago), 'Componentes '+pliFmtR(R.totalComp))}
+    ${pliKpi('Fábrica', pliFmtData(R.iniFab)+' → '+pliFmtData(R.fimFab), p.capFab+' t/mês')}
+    ${pliKpi('Instalação', pliFmtData(R.minInst)+' → '+pliFmtData(R.maxInst), p.efetivo+' pessoas · '+pliFmtT(R.capInst,1)+' t/mês · pico exigido '+Math.ceil(R.picoPessoas)+' pessoas')}
+    ${pliKpi('Término da instalação × alvo', pliFmtData(R.maxInst), p.alvo?('Alvo '+pliFmtData(p.alvo)+(R.atendeAlvo?' ✔ atende':' ✘ não atende')):'', R.atendeAlvo===false?'var(--danger)':'var(--ok)')}
+    ${pliKpi('Mão de obra (fab + inst)', pliFmtR(sFab+sInst), 'Fab '+pliFmtR(sFab)+' · Inst '+pliFmtR(sInst))}
+   </div>`;
+  const prem = `<div class="pli-card"><div class="pli-note" style="margin:0;">As premissas, o faseamento, os marcos e o teto (à gastar) de <b>${esc(ob.nome)}</b> ficam na aba <b>Premissas</b>. <button class="btn small" onclick="PLI_UI.cronObra=${k};pliSetTab('premissas')">Abrir Premissas</button></div></div>`;
   const dm = R.meses;
   const lin = [
     {rot:'Pagamento alumínio (R$)', v:R.pagto, fmt:v=>v>0?pliFmtR(v):''},
@@ -11651,7 +11727,6 @@ function pliHtmlCruzamento(){
   ${pliHtmlCurvaS()}
   ${pliHtmlMarcos()}
   ${pliHtmlCenarios()}
-  ${pliHtmlGasto()}
   ${pliHtmlCompraReal()}
   ${pliHtmlOtimizador()}
   ${pliHtmlCapNec()}
@@ -16785,6 +16860,103 @@ function cfGraficoSVG(D){
   const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:960px;max-height:290px;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
 }
+// Curva S de um único grupo de custo (materiais, mão de obra...), com o mesmo desenho da curva geral.
+function cfGraficoGrupo(D, k){
+  const n = D.meses.length; if(!n) return '';
+  let a = 0, b = 0;
+  Object.keys(D.real[k]).forEach(m=>{ if(m<D.meses[0]){ a += D.real[k][m]; b += D.real[k][m]; } });
+  Object.keys(D.prev[k]).forEach(m=>{ if(m<D.meses[0]) b += D.prev[k][m]; });
+  const acR = [], acRP = [];
+  D.meses.forEach(m=>{ const r = D.real[k][m]||0, p = D.prev[k][m]||0; a += r; b += r+p; acR.push(m<=D.hojeM ? a : null); acRP.push(b); });
+  if(!(acRP[n-1]>0) && !(D.orc[k]>0)) return '<div class="step-note">Sem lançamentos nem previsão neste grupo.</div>';
+  return cfGraficoSVG({ meses:D.meses, hojeM:D.hojeM, acR, acRP, orcT:D.orc[k]||0, tendT:D.tend[k]||0 })
+    + `<div class="step-note" style="margin-top:4px;">Realizado até hoje: <b>${fmtMoeda(acR.filter(v=>v!=null).pop()||0)}</b> · projeção final: <b>${fmtMoeda(acRP[n-1])}</b>${D.orc[k]>0?` · orçado: <b>${fmtMoeda(D.orc[k])}</b>`:''}</div>`;
+}
+// Curva geral de execução física: média de fabricação e instalação (ponderadas por kg), planejado × realizado.
+function cfInstMapa(){
+  const mapa = {}, itens = load('itensObra'); let C; try{ C = plcLoad(); }catch(e){ return mapa; }
+  (C.obras||[]).forEach(ob=>{
+    const sg = plcObraSgptDoCron(ob); const m = mapa[ob.id] = {}; if(!sg) return;
+    itens.filter(it=>it.obraId===sg.id && itemAtivo(it)).forEach(it=>{
+      const kgUn = parseFloat(it.pesoLiquido)||0;
+      expPecas(it).forEach(p=>{
+        const h = expHist(p).filter(x=>x.tipo==='inst').sort((x,y)=>(x.em||'').localeCompare(y.em||''))[0]; if(!h || !h.em) return;
+        const d = new Date(h.em); if(isNaN(d)) return;
+        const ym = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); m[ym] = (m[ym]||0) + kgUn;
+      });
+    });
+  });
+  return mapa;
+}
+function cfExecucaoDados(obraId){
+  let C; try{ C = plcLoad(); }catch(e){ return null; }
+  const RM = pcpRealMapa(), IM = cfInstMapa(), hojeM = todayISO().slice(0,7), lista = [];
+  (C.obras||[]).forEach(ob=>{
+    const sg = plcObraSgptDoCron(ob); if(obraId && (!sg || sg.id!==obraId)) return;
+    let R, S; try{ R = plcCalc(ob); S = plcCurvaS(ob, R); }catch(e){ return; }
+    if(!S) return;
+    const kg = (R.lotes||[]).reduce((a,l)=>a+l.kg,0) || 0; if(!kg) return;
+    lista.push({ ob, S, kg });
+  });
+  if(!lista.length) return null;
+  const ini = lista.map(x=>x.S.ini.slice(0,7)).sort()[0], fim = lista.map(x=>x.S.fim.slice(0,7)).sort().slice(-1)[0];
+  const meses = pliMesesEntre(ini, fim), totKg = lista.reduce((a,x)=>a+x.kg,0);
+  const plan = [], real = [], fabR = [], instR = [];
+  meses.forEach(m=>{
+    let pl = 0, fr = 0, ir = 0;
+    lista.forEach(x=>{
+      let pt = null; x.S.pts.forEach(q=>{ if(q.d.slice(0,7) <= m) pt = q; });
+      pl += pt ? (pt.fab+pt.inst)/2*x.kg : 0;
+      const acum = (mp)=>{ let t = 0; Object.keys(mp||{}).forEach(k=>{ if(k<=m) t += (typeof mp[k]==='number' ? mp[k] : mp[k].kg); }); return Math.min(100, t/x.kg*100); };
+      fr += acum(RM[x.ob.id])*x.kg; ir += acum(IM[x.ob.id])*x.kg;
+    });
+    plan.push(pl/totKg);
+    if(m<=hojeM){ fabR.push(fr/totKg); instR.push(ir/totKg); real.push((fr+ir)/2/totKg); } else { fabR.push(null); instR.push(null); real.push(null); }
+  });
+  return { meses, plan, real, fabR, instR, hojeM, obras:lista.map(x=>x.ob.nome) };
+}
+function cfExecucaoSVG(E){
+  const W=960, H=270, pl=44, pr=16, pt=16, pb=34, n=E.meses.length;
+  const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/100);
+  let g='';
+  [0,25,50,75,100].forEach(v=>{ g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v}%</text>`; });
+  E.meses.forEach((m,i)=>{ if(n<=14 || i%2===0) g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
+  const pts = a => a.map((v,i)=>v==null?null:`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(' ');
+  g+=`<polyline points="${pts(E.plan)}" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4" opacity=".75"/>`;
+  g+=`<polyline points="${pts(E.fabR)}" fill="none" stroke="#bd0c1d" stroke-width="1.6" opacity=".85"/>`;
+  g+=`<polyline points="${pts(E.instR)}" fill="none" stroke="#1565c0" stroke-width="1.6" opacity=".85"/>`;
+  g+=`<polyline points="${pts(E.real)}" fill="none" stroke="currentColor" stroke-width="2.8"/>`;
+  const hi = E.meses.indexOf(E.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:960px;max-height:290px;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S de execução física">${g}</svg>`;
+}
+function cfExecucaoHtml(obraId){
+  const E = cfExecucaoDados(obraId);
+  if(!E) return '<div class="step-note">Sem fases planejadas (fabricação/instalação) no Planejamento Integrado para esta seleção.</div>';
+  const ult = a => { let v = null; a.forEach(x=>{ if(x!=null) v = x; }); return v; };
+  const hi = E.meses.indexOf(E.hojeM), plHoje = hi>=0 ? E.plan[hi] : (E.hojeM > E.meses[E.meses.length-1] ? 100 : 0), reHoje = ult(E.real) || 0;
+  const f = v => (v||0).toFixed(1).replace('.',',')+'%';
+  return cfExecucaoSVG(E) + `<div class="step-note" style="margin-top:4px;"><span>━ realizado geral</span> · <span>┅ planejado geral</span> · <span style="color:#bd0c1d">━ fabricação (baixas de liberação)</span> · <span style="color:#1565c0">━ instalação (baixas)</span> — execução = média de fabricação e instalação, ponderada por kg.</div>
+    <div style="margin-top:4px;font-size:13px;">Hoje: planejado <b>${f(plHoje)}</b> · realizado <b>${f(reHoje)}</b> · desvio <b style="color:${reHoje<plHoje-0.05?'#c62828':'#2e7d32'}">${(reHoje-plHoje>=0?'+':'')+(reHoje-plHoje).toFixed(1).replace('.',',')} p.p.</b></div>`;
+}
+function cfImprimir(){
+  const sel = document.getElementById('cfObra'), obra = sel && sel.value ? sel.options[sel.selectedIndex].text : 'Todas as obras (consolidado)';
+  const g = id => { const e = document.getElementById(id); return e ? e.innerHTML : ''; };
+  document.getElementById('rdoPrintArea').innerHTML = `<div class="rdo-landscape-wrap"><h1>Cronograma Financeiro — Divisão de Alumínio</h1>
+    <div class="meta">${esc(obra)} · gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
+    <div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">${g('cfKpis')}</div>
+    <h3>Curva S financeira</h3>${g('cfGrafico')}
+    <h3>Curva S de execução da obra (físico)</h3>${g('cfExecucao')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;page-break-inside:avoid;"><div><h3>Curva S — Materiais</h3>${g('cfGraficoMat')}</div><div><h3>Curva S — Mão de obra</h3>${g('cfGraficoMdo')}</div></div>
+    <h3 style="page-break-before:always;">Fluxo mensal por grupo de custo</h3>${g('cfTabela')}</div>`;
+  window.print();
+}
+function pcpImprimir(){
+  const c = document.getElementById('pcpConteudo'); if(!c) return;
+  const clone = c.cloneNode(true);
+  clone.querySelectorAll('button,input,select').forEach(e=>e.remove());
+  document.getElementById('rdoPrintArea').innerHTML = `<div class="rdo-landscape-wrap"><h1>PCP de fabricação — ${esc(((document.getElementById('pcpMesTit')||{}).textContent)||'')}</h1><div class="meta">Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>${clone.innerHTML}</div>`;
+  window.print();
+}
 function renderCronogramaFinanceiro(){
   const sem = document.getElementById('cfSemAcesso'), cont = document.getElementById('cfConteudo');
   if(!temAcessoFinanceiro()){ sem.style.display='block'; cont.style.display='none'; return; }
@@ -16803,6 +16975,8 @@ function renderCronogramaFinanceiro(){
     [D.tendT>0?'Tendência':'Orçado', ref>0?fmtMoeda(ref):'—', ''],
     ['Saldo projetado', ref>0?fmtMoeda(ref-projFinal):'—', estouro?'color:#c62828;':'']
   ].map(k=>`<div class="kpi"><div class="num" style="${k[2]}">${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
+  try{ document.getElementById('cfExecucao').innerHTML = cfExecucaoHtml(CF_UI.obra); }catch(e){ console.error('Curva de execução', e); }
+  try{ document.getElementById('cfGraficoMat').innerHTML = cfGraficoGrupo(D,'material'); document.getElementById('cfGraficoMdo').innerHTML = cfGraficoGrupo(D,'maoDeObra'); }catch(e){ console.error('Curvas por grupo', e); }
   document.getElementById('cfGrafico').innerHTML = cfGraficoSVG(D) + `<div class="step-note" style="margin-top:4px;">Linha cheia = realizado acumulado · tracejada = realizado + previsto · pontilhada/tracejada horizontal = orçado/tendência${estouro?' · <b style="color:#c62828;">projeção acima da referência</b>':''}</div>`;
   const hojeM = D.hojeM, fm = v => v? Math.round(v).toLocaleString('pt-BR') : '';
   let h = `<div style="overflow:auto;"><table class="data-table" style="min-width:${220+n*86+300}px;font-size:12px;"><thead><tr><th style="position:sticky;left:0;background:var(--card,#fff);">Grupo de custo</th>${D.meses.map(m=>`<th style="text-align:right;${m===hojeM?'text-decoration:underline;':''}">${mesLabelCurto(m)}</th>`).join('')}<th style="text-align:right;">Total</th><th style="text-align:right;">Orçado</th><th style="text-align:right;">Tendência</th></tr></thead><tbody>`;
