@@ -980,9 +980,11 @@
 
       <div class="nav-group-label">Financeiro / RH</div>
       <div class="nav-item" data-section="rateiomdo"><span class="ico">💰</span><span class="label">Rateio de Mão de Obra</span></div>
+      <div class="nav-item" data-section="cronfin" id="navCronFin"><span class="ico">📈</span><span class="label">Cronograma Financeiro</span></div>
 
       <div class="nav-group-label" id="navGrpPlanej" style="display:none;">Planejamento (Gerência)</div>
       <div class="nav-item" id="navPlanejInt" data-section="planejint" style="display:none;"><span class="ico">📈</span><span class="label">Planejamento Integrado de Alumínio</span></div>
+      <div class="nav-item" id="navPCP" data-section="pcp" style="display:none;"><span class="ico">🏭</span><span class="label">PCP de Fabricação</span></div>
 
       <div class="nav-group-label" id="navGrpCoord" style="display:none;">Coordenação</div>
       <div class="nav-item" id="navPainel" data-section="painel" style="display:none;"><span class="ico">🚨</span><span class="label">Painel de Pendências</span><span id="navPainelBadge" style="display:none;margin-left:auto;background:#bd0c1d;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;font-weight:700"></span></div>
@@ -1195,7 +1197,7 @@
               <button class="btn small secondary ow-tab-btn" data-tab="projetos" onclick="showObraTab('projetos')">Projetos</button>
               <button class="btn small secondary ow-tab-btn" data-tab="producao" onclick="showObraTab('producao')">Produção</button>
               <button class="btn small secondary ow-tab-btn" data-tab="instalacao" onclick="showObraTab('instalacao')">Instalação</button>
-              <button class="btn small secondary ow-tab-btn" data-tab="expedicao" onclick="showObraTab('expedicao')">Expedição / Rastreio</button>
+              <button class="btn small secondary ow-tab-btn" data-tab="expedicao" onclick="showObraTab('expedicao')">Fábrica / Expedição / Rastreio</button>
               <button class="btn small secondary ow-tab-btn" data-tab="materiais" onclick="showObraTab('materiais')">Compras</button>
               <button class="btn small secondary ow-tab-btn" data-tab="vento" onclick="showObraTab('vento')">Pressão de Vento</button>
               <button class="btn small secondary ow-tab-btn" data-tab="perfis" onclick="showObraTab('perfis')">Cálculo de Perfis</button>
@@ -2335,6 +2337,36 @@
               <div id="admRateioResultado" style="margin-top:14px;"></div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-cronfin">
+        <div id="cfSemAcesso" class="empty-state" style="display:none;"><div class="big">🔒</div>Acesso restrito aos perfis com acesso financeiro.</div>
+        <div id="cfConteudo">
+          <div class="form-grid" style="margin-bottom:10px;">
+            <div class="field"><label>Obra</label><select id="cfObra" onchange="CF_UI.obra=this.value;renderCronogramaFinanceiro()"></select></div>
+            <div class="field"><label>Janela</label><select id="cfJanela" onchange="CF_UI.meses=parseInt(this.value,10);renderCronogramaFinanceiro()"><option value="6">Últimos 6 meses + futuro</option><option value="12">Últimos 12 meses + futuro</option><option value="24">Últimos 24 meses + futuro</option><option value="0">Tudo</option></select></div>
+            <div class="field" style="align-self:end;"><button class="btn small secondary" onclick="cfExportarCSV()">Exportar CSV</button> <button class="btn small secondary" onclick="window.print()">Imprimir</button></div>
+          </div>
+          <div class="kpi-row" id="cfKpis"></div>
+          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Curva S financeira</h3><div id="cfGrafico"></div></div>
+          <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Fluxo mensal por grupo de custo</h3><div id="cfTabela"></div></div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-pcp">
+        <div id="pcpSemAcesso" class="empty-state" style="display:none;"><div class="big">🔒</div>Acesso restrito à Gerência e Coordenação.</div>
+        <div id="pcpConteudo">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="btn small secondary" onclick="pcpMudarMes(-1)">‹</button>
+            <h2 id="pcpMesTit" style="margin:0;min-width:200px;text-align:center;"></h2>
+            <button class="btn small secondary" onclick="pcpMudarMes(1)">›</button>
+            <input type="month" id="pcpMesInput" onchange="pcpIrMes(this.value)">
+            <button class="btn small secondary" onclick="window.print()">Imprimir</button>
+          </div>
+          <div class="kpi-row" id="pcpKpis"></div>
+          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Panorama da fábrica (t/mês)</h3><div id="pcpPanorama"></div></div>
+          <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Plano de fabricação do mês × liberado para expedição, por obra e fase</h3><div id="pcpTabela"></div></div>
         </div>
       </section>
 
@@ -7436,6 +7468,8 @@ const sectionTitles = {
   setores: ['Setores','Cadastro de setores da divisão'],
   tarefas: ['Tarefas por Setor','Controle de tarefas por setor'],
   metas: ['Metas por Setor','Acompanhamento de metas por setor'],
+  pcp: ['PCP de Fabricação','Plano mensal de fabricação por obra e fase, capacidade da fábrica e realizado (peças liberadas por QR Code)'],
+  cronfin: ['Cronograma Financeiro','Fluxo mensal de todos os custos (mão de obra, materiais, custo operacional...), realizado × previsto e curva S'],
   solicitacoes: ['Solicitações de Compra','Esteira: Solicitante → ADM → Coordenador → Gerente → Suprimentos Calper'],
   materiaisgeral: ['Compras — Pedidos','Todos os pedidos de compra de material, agrupados por obra'],
   painel: ['Painel de Pendências','Atrasos e pendências de todas as áreas (Gerência e Coordenação)'],
@@ -7503,6 +7537,8 @@ function showSection(id){
     if(id==='metas'){ refreshMetaFiltroSetor(); refreshMetaSetorSelect(); renderMetas(); }
     if(id==='materiaisgeral') renderMateriaisGeral();
     if(id==='solicitacoes') renderSolicitacoes();
+    if(id==='cronfin') renderCronogramaFinanceiro();
+    if(id==='pcp') renderPCP();
     if(id==='rateiomdo') renderRateioMaoDeObra();
     if(id==='planejint') renderPlanejInt();
     if(id==='painel') renderPainel();
@@ -7574,6 +7610,9 @@ const EXP_ESTADOS = {
   rev_pend:      ['Ajuste p/ entrega pendente','status-pausado']
 };
 const EXP_MODOS = [
+  ['corte','A · Corte concluído (perfil)','Todas as barras do perfil cortadas'],
+  ['usin','B · Usinagem concluída (perfil)','Todas as barras do perfil usinadas'],
+  ['vidro','C · Vidro pronto (colagem)','Todos os vidros da linha prontos'],
   ['pronto','1 · Liberar da fábrica','Peça pronta → liberada na Expedição'],
   ['exp','2 · Expedir para a obra','Saiu da expedição → entra na remessa'],
   ['rec','3 · Receber na obra','Conferência de chegada na obra'],
@@ -7593,7 +7632,7 @@ const EXP_ETQ_PRESETS = {
 const PLI_UI_EXP = { abertos:{}, log:[] };
 function expCfg(){
   let c = null; try{ c = JSON.parse(localStorage.getItem(DB_PREFIX+'cfgExp')); }catch(e){}
-  const base = { modo:'pronto', marcarProducao:true, preset:'p21', custom:Object.assign({}, EXP_ETQ_PRESETS.custom), inicio:1, copias:1, escopo:'pendentes', blocoId:'' };
+  const base = { modo:'pronto', marcarProducao:true, bloquearLib:false, preset:'p21', custom:Object.assign({}, EXP_ETQ_PRESETS.custom), inicio:1, copias:1, escopo:'pendentes', blocoId:'' };
   return Object.assign(base, (c && !Array.isArray(c)) ? c : {});
 }
 function expCfgSet(k, v){ const c = expCfg(); c[k] = v; save('cfgExp', c); }
@@ -7695,6 +7734,7 @@ function expMarcarProducaoOk(itemId){
 }
 /* resultado: { nivel:'ok'|'aviso'|'erro', msg } */
 function expProcessar(txt, modo, extra){
+  if(modo==='corte' || modo==='usin' || modo==='vidro') return fabProcessarLote(txt, modo);
   const p = expAchaPeca(txt);
   if(!p) return { nivel:'erro', msg:'Código "'+String(txt).trim()+'" não encontrado no sistema.' };
   const obra = (load('obras').find(o=>o.id===p.it.obraId)||{}).nome || '';
@@ -7704,6 +7744,7 @@ function expProcessar(txt, modo, extra){
   let aviso = '';
   if(modo==='pronto'){
     if(expTem(p,'pronto')) return { nivel:'aviso', msg:nome+' já estava liberada na expedição.' };
+    { const pend = fabPendenciasItem(p.it); if(pend.length){ const tx = 'pendente na fábrica: '+pend.slice(0,3).join('; ')+(pend.length>3?' … +'+(pend.length-3):''); if(cfg.bloquearLib) return { nivel:'erro', msg:nome+' NÃO liberada — '+tx+'.' }; aviso = ' (atenção: '+tx+')'; } }
   } else if(modo==='exp'){
     if(!expTem(p,'pronto')) return { nivel:'erro', msg:nome+' ainda NÃO foi liberada pela fábrica — faça a leitura "Liberar da fábrica" antes.' };
     if(expTem(p,'exp')) return { nivel:'aviso', msg:nome+' já foi expedida.' };
@@ -7800,11 +7841,13 @@ function renderExpedicao(){
         <button class="btn" onclick="expLer()">Registrar</button>
         <button class="btn secondary" onclick="expAbrirCamera()">📷 Ler com a câmera</button>
       </div>
-      <div style="margin-top:8px;font-size:12.5px;"><label><input type="checkbox" ${cfg.marcarProducao?'checked':''} onchange="expCfgSet('marcarProducao',this.checked)"> Quando todas as peças de um item forem liberadas, marcar as fases de Produção do item como OK</label></div>
+      <div style="margin-top:8px;font-size:12.5px;"><label><input type="checkbox" ${cfg.marcarProducao?'checked':''} onchange="expCfgSet('marcarProducao',this.checked)"> Quando todas as peças de um item forem liberadas, marcar as fases de Produção do item como OK</label><br><label><input type="checkbox" ${cfg.bloquearLib?'checked':''} onchange="expCfgSet('bloquearLib',this.checked)"> <b>Bloquear</b> a liberação da esquadria se houver corte, usinagem ou vidro pendente do tipo (desmarcado = só avisa)</label></div>
       <div id="expResultado" style="display:none"></div>
       <div id="expLog" style="margin-top:6px;"></div>
       <div class="step-note">Modo atual: <b>${EXP_MODOS.find(m=>m[0]===cfg.modo)[1]}</b>. O leitor Bluetooth/USB digita o código e dá Enter — mantenha o cursor no campo acima. Regras: só expede peça liberada; só recebe peça expedida; só revisa peça instalada; item cancelado é bloqueado. "Instalada" e "Revisão" dão baixa nas fases Instalação e Revisão da peça (aba Instalação).</div>
     </div></div>
+
+    ${fabPainelHtml()}
 
     <div class="panel"><div class="panel-head">Peças por item</div><div class="panel-body">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
@@ -7837,6 +7880,7 @@ function expCustom(k, v){ const c = expCfg(); c.custom[k] = expNum(v); save('cfg
 function expToggle(itemId){ PLI_UI_EXP.abertos[itemId] = !PLI_UI_EXP.abertos[itemId]; expAtualizar(); }
 function expAtualizar(){
   if(!currentObraId) return;
+  try{ fabAtualizarLotes(); }catch(e){ console.error('Lotes da fábrica', e); }
   const painel = document.getElementById('expPainel'); if(!painel) return;
   const itens = load('itensObra').filter(it=>it.obraId===currentObraId);
   const blocos = load('blocos'), nomeBl = id => (blocos.find(b=>b.id===id)||{}).nome || '—';
@@ -11416,6 +11460,7 @@ function pliAtualizarMenu(){
   const v = pliTemAcesso() ? '' : 'none';
   if(it) it.style.display = v;
   if(lb) lb.style.display = v;
+  { const pc = document.getElementById('navPCP'); if(pc) pc.style.display = v; }
   try{ coordAtualizarMenu(); }catch(e){}
 }
 
@@ -17150,6 +17195,636 @@ function scDecidir(acao){
   else if(acao==='suprimentos'){ s.status = 'suprimentos'; s.enviadaSuprimentosEm = new Date().toISOString(); if(obs) s.protocoloSuprimentos = obs; scHist(s, et, 'Enviada para Suprimentos Calper', obs); }
   else if(acao==='concluir'){ s.status = 'concluida'; scHist(s, et, 'Pedido realizado em Suprimentos', obs); }
   scSalvar(s); scRenderDetalhe(); renderSolicitacoes();
+}
+
+
+/* ================= CRONOGRAMA FINANCEIRO (mensal, todas as obras ou uma) ================= */
+const CF_GRUPOS = [
+  { k:'maoDeObra', nome:'Mão de obra', orc:'maoDeObra' },
+  { k:'material', nome:'Materiais', orc:'material' },
+  { k:'vidro', nome:'Vidro', orc:'vidro' },
+  { k:'operacional', nome:'Custo operacional da fábrica', orc:null },
+  { k:'equip', nome:'Equipamentos / Administrativo', orc:null },
+  { k:'outros', nome:'Outros', orc:'outros' }
+];
+let CF_UI = { obra:'', meses:12 };
+function cfGrupoDe(cat){
+  if(cat==='maoDeObra') return 'maoDeObra';
+  if(cat==='material'||cat==='aluminio'||cat==='acessorios') return 'material';
+  if(cat==='vidro') return 'vidro';
+  if(cat==='custoOperacionalFabrica') return 'operacional';
+  if(cat==='equipamento'||cat==='administrativo') return 'equip';
+  return 'outros';
+}
+function cfMesDe(d){ return (d||'').slice(0,7); }
+function cfSomaMeses(m, n){ const [a,b]=m.split('-').map(Number); const t=a*12+(b-1)+n; return Math.floor(t/12)+'-'+String(t%12+1).padStart(2,'0'); }
+function cfCalcular(obraId){
+  const lancs = load('lancamentosFinanceiros').filter(l=>l.tipo==='despesa' && (!obraId || l.obraId===obraId) && cfMesDe(l.data));
+  const prevs = load('previsoesGastos').filter(p=>p.status!=='paga' && (!obraId || p.obraId===obraId) && cfMesDe(p.dataPrevista));
+  const hojeM = cfMesDe(new Date().toISOString());
+  const real = {}, prev = {};
+  CF_GRUPOS.forEach(g=>{ real[g.k]={}; prev[g.k]={}; });
+  const todos = [];
+  lancs.forEach(l=>{ const g=cfGrupoDe(l.categoria), m=cfMesDe(l.data); real[g][m]=(real[g][m]||0)+(l.valor||0); todos.push(m); });
+  prevs.forEach(p=>{ const g=cfGrupoDe(p.categoria), m=cfMesDe(p.dataPrevista); prev[g][m]=(prev[g][m]||0)+(p.valor||0); todos.push(m); });
+  todos.push(hojeM);
+  todos.sort();
+  let ini = todos[0], fim = todos[todos.length-1];
+  if(CF_UI.meses>0){ const lim = cfSomaMeses(hojeM, -(CF_UI.meses-1)); if(ini<lim) ini=lim; }   // janela dos últimos N meses
+  const meses=[]; for(let m=ini; m<=fim; m=cfSomaMeses(m,1)) meses.push(m);
+  // meses anteriores à janela entram como saldo inicial acumulado
+  const antes = {r:0,p:0};
+  CF_GRUPOS.forEach(g=>{ Object.keys(real[g.k]).forEach(m=>{ if(m<ini) antes.r+=real[g.k][m]; }); Object.keys(prev[g.k]).forEach(m=>{ if(m<ini) antes.p+=prev[g.k][m]; }); });
+  const obras = load('obras').filter(o=>!obraId || o.id===obraId);
+  const orc = {}, tend = {}; let orcT=0, tendT=0;
+  CF_GRUPOS.forEach(g=>{ orc[g.k]=0; tend[g.k]=0; });
+  obras.forEach(o=>{ const fc=o.financeiroCategorias||{};
+    FIN_CATEGORIAS_ORCAMENTO.forEach(c=>{ const x=fc[c.key]||{}; orcT+=x.orcado||0; tendT+=x.tendencia||0; const g=CF_GRUPOS.find(q=>q.orc===c.key); if(g){ orc[g.k]+=x.orcado||0; tend[g.k]+=x.tendencia||0; } }); });
+  const totR = meses.map(m=>CF_GRUPOS.reduce((s,g)=>s+(real[g.k][m]||0),0));
+  const totP = meses.map(m=>CF_GRUPOS.reduce((s,g)=>s+(prev[g.k][m]||0),0));
+  const acR=[], acRP=[]; let a=antes.r, b=antes.r+antes.p;
+  meses.forEach((m,i)=>{ a+=totR[i]; b+=totR[i]+totP[i]; acR.push(m<=hojeM?a:null); acRP.push(b); });
+  return { meses, hojeM, real, prev, totR, totP, acR, acRP, orc, tend, orcT, tendT, antes };
+}
+function cfGraficoSVG(D){
+  const W=860, H=260, pl=64, pr=16, pt=16, pb=36, n=D.meses.length; if(!n) return '';
+  const ref = D.tendT>0 ? D.tendT : D.orcT;
+  const maxV = Math.max(ref||0, ...D.acRP, ...(D.acR.filter(v=>v!=null)), 1)*1.08;
+  const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/maxV);
+  const estouro = ref>0 && D.acRP[n-1] > ref;
+  const cor = estouro ? '#c62828' : 'currentColor';
+  let g = '';
+  for(let t=0;t<=4;t++){ const v=maxV*t/4, y=Y(v); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v>=1e6?(v/1e6).toFixed(1)+' mi':Math.round(v/1e3)+' mil'}</text>`; }
+  D.meses.forEach((m,i)=>{ if(n<=14 || i%2===0) g+=`<text x="${X(i)}" y="${H-14}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
+  if(D.orcT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.orcT)}" y2="${Y(D.orcT)}" stroke="currentColor" opacity=".45" stroke-dasharray="2 4"/><text x="${W-pr}" y="${Y(D.orcT)-4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">Orçado ${fmtMoeda(D.orcT)}</text>`;
+  if(D.tendT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.tendT)}" y2="${Y(D.tendT)}" stroke="currentColor" opacity=".7" stroke-dasharray="6 4"/><text x="${pl+4}" y="${Y(D.tendT)-4}" font-size="10" fill="currentColor" opacity=".85">Tendência ${fmtMoeda(D.tendT)}</text>`;
+  const pts = arr => arr.map((v,i)=> v==null?null:`${X(i)},${Y(v)}`).filter(Boolean).join(' ');
+  g+=`<polyline points="${pts(D.acRP)}" fill="none" stroke="${cor}" stroke-width="2" stroke-dasharray="5 4" opacity=".75"/>`;
+  g+=`<polyline points="${pts(D.acR)}" fill="none" stroke="${cor}" stroke-width="2.6"/>`;
+  const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
+}
+function renderCronogramaFinanceiro(){
+  const sem = document.getElementById('cfSemAcesso'), cont = document.getElementById('cfConteudo');
+  if(!temAcessoFinanceiro()){ sem.style.display='block'; cont.style.display='none'; return; }
+  sem.style.display='none'; cont.style.display='block';
+  const sel = document.getElementById('cfObra'), obras = load('obras');
+  sel.innerHTML = '<option value="">Todas as obras (consolidado)</option>' + obras.map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  sel.value = CF_UI.obra; if(sel.value!==CF_UI.obra){ CF_UI.obra=''; sel.value=''; }
+  document.getElementById('cfJanela').value = String(CF_UI.meses);
+  const D = cfCalcular(CF_UI.obra), n = D.meses.length;
+  const ref = D.tendT>0 ? D.tendT : D.orcT, projFinal = D.acRP[n-1]||0, gastoHoje = (()=>{ let v=null; D.acR.forEach(x=>{ if(x!=null) v=x; }); return v||0; })();
+  const estouro = ref>0 && projFinal>ref;
+  document.getElementById('cfKpis').innerHTML = [
+    ['Realizado até hoje', fmtMoeda(gastoHoje), ''],
+    ['Previsto a pagar', fmtMoeda(D.totP.reduce((a,b)=>a+b,0)+D.antes.p), ''],
+    ['Projeção final (real + previsto)', fmtMoeda(projFinal), estouro?'color:#c62828;':''],
+    [D.tendT>0?'Tendência':'Orçado', ref>0?fmtMoeda(ref):'—', ''],
+    ['Saldo projetado', ref>0?fmtMoeda(ref-projFinal):'—', estouro?'color:#c62828;':'']
+  ].map(k=>`<div class="kpi"><div class="num" style="${k[2]}">${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
+  document.getElementById('cfGrafico').innerHTML = cfGraficoSVG(D) + `<div class="step-note" style="margin-top:4px;">Linha cheia = realizado acumulado · tracejada = realizado + previsto · pontilhada/tracejada horizontal = orçado/tendência${estouro?' · <b style="color:#c62828;">projeção acima da referência</b>':''}</div>`;
+  const hojeM = D.hojeM, fm = v => v? Math.round(v).toLocaleString('pt-BR') : '';
+  let h = `<div style="overflow:auto;"><table class="data-table" style="min-width:${220+n*86+300}px;font-size:12px;"><thead><tr><th style="position:sticky;left:0;background:var(--card,#fff);">Grupo de custo</th>${D.meses.map(m=>`<th style="text-align:right;${m===hojeM?'text-decoration:underline;':''}">${mesLabelCurto(m)}</th>`).join('')}<th style="text-align:right;">Total</th><th style="text-align:right;">Orçado</th><th style="text-align:right;">Tendência</th></tr></thead><tbody>`;
+  CF_GRUPOS.forEach(g=>{
+    const rs = D.meses.map(m=>D.real[g.k][m]||0), ps = D.meses.map(m=>D.prev[g.k][m]||0);
+    const tot = rs.reduce((a,b)=>a+b,0)+ps.reduce((a,b)=>a+b,0);
+    if(!tot && !D.orc[g.k]) return;
+    h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);"><b>${g.nome}</b></td>${D.meses.map((m,i)=>`<td style="text-align:right;">${rs[i]?fm(rs[i]):''}${ps[i]?`<div style="opacity:.55;font-style:italic;">${fm(ps[i])}</div>`:''}</td>`).join('')}<td style="text-align:right;"><b>${fm(tot)}</b></td><td style="text-align:right;">${fm(D.orc[g.k])}</td><td style="text-align:right;">${fm(D.tend[g.k])}</td></tr>`;
+  });
+  h += `<tr style="border-top:2px solid currentColor;"><td style="position:sticky;left:0;background:var(--card,#fff);"><b>Total do mês</b></td>${D.meses.map((m,i)=>`<td style="text-align:right;"><b>${fm(D.totR[i]+D.totP[i])}</b></td>`).join('')}<td style="text-align:right;"><b>${fm(D.totR.reduce((a,b)=>a+b,0)+D.totP.reduce((a,b)=>a+b,0))}</b></td><td style="text-align:right;">${fm(D.orcT)}</td><td style="text-align:right;">${fm(D.tendT)}</td></tr>`;
+  h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);">Acumulado (real + previsto)</td>${D.acRP.map(v=>`<td style="text-align:right;${ref>0&&v>ref?'color:#c62828;font-weight:600;':''}">${fm(v)}</td>`).join('')}<td></td><td></td><td></td></tr>`;
+  if(D.orcT>0) h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);">% do orçado</td>${D.acRP.map(v=>`<td style="text-align:right;opacity:.75;">${Math.round(v/D.orcT*100)}%</td>`).join('')}<td></td><td></td><td></td></tr>`;
+  h += `</tbody></table></div><div class="step-note" style="margin-top:6px;">Números normais = realizado (lançamentos financeiros) · <i>itálico = previsto</i> (previsões de gasto em aberto, incluindo as geradas pelo Planejamento Integrado). Mão de obra e custo operacional entram pelo Rateio mensal.${D.antes.r||D.antes.p?` Meses anteriores à janela somam ${fmtMoeda(D.antes.r+D.antes.p)} no acumulado.`:''}</div>`;
+  document.getElementById('cfTabela').innerHTML = h;
+}
+function cfExportarCSV(){
+  const D = cfCalcular(CF_UI.obra); const linhas=[['Grupo',...D.meses.map(mesLabelCurto),'Total']];
+  CF_GRUPOS.forEach(g=>{ const v=D.meses.map(m=>(D.real[g.k][m]||0)+(D.prev[g.k][m]||0)); linhas.push([g.nome,...v.map(x=>x.toFixed(2).replace('.',',')),v.reduce((a,b)=>a+b,0).toFixed(2).replace('.',',')]); });
+  linhas.push(['Acumulado',...D.acRP.map(x=>x.toFixed(2).replace('.',',')),'']);
+  const csv='﻿'+linhas.map(r=>r.join(';')).join('\n'), a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='cronograma-financeiro.csv'; a.click();
+}
+
+
+/* ================= PCP DE FABRICAÇÃO MENSAL (a partir das fases do Planejamento Integrado) ================= */
+let PCP_UI = { mes: (new Date().toISOString().slice(0,7)) };
+function pcpMesSoma(ym, n){ const [a,b]=ym.split('-').map(Number); const t=a*12+(b-1)+n; return Math.floor(t/12)+'-'+String(t%12+1).padStart(2,'0'); }
+function pcpMesLabel(ym){ const nomes=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro']; return nomes[+ym.slice(5,7)-1]+' de '+ym.slice(0,4); }
+function pcpCapMes(ym){ const P = pliLoad(); if(!P || !P.cap) return 30; return ym < P.cap.de ? P.cap.atual : P.cap.nova; }
+// lista de fases a fabricar: usa o sequenciamento da fábrica; se estiver desligado, cai nos lotes de cada obra
+function pcpFases(){
+  const out = []; let seq = null;
+  try{ seq = plcSeqGet(); }catch(e){}
+  const C = plcLoad();
+  const idDaObra = nome => { const o = (C&&C.obras||[]).find(x=>x.nome===nome); return o ? o.id : nome; };
+  if(seq && seq.fases && seq.fases.length){
+    seq.fases.forEach(f=> out.push({ obraId:idDaObra(f.obra), obra:f.obra, cod:f.cod, desc:f.desc||'', kg:f.kg, pronto:f.pronto, ini:f.iniFab, fim:f.fimFab, com:f.com||[] }));
+  } else if(C && C.obras){
+    C.obras.forEach(ob=>{ let R; try{ R = plcCalc(ob); }catch(e){ return; }
+      const por = {};
+      (R.lotes||[]).forEach(l=>{ const k=l.fase; const a = por[k] || (por[k]={ obraId:ob.id, obra:ob.nome, cod:k, desc:l.desc||'', kg:0, pronto:l.liberado, ini:l.iniFab, fim:l.fimFab, com:[] }); a.kg+=l.kg; if(l.liberado<a.pronto) a.pronto=l.liberado; if(l.iniFab<a.ini) a.ini=l.iniFab; if(l.fimFab>a.fim) a.fim=l.fimFab; });
+      Object.values(por).forEach(x=>out.push(x)); });
+  }
+  return out.filter(f=>f.kg>0 && f.ini && f.fim);
+}
+// kg da fase que cai no mês (distribuição uniforme entre início e fim)
+function pcpKgNoMes(f, ym){
+  const ini = f.ini, fim = f.fim > f.ini ? f.fim : pliAddDias(f.ini,1);
+  const m0 = ym+'-01', m1 = pcpMesSoma(ym,1)+'-01';
+  const a = ini > m0 ? ini : m0, b = fim < m1 ? fim : m1;
+  const d = pliDiffDias(b, a); if(d<=0) return 0;
+  return f.kg * d / Math.max(1, pliDiffDias(fim, ini));
+}
+function pcpKgAteMes(f, ym){ // acumulado até o fim do mês
+  const fimMes = pcpMesSoma(ym,1)+'-01';
+  const ini = f.ini, fim = f.fim > f.ini ? f.fim : pliAddDias(f.ini,1);
+  const b = fim < fimMes ? fim : fimMes, d = pliDiffDias(b, ini); if(d<=0) return 0;
+  return f.kg * Math.min(1, d / Math.max(1, pliDiffDias(fim, ini)));
+}
+// REALIZADO = peças liberadas da fábrica para a expedição (leitura de QR Code / código de barras, modo "Liberar da fábrica")
+// kg = peso líquido do item × cada peça liberada, no mês da leitura. Chave = obra do cronograma (plc).
+function pcpRealMapa(){
+  const mapa = {}, itens = load('itensObra');
+  let C; try{ C = plcLoad(); }catch(e){ return mapa; }
+  (C.obras||[]).forEach(ob=>{
+    const sg = plcObraSgptDoCron(ob); const m = mapa[ob.id] = {}; if(!sg) return;
+    itens.filter(it=>it.obraId===sg.id && itemAtivo(it)).forEach(it=>{
+      const kgUn = parseFloat(it.pesoLiquido)||0;
+      expPecas(it).forEach(p=>{
+        const h = expHist(p).filter(x=>x.tipo==='pronto').sort((x,y)=>(x.em||'').localeCompare(y.em||''))[0]; if(!h || !h.em) return;
+        const d = new Date(h.em); if(isNaN(d)) return;
+        const ym = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        const r = m[ym] || (m[ym]={ kg:0, n:0 }); r.kg += kgUn; r.n++;
+      });
+    });
+  });
+  return mapa;
+}
+function pcpRealObra(mapa, obraId, ym){ const r = (mapa[obraId]||{})[ym]; return r ? { ton:r.kg/1000, n:r.n } : { ton:0, n:0 }; }
+function pcpRealAcum(mapa, obraId, ym){ let t=0; Object.keys(mapa[obraId]||{}).forEach(m=>{ if(m<=ym) t+=mapa[obraId][m].kg; }); return t/1000; }
+function pcpMudarMes(n){ PCP_UI.mes = pcpMesSoma(PCP_UI.mes, n); renderPCP(); }
+function pcpIrMes(v){ if(/^\d{4}-\d{2}$/.test(v)){ PCP_UI.mes = v; renderPCP(); } }
+function renderPCP(){
+  const sem = document.getElementById('pcpSemAcesso'), cont = document.getElementById('pcpConteudo');
+  if(!pliTemAcesso()){ sem.style.display='block'; cont.style.display='none'; return; }
+  sem.style.display='none'; cont.style.display='block';
+  const ym = PCP_UI.mes, fases = pcpFases(), esc2 = esc, RM = pcpRealMapa();
+  document.getElementById('pcpMesTit').textContent = pcpMesLabel(ym).replace(/^./, c=>c.toUpperCase());
+  document.getElementById('pcpMesInput').value = ym;
+  if(!fases.length){ document.getElementById('pcpKpis').innerHTML=''; document.getElementById('pcpPanorama').innerHTML=''; document.getElementById('pcpTabela').innerHTML = '<div class="empty-state"><div class="big">🏭</div>Sem fases para fabricar. Cadastre as obras e fases no <b>Planejamento Integrado</b> (cronograma financeiro) e importe a planilha de capacidade.</div>'; return; }
+  const cap = pcpCapMes(ym);
+  // linhas do mês
+  const linhas = fases.map(f=>({ f, t: pcpKgNoMes(f, ym)/1000, acum: pcpKgAteMes(f, ym)/f.kg })).filter(x=>x.t>0.0005).sort((a,b)=> a.f.obra.localeCompare(b.f.obra) || a.f.ini.localeCompare(b.f.ini));
+  const planT = linhas.reduce((s,x)=>s+x.t,0), ocup = cap>0 ? planT/cap : 0;
+  const nomeObraPlc = {}; fases.forEach(f=>nomeObraPlc[f.obraId]=f.obra); try{ (plcLoad().obras||[]).forEach(o=>nomeObraPlc[o.id]=nomeObraPlc[o.id]||o.nome); }catch(e){}
+  const ids = new Set(linhas.map(x=>x.f.obraId)); Object.keys(RM).forEach(id=>{ if(pcpRealObra(RM,id,ym).n>0) ids.add(id); });
+  const obrasMes = [...ids].map(id=>[id, nomeObraPlc[id]||id]).sort((a,b)=>a[1].localeCompare(b[1]));
+  let realT = 0, realN = 0; obrasMes.forEach(([id])=>{ const r = pcpRealObra(RM,id,ym); realT+=r.ton; realN+=r.n; });
+  const temReal = realN>0;
+  const vermelho = 'color:#c62828;';
+  document.getElementById('pcpKpis').innerHTML = [
+    ['Planejado no mês', pliFmtT(planT)+' t', ''],
+    ['Capacidade da fábrica', pliFmtT(cap,0)+' t', ''],
+    ['Ocupação', Math.round(ocup*100)+'%', ocup>1.0001?vermelho:''],
+    ['Liberado p/ expedição (QR)', temReal?pliFmtT(realT)+' t · '+realN+' pç':'—', ''],
+    ['Obras em fabricação', String(obrasMes.length), '']
+  ].map(k=>`<div class="kpi"><div class="num" style="${k[2]}">${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
+  // panorama de 12 meses (2 antes, atual, 9 depois)
+  const meses = []; for(let i=-2;i<=9;i++) meses.push(pcpMesSoma(ym,i));
+  const dados = meses.map(m=>({ m, t: fases.reduce((s,f)=>s+pcpKgNoMes(f,m),0)/1000, cap: pcpCapMes(m), real: Object.keys(RM).reduce((s,id)=>s+pcpRealObra(RM,id,m).ton,0) }));
+  const maxV = Math.max(1, ...dados.map(d=>Math.max(d.t,d.cap,d.real)))*1.1;
+  document.getElementById('pcpPanorama').innerHTML = `<div style="display:flex;gap:6px;height:170px;border-bottom:1px solid rgba(128,128,128,.4);padding:0 4px;">${dados.map(d=>{
+    const h = v=> Math.round(v/maxV*140), over = d.t>d.cap+0.0001;
+    return `<div style="flex:1;position:relative;cursor:pointer;" onclick="pcpIrMes('${d.m}')" title="${mesLabelCurto(d.m)}: ${pliFmtT(d.t)} t planejadas · capacidade ${pliFmtT(d.cap,0)} t${d.real?' · realizado '+pliFmtT(d.real)+' t':''}">
+      <div style="position:absolute;left:0;right:0;bottom:${h(Math.max(d.t,d.cap,d.real))+4}px;text-align:center;font-size:10px;opacity:.75;">${pliFmtT(d.t)}</div>
+      <div style="position:absolute;left:12%;width:48%;bottom:0;height:${h(d.t)}px;background:${over?'#c62828':'#555'};opacity:${d.m===ym?1:.55};"></div>
+      ${d.real?`<div style="position:absolute;left:64%;width:24%;bottom:0;height:${h(d.real)}px;background:#999;"></div>`:''}
+      <div style="position:absolute;left:0;right:0;bottom:${h(d.cap)}px;border-top:2px dashed currentColor;opacity:.5;"></div></div>`; }).join('')}</div>
+    <div style="display:flex;gap:6px;padding:0 4px;">${dados.map(d=>`<div style="flex:1;text-align:center;font-size:10px;${d.m===ym?'font-weight:700;':'opacity:.7;'}">${mesLabelCurto(d.m)}</div>`).join('')}</div>
+    <div class="step-note" style="margin-top:6px;">Barra escura = t planejadas (vermelha se acima da capacidade) · barra clara = realizado (peças liberadas por leitura de QR Code/código de barras) · tracejado = capacidade da fábrica. Clique num mês para abrir.</div>`;
+  // tabela do mês
+  let h = '';
+  if(!obrasMes.length) h = '<div class="empty-state">Nenhuma fase planejada nem peça liberada neste mês.</div>';
+  else {
+    h = `<div style="overflow:auto;"><table class="data-table" style="font-size:12px;min-width:880px;"><thead><tr><th>Obra</th><th>Fase</th><th>Descrição</th><th>Material liberado</th><th>Início</th><th>Fim</th><th style="text-align:right;">Total (t)</th><th style="text-align:right;">No mês (t)</th><th style="text-align:right;">Acum. até fim do mês</th><th>Divide a fábrica com</th></tr></thead><tbody>`;
+    obrasMes.forEach(([oid, onome])=>{
+      const ls = linhas.filter(x=>x.f.obraId===oid), sub = ls.reduce((s,x)=>s+x.t,0), r = pcpRealObra(RM, oid, ym);
+      const planAc = fases.filter(f=>f.obraId===oid).reduce((t,f)=>t+pcpKgAteMes(f,ym),0)/1000, realAc = pcpRealAcum(RM, oid, ym);
+      ls.forEach((x,i)=>{ const f=x.f; h += `<tr><td>${i===0?`<b>${esc2(onome)}</b>`:''}</td><td>${esc2(f.cod)}</td><td>${esc2(f.desc)}</td><td>${pliFmtData(f.pronto)}</td><td>${pliFmtData(f.ini)}</td><td>${pliFmtData(f.fim)}</td><td style="text-align:right;">${pliFmtT(f.kg/1000)}</td><td style="text-align:right;"><b>${pliFmtT(x.t)}</b></td><td style="text-align:right;">${Math.round(x.acum*100)}%</td><td style="font-size:11px;opacity:.8;">${esc2((f.com||[]).join(', '))}</td></tr>`; });
+      const dif = r.ton - sub, difAc = realAc - planAc;
+      h += `<tr style="background:rgba(128,128,128,.08);"><td colspan="7" style="text-align:right;">${ls.length?'Subtotal ':'Sem fase planejada — '}${esc2(onome)}</td><td style="text-align:right;"><b>${pliFmtT(sub)}</b></td><td colspan="2">Liberado no mês: <b>${pliFmtT(r.ton)} t</b> (${r.n} pç) <span style="${dif<-0.0005?vermelho:''}">${dif>=0?'+':''}${pliFmtT(dif)} t</span><br><span style="font-size:11px;opacity:.85;">Acumulado: plano ${pliFmtT(planAc)} t · liberado ${pliFmtT(realAc)} t <span style="${difAc<-0.0005?vermelho:''}">(${difAc>=0?'+':''}${pliFmtT(difAc)} t)</span></span></td></tr>`;
+    });
+    h += `<tr style="border-top:2px solid currentColor;"><td colspan="7" style="text-align:right;"><b>Total planejado no mês</b></td><td style="text-align:right;${ocup>1.0001?vermelho:''}"><b>${pliFmtT(planT)}</b></td><td colspan="2">Capacidade ${pliFmtT(cap,0)} t · ocupação <b style="${ocup>1.0001?vermelho:''}">${Math.round(ocup*100)}%</b></td></tr></tbody></table></div>
+      <div class="step-note" style="margin-top:6px;">As toneladas do mês distribuem cada fase de forma uniforme entre o início e o fim da fabricação definidos pelo Planejamento Integrado (ordem de produção, capacidade e obras em paralelo). Para mudar datas, capacidade ou ordem, ajuste lá — o PCP recalcula sozinho. O realizado é automático: cada peça lida em <b>Expedição → Liberar da fábrica</b> (QR Code ou código de barras) entra, pelo peso líquido do item, no mês da leitura.</div>`;
+  }
+  document.getElementById('pcpTabela').innerHTML = h;
+}
+
+/* ---------- leitura de PDFs do CEM Pro (pdf.js) ---------- */
+function fabKey(s){ return String(s||'').toUpperCase().replace(/\s+/g,'').replace(/-(H|L)$/,'').replace(/-$/,''); }
+function fabNum(s){ const t = String(s||'').trim(); if(!/^-?[\d.]+(,\d+)?$/.test(t)) return NaN; return parseFloat(t.replace(/\./g,'').replace(',','.')); }
+function fabIsInt(s){ return /^\d+$/.test(String(s||'').trim()); }
+async function fabPdfRows(doc){
+  const rows = [];
+  for(let p=1; p<=doc.numPages; p++){
+    const pg = await doc.getPage(p), tc = await pg.getTextContent();
+    const items = tc.items.filter(i=>i.str && i.str.trim()!=='').map(i=>({ t:i.str, x:i.transform[4], y:i.transform[5], w:i.width||0 }));
+    items.sort((a,b)=> (b.y-a.y) || (a.x-b.x));
+    let cur = null;
+    items.forEach(it=>{ if(!cur || Math.abs(cur.y-it.y) > 3.6){ cur = { p, y:it.y, items:[] }; rows.push(cur); } cur.items.push(it); });
+  }
+  rows.forEach(r=>{
+    r.items.sort((a,b)=>a.x-b.x); const cells = [];
+    r.items.forEach(it=>{ const last = cells[cells.length-1];
+      if(last && it.x-(last.x+last.w) < 4.5){ last.t += (it.x-(last.x+last.w) > 0.8 ? ' ' : '') + it.t; last.w = it.x+it.w-last.x; }
+      else cells.push({ t:it.t, x:it.x, w:it.w }); });
+    r.cells = cells.map(c=>({ t:c.t.trim(), x:c.x, w:c.w })); r.c = r.cells.map(c=>c.t); r.txt = r.c.join(' ');
+    delete r.items;
+  });
+  return rows;
+}
+function fabClassificar(rows){
+  const topo = rows.slice(0,14).map(r=>r.txt).join(' | ');
+  if(/Itens da Obra/i.test(topo)) return 'itens';
+  if(/Rela..o de Vidros/i.test(topo)) return 'vidros';
+  if(/Padr.es de Cortes|Confer.ncia de Cortes/i.test(topo)) return 'cortes';
+  if(rows.some(r=>/^Modelo:/.test(r.txt))) return 'montagem';
+  return null;
+}
+const FAB_RUIDO = /^(Obra:|Cliente:|Endere.o:|Tratamento:|Aten..o:|CEM Pro|Itens da Obra|Emitido por|Rela..o de Vidros|Refer.ncia:|AVISOS|•|Padr.es de Cortes|Confer.ncia de Cortes|Data do c.lculo|Peso Total|[A-Z]+-ORC-)/i;
+function fabParseItens(rows){
+  const out = []; let modeloCod = '', modeloDesc = '', st = 0, last = null, inData = false;
+  for(const r of rows){
+    const c = r.c; if(!c.length) continue;
+    if(FAB_RUIDO.test(r.txt) && !/^\d/.test(c[0])) { if(/^Obra:/.test(r.txt)||/^Atenção/.test(r.txt)||/^CEM Pro/.test(r.txt)){ last = null; } continue; }
+    if(/^Tipo\b/.test(c[0]) && /Quantidade/.test(r.txt)){ last = null; inData = true; continue; }
+    if(c.length===1 && /^[A-Z0-9]{2,5}-[A-Z0-9]+(-[A-Z0-9]+)*$/.test(c[0]) && /\d/.test(c[0])){ modeloCod = c[0]; st = 1; last = null; inData = false; continue; }
+    if(st===1 && c.length===1){ modeloDesc = c[0]; st = 0; last = null; continue; }
+    let i = -1;
+    for(let k=1; k<=c.length-4; k++){ if(fabIsInt(c[k]) && fabIsInt(c[k+1]) && +c[k+1]>=50 && fabIsInt(c[k+2]) && +c[k+2]>=50 && !isNaN(fabNum(c[k+3])) && /,/.test(c[k+3])){ i = k; break; } }
+    if(i>0){
+      const nums = c.slice(i+4).filter(x=>!isNaN(fabNum(x)) && /,/.test(x));
+      const pesoUn = nums.length>=2 ? fabNum(nums[nums.length-2]) : (nums.length ? fabNum(nums[0]) : 0);
+      const loc = c.slice(i+4).filter(x=>isNaN(fabNum(x))).join(' ');
+      last = { tipo:c.slice(0,i).join(' '), qtd:+c[i], L:+c[i+1], H:+c[i+2], area:fabNum(c[i+3]), pesoUn, loc, modelo:modeloCod, desc:modeloDesc };
+      out.push(last); continue;
+    }
+    if(c.length===1 && last && inData && !/^\d+$/.test(c[0])){ last.tipo += ' ' + c[0]; continue; }
+  }
+  out.forEach(x=>{ x.tipo = x.tipo.replace(/\s+/g,' ').trim(); x.key = fabKey(x.tipo); });
+  return out;
+}
+function fabParseCortes(rows){
+  const blocos = []; let b = null, st = '';
+  for(const r of rows){
+    const c = r.c; if(!c.length) continue;
+    const m = r.txt.match(/Barras:\s*(\d+)\s*x\s*(\d+)/);
+    if(m && !/^\d+\s*x/.test(c[0])){
+      let cod = c[0]; if(/Barras:/.test(cod)) cod = cod.split('Barras:')[0].trim();
+      b = { perfil:cod, desc:'', trat:'', barras:+m[1], comp:+m[2], pecas:[] }; blocos.push(b); st = 'desc'; continue;
+    }
+    if(!b) continue;
+    if(/^Aten..o:|^CEM Pro/.test(r.txt) || /^Obra:/.test(r.txt) || /Calculada em/.test(r.txt)) continue;
+    if(st==='desc'){ if(/^Trat\.:/.test(c[0])){ b.trat = c[0].replace(/^Trat\.:\s*/,''); st = 'hdr'; continue; } if(!/N.vel Otimiza/.test(c[0])) b.desc = (b.desc ? b.desc+' ' : '') + c[0]; continue; }
+    if(st==='hdr'){ if(/^Quantidade/.test(c[0])) st = 'pecas'; continue; }
+    if(st==='pecas'){
+      if(/ped.os?$/.test(r.txt) || /^\d+\s+ped/.test(r.txt)){ st = 'fim'; continue; }
+      if(c.length>=3 && fabIsInt(c[0]) && fabIsInt(c[1]) && /^\d+\/\d+$/.test(c[2])){ b.pecas.push({ qtd:+c[0], tam:+c[1], ang:c[2], tipo:c.slice(3).join(' ') }); continue; }
+      if(c.length===1 && b.pecas.length){ b.pecas[b.pecas.length-1].tipo += ' ' + c[0]; continue; }
+    }
+  }
+  const mapa = new Map();
+  blocos.forEach(x=>{ x.pecas.forEach(p=>{ p.tipo = p.tipo.replace(/\s+/g,' ').trim(); p.key = fabKey(p.tipo.replace(/\s*-\s*(H|L|A|-)$/,'')); });
+    const k = x.perfil; if(mapa.has(k)){ const a = mapa.get(k); a.barras += x.barras; a.pecas = a.pecas.concat(x.pecas); } else mapa.set(k, x); });
+  return [...mapa.values()];
+}
+function fabParseVidros(rows){
+  const out = []; let last = null, ref = '';
+  for(const r of rows){
+    const c = r.c; if(!c.length) continue;
+    if(/^Refer.ncia:/.test(r.txt)){ ref = r.txt.replace(/^Refer.ncia:\s*/,''); last = null; continue; }
+    if(/^(Obra:|Cliente|Aten..o|CEM Pro|Rela..o de Vidros|Emitido|WAY-|C.digo\b)/.test(r.txt) && !/^[A-Z]{2,}-[A-Z]+-/.test(c[0])) { if(/^C.digo\b/.test(c[0])) continue; if(/^(Obra:|Aten..o|CEM Pro)/.test(r.txt)) last = null; continue; }
+    let i = -1;
+    for(let k=2; k<=c.length-5; k++){ if(fabIsInt(c[k]) && fabIsInt(c[k+1]) && fabIsInt(c[k+2]) && !isNaN(fabNum(c[k+3])) && !isNaN(fabNum(c[k+4]))){ i = k; break; } }
+    if(i>=3){
+      last = { ref, codigo:c[0], cor:c[1], tipo:c.slice(2,i).join(' '), L:+c[i], H:+c[i+1], qtd:+c[i+2], areaReal:fabNum(c[i+3]), areaEmp:fabNum(c[i+4]), peso:fabNum(c[i+5]), pos:c.slice(i+6).join(' '), desc:'', _x:r.cells[0].x, _tx:r.cells[2].x, _px:(r.cells[i+6]||{}).x };
+      out.push(last); continue;
+    }
+    if(c.length===1 && last){
+      const x = r.cells[0].x;
+      if(x > last._x + 100 && !last.desc){
+        if(last._px!=null && Math.abs(x-last._px) < Math.abs(x-last._tx)) last.pos += ' ' + c[0]; else last.tipo += ' ' + c[0];
+      } else if(!last.desc) last.desc = c[0];
+    }
+  }
+  out.forEach(x=>{ x.tipo = x.tipo.replace(/\s+/g,' ').trim(); x.key = fabKey(x.tipo); x.pos = x.pos.replace(/\s+/g,' ').trim(); delete x._x; delete x._tx; delete x._px; });
+  return out;
+}
+function fabParseMontagem(rows){
+  const out = new Map();
+  for(let i=0; i<rows.length; i++){
+    const t = rows[i].txt; if(!/^Modelo:/.test(t)) continue;
+    const bloco = [rows[i].txt, rows[i+1]&&rows[i+1].txt, rows[i+2]&&rows[i+2].txt, rows[i+3]&&rows[i+3].txt].filter(Boolean).join(' ');
+    const q = bloco.match(/\((\d+)\s*unid/);
+    let tipo = t.replace(/^Modelo:\s*/,'').replace(/\s*-\s*$/,'');
+    const fam = rows[i+1] && /^[A-Z0-9]{2,5}-[A-Z0-9]+(-[A-Z0-9]+)*$/.test(rows[i+1].txt) ? rows[i+1].txt : '';
+    if(!fam){ const m2 = bloco.match(/^Modelo:\s*(.*?)\s+-\s*([A-Z0-9]{2,5}-[A-Z0-9-]+)/); if(m2){ tipo = m2[1]; } }
+    const key = fabKey(tipo); if(!out.has(key) && q) out.set(key, { tipo, key, qtd:+q[1] });
+  }
+  return [...out.values()];
+}
+async function fabLerArquivos(files, pdfjs){
+  const res = { itens:[], cortes:[], vidros:[], montagem:[], arquivos:[], avisos:[] };
+  for(const f of files){
+    try{
+      const buf = await f.arrayBuffer(); const doc = await pdfjs.getDocument({ data:new Uint8Array(buf) }).promise;
+      const rows = await fabPdfRows(doc), tipo = fabClassificar(rows);
+      if(!tipo){ res.avisos.push(f.name+': relatório não reconhecido (esperado: Itens, Cortes/Conferência, Vidros ou Montagem do CEM Pro).'); continue; }
+      if(tipo==='itens') res.itens = res.itens.concat(fabParseItens(rows));
+      if(tipo==='cortes'){ const novos = fabParseCortes(rows); novos.forEach(n=>{ const j = res.cortes.find(x=>x.perfil===n.perfil); if(!j) res.cortes.push(n); }); }
+      if(tipo==='vidros') res.vidros = res.vidros.concat(fabParseVidros(rows));
+      if(tipo==='montagem') res.montagem = res.montagem.concat(fabParseMontagem(rows));
+      res.arquivos.push({ nome:f.name, tipo, paginas:doc.numPages });
+    }catch(e){ res.avisos.push(f.name+': erro ao ler ('+(e&&e.message||e)+').'); }
+  }
+  return res;
+}
+
+/* ================= FÁBRICA: lotes de corte/usinagem (por perfil) e vidros importados do CEM Pro ================= */
+let FAB_PDFJS = null;
+async function fabCarregarPdfJs(){
+  if(FAB_PDFJS) return FAB_PDFJS;
+  const base = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  if(!window.pdfjsLib){
+    await new Promise((res,rej)=>{ const s = document.createElement('script'); s.src = base+'pdf.min.js'; s.onload = res; s.onerror = ()=>rej(new Error('Não foi possível carregar o leitor de PDF (verifique a conexão).')); document.head.appendChild(s); });
+  }
+  try{ const r = await fetch(base+'pdf.worker.min.js'); const b = await r.blob(); window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(b); }
+  catch(e){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = base+'pdf.worker.min.js'; }
+  FAB_PDFJS = window.pdfjsLib; return FAB_PDFJS;
+}
+let FAB_UI = { imp:null, aba:'perfil', bloco:'', busca:'', st:'' };
+function fabDH(iso){ return expFmtDH(iso); }
+function fabFmt(n, d){ return (n||0).toLocaleString('pt-BR',{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
+function fabTotalLote(l){ return l.tipo==='perfil' ? (l.barras||0) : (l.qtd||0); }
+function fabEstagio(l, campo){ return (l[campo]||{}).n||0; }
+function fabPendenciasItem(it){
+  const key = it.chaveCem || fabKey(it.nomenclatura); if(!key) return [];
+  const pend = [];
+  load('fabLotes').filter(l=>l.obraId===it.obraId).forEach(l=>{
+    if(l.tipo==='perfil' && (l.pecas||[]).some(p=>p.key===key)){
+      const t = fabTotalLote(l);
+      if(fabEstagio(l,'corte')<t) pend.push('corte do perfil '+l.perfil+' ('+fabEstagio(l,'corte')+'/'+t+')');
+      else if(fabEstagio(l,'usin')<t) pend.push('usinagem do perfil '+l.perfil+' ('+fabEstagio(l,'usin')+'/'+t+')');
+    }
+    if(l.tipo==='vidro' && l.key===key && fabEstagio(l,'vid')<fabTotalLote(l)) pend.push('vidro '+(l.pos||l.cor||'')+' '+l.L+'×'+l.H+' ('+fabEstagio(l,'vid')+'/'+fabTotalLote(l)+')');
+  });
+  return pend;
+}
+function fabProcessarLote(txt, modo){
+  const t = String(txt||'').trim().replace(/^SGPT[:|]/i,'').trim();
+  const lotes = load('fabLotes'), l = lotes.find(x=>String(x.codigo).toUpperCase()===t.toUpperCase());
+  if(!l) return { nivel:'erro', msg:'Código "'+t+'" não encontrado entre os perfis/vidros importados.' };
+  const esperado = modo==='vidro' ? 'vidro' : 'perfil';
+  const nome = (l.tipo==='perfil' ? ['Perfil',l.perfil,l.desc] : ['Vidro',l.tipoTxt,l.pos,l.L+'×'+l.H]).filter(Boolean).join(' ');
+  if(l.tipo!==esperado) return { nivel:'erro', msg:nome+' é um código de '+(l.tipo==='perfil'?'PERFIL':'VIDRO')+' — troque o modo de leitura.' };
+  const campo = modo==='corte' ? 'corte' : (modo==='usin' ? 'usin' : 'vid'), total = fabTotalLote(l);
+  const est = l[campo] || (l[campo] = { n:0, hist:[] }), rot = { corte:'corte concluído', usin:'usinagem concluída', vid:'vidro pronto (colagem)' }[campo];
+  const obra = (load('obras').find(o=>o.id===l.obraId)||{}).nome || '';
+  if(modo==='usin' && fabEstagio(l,'corte') < total) return { nivel:'erro', msg:nome+' — o corte ainda não foi concluído ('+fabEstagio(l,'corte')+'/'+total+' barras). Corte antes de usinar.' };
+  if(est.n >= total){
+    const u = (est.hist||[]).filter(h=>!h.desfeito).slice(-1)[0];
+    return { nivel:'aviso', msg:nome+' — leitura DUPLICADA: '+rot+' já registrado'+(u?' em '+fabDH(u.em)+' por '+u.por:'')+'. Nada foi somado.' };
+  }
+  const agora = new Date().toISOString(), quem = expUsuario();
+  est.hist = est.hist || []; est.hist.push({ n:total-est.n, de:est.n, em:agora, por:quem }); est.n = total;
+  save('fabLotes', lotes);
+  try{ logAtividade(l.obraId, 'fabrica', nome+' — '+rot); }catch(e){}
+  return { nivel:'ok', msg:nome+' — '+rot+(obra?' · '+obra:'')+' ('+total+'/'+total+')' };
+}
+/* ---------- importação ---------- */
+async function fabLer(input){
+  const files = [...(input.files||[])]; if(!files.length) return;
+  const st = document.getElementById('fabImpStatus'); if(st) st.textContent = 'Lendo '+files.length+' arquivo(s)...';
+  try{
+    const pdfjs = await fabCarregarPdfJs();
+    FAB_UI.imp = await fabLerArquivos(files, pdfjs);
+  }catch(e){ if(st) st.innerHTML = '<span style="color:#a80e26">'+esc(e.message||String(e))+'</span>'; input.value=''; return; }
+  input.value = '';
+  if(st) st.textContent = '';
+  fabRenderPreview();
+}
+function fabAnaliseImport(){
+  const I = FAB_UI.imp; if(!I) return null;
+  const blocoSel = (document.getElementById('fabBloco')||{}).value || '';
+  const existentes = (blocoSel && blocoSel!=='__novo__') ? load('itensObra').filter(it=>it.obraId===currentObraId && it.blocoId===blocoSel) : [];
+  const chaveEx = new Set(existentes.map(it=>fabKey(it.nomenclatura)));
+  const keys = new Set(I.itens.map(x=>x.key));
+  const semItemCorte = new Set(); I.cortes.forEach(c=>c.pecas.forEach(p=>{ if(!keys.has(p.key)) semItemCorte.add(p.tipo.replace(/\s*-\s*(H|L|A|-)$/,'')); }));
+  const semItemVidro = new Set(I.vidros.filter(v=>!keys.has(v.key)).map(v=>v.tipo));
+  const semItemMont = I.montagem.filter(m=>!keys.has(m.key));
+  const divMont = I.montagem.filter(m=>{ const it = I.itens.find(x=>x.key===m.key); return it && it.qtd!==m.qtd; });
+  return { novos:I.itens.filter(x=>!chaveEx.has(x.key)).length, jaExistem:I.itens.filter(x=>chaveEx.has(x.key)).length, semItemCorte:[...semItemCorte], semItemVidro:[...semItemVidro], semItemMont, divMont };
+}
+function fabRenderPreview(){
+  const box = document.getElementById('fabPreview'); if(!box) return;
+  const I = FAB_UI.imp; if(!I){ box.innerHTML = ''; return; }
+  const A = fabAnaliseImport();
+  const barras = I.cortes.reduce((s,c)=>s+c.barras,0), vid = I.vidros.reduce((s,v)=>s+v.qtd,0), esq = I.itens.reduce((s,x)=>s+x.qtd,0);
+  const lista = (arr,max)=> arr.slice(0,max).map(x=>esc(x)).join(' · ') + (arr.length>max?' … +'+(arr.length-max):'');
+  const li = (ok, txt)=>`<div style="padding:2px 0;color:${ok?'#1f7a3a':'#b26a00'};">${ok?'✔':'⚠'} ${txt}</div>`;
+  box.innerHTML = `<div style="border:1px solid rgba(128,128,128,.4);border-radius:8px;padding:12px;margin-top:10px;">
+    <div style="font-weight:700;margin-bottom:6px;">Conferência antes de importar</div>
+    ${I.arquivos.map(a=>`<div style="font-size:12.5px;">📄 ${esc(a.nome)} — <b>${{itens:'Itens da obra',cortes:'Cortes / Conferência de cortes',vidros:'Relação de vidros',montagem:'Montagem'}[a.tipo]}</b> (${a.paginas} pág.)</div>`).join('')}
+    ${I.avisos.map(a=>`<div style="color:#a80e26;font-size:12.5px;">✖ ${esc(a)}</div>`).join('')}
+    <div style="margin-top:8px;">
+      ${li(I.itens.length>0, 'Esquadrias: <b>'+I.itens.length+'</b> tipos · <b>'+esq+'</b> unidades'+(I.itens.length?' — <b>'+A.jaExistem+'</b> já cadastrados no bloco (não serão alterados), <b>'+A.novos+'</b> sem cadastro':' — importe também o relatório de Itens'))}
+      ${I.itens.length&&A.novos>0?`<label style="display:block;font-size:12.5px;margin:2px 0 6px 18px;"><input type="checkbox" id="fabCriarEsq" ${A.jaExistem===0?'checked':''}> Criar no cadastro as <b>${A.novos}</b> esquadria(s) que ainda não existem neste bloco (as já cadastradas nunca são alteradas)</label>`:''}
+      ${li(I.cortes.length>0, 'Perfis: <b>'+I.cortes.length+'</b> (um código por perfil) · <b>'+fabFmt(barras)+'</b> barras')}
+      ${li(I.vidros.length>0, 'Vidros: <b>'+I.vidros.length+'</b> linhas · <b>'+fabFmt(vid)+'</b> vidros')}
+      ${I.montagem.length?li(!A.semItemMont.length && !A.divMont.length, 'Montagem: <b>'+I.montagem.length+'</b> modelo(s) lido(s)'+(A.divMont.length?' · quantidade diferente do relatório de Itens em: '+lista(A.divMont.map(m=>m.tipo),5):'')+(A.semItemMont.length?' · sem item: '+lista(A.semItemMont.map(m=>m.tipo),5):'')):''}
+      ${I.itens.length?li(!A.semItemCorte.length, A.semItemCorte.length?'Peças de corte de tipos que não estão no relatório de Itens: '+lista(A.semItemCorte,10):'Todas as peças de corte ligam a um tipo de esquadria'):''}
+      ${I.itens.length?li(!A.semItemVidro.length, A.semItemVidro.length?'Vidros de tipos que não estão no relatório de Itens: '+lista(A.semItemVidro,10):'Todos os vidros ligam a um tipo de esquadria'):''}
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn" onclick="fabConfirmar()">Confirmar importação</button><button class="btn secondary" onclick="FAB_UI.imp=null;fabRenderPreview()">Descartar</button></div>
+    <div class="step-note">A importação <b>não altera</b> nenhuma esquadria já cadastrada (medidas, pesos, quantidades, progresso). Importar de novo o mesmo relatório não duplica: perfis e vidros já importados mantêm código e baixas; o que for novo é acrescentado.</div></div>`;
+}
+function fabConfirmar(){
+  const I = FAB_UI.imp; if(!I || !currentObraId) return;
+  let blocoId = (document.getElementById('fabBloco')||{}).value || '';
+  const novoNome = ((document.getElementById('fabBlocoNovo')||{}).value||'').trim();
+  let blocos = load('blocos');
+  if(!blocoId || blocoId==='__novo__'){
+    if(!novoNome){ toast('Escolha o bloco ou digite o nome de um bloco novo (ex.: BL5).'); return; }
+    const fase = garantirFaseNaoClassificado(currentObraId);
+    blocos = load('blocos'); const b = { id:uid(), obraId:currentObraId, nome:novoNome, faseId:fase.id }; blocos.push(b); save('blocos', blocos); blocoId = b.id;
+  }
+  // 1) esquadrias — NUNCA altera item já cadastrado; só cria os que ainda não existem no bloco (e só se marcado)
+  const criarEsq = !!(document.getElementById('fabCriarEsq')||{}).checked;
+  let itens = load('itensObra'), criados = 0, jaExistiam = 0, ignorados = 0;
+  I.itens.forEach(x=>{
+    const tipoEsq = /GUARDA/i.test(x.desc||'') ? 'Guarda-corpo' : (/FACHADA/i.test(x.desc||'') ? 'Fachada' : 'Janela e Porta');
+    const existe = itens.some(i=>i.obraId===currentObraId && i.blocoId===blocoId && (i.chaveCem===x.key || fabKey(i.nomenclatura)===x.key));
+    if(existe){ jaExistiam++; return; }
+    if(!criarEsq){ ignorados++; return; }
+    const it = { id:uid(), obraId:currentObraId, blocoId, tipologiaId:null, nomenclatura:x.tipo, tipoEsquadria:tipoEsq, largura:String(x.L), altura:String(x.H), pesoLiquido:x.pesoUn||0,
+      localizacoes:[{ id:uid(), local:'', quantidade:x.qtd }], quantidade:x.qtd, projeto:{}, producao:{}, instalacao:{}, chaveCem:x.key, modeloCem:x.modelo||'' };
+    itens.push(it); criados++; try{ gerarTarefasParaItemNovo(it); }catch(e){}
+  });
+  if(criados) save('itensObra', itens);
+  // 2) lotes de perfil e vidro
+  const lotes = load('fabLotes'); let nP = 0, nV = 0;
+  const seq = pre => lotes.filter(l=>String(l.codigo).startsWith(pre)).reduce((m,l)=>Math.max(m, parseInt(String(l.codigo).slice(1),10)||0), 0);
+  let sP = seq('P'), sV = seq('V'); const agora = new Date().toISOString();
+  I.cortes.forEach(c=>{
+    const chave = 'P|'+blocoId+'|'+c.perfil; const ex = lotes.find(l=>l.chave===chave);
+    const base = { obraId:currentObraId, blocoId, tipo:'perfil', chave, perfil:c.perfil, desc:c.desc, trat:c.trat, barras:c.barras, comp:c.comp, pecas:c.pecas };
+    if(ex){ Object.assign(ex, base); return; }
+    sP++; lotes.push(Object.assign({ id:uid(), codigo:'P'+String(sP).padStart(5,'0'), importadoEm:agora, corte:{ n:0, hist:[] }, usin:{ n:0, hist:[] } }, base)); nP++;
+  });
+  I.vidros.forEach(v=>{
+    const chave = ['V',blocoId,v.codigo,v.key,v.pos,v.L,v.H].join('|'); const ex = lotes.find(l=>l.chave===chave);
+    const base = { obraId:currentObraId, blocoId, tipo:'vidro', chave, ref:v.ref, cod:v.codigo, cor:v.cor, tipoTxt:v.tipo, key:v.key, pos:v.pos, L:v.L, H:v.H, qtd:v.qtd, areaReal:v.areaReal, peso:v.peso, descVidro:v.desc };
+    if(ex){ Object.assign(ex, base); return; }
+    sV++; lotes.push(Object.assign({ id:uid(), codigo:'V'+String(sV).padStart(5,'0'), importadoEm:agora, vid:{ n:0, hist:[] } }, base)); nV++;
+  });
+  save('fabLotes', lotes);
+  FAB_UI.imp = null;
+  toast('Importado: '+nP+' perfil(is) e '+nV+' linha(s) de vidro novos · esquadrias: '+criados+' criada(s), '+jaExistiam+' já cadastrada(s) (não alteradas)'+(ignorados?', '+ignorados+' fora do cadastro':'')+'.');
+  try{ renderAllItemModulos(); }catch(e){}
+  renderExpedicao();
+}
+/* ---------- painel (lotes) ---------- */
+function fabPainelHtml(){
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId),'nome');
+  return `<div class="panel"><div class="panel-head">Fábrica — importar relatórios do CEM Pro e gerar etiquetas por perfil e vidro</div><div class="panel-body">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <label style="font-size:12px;">Bloco<br><select id="fabBloco" onchange="fabRenderPreview()" style="min-width:160px;"><option value="__novo__">+ Novo bloco…</option>${blocos.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')}</select></label>
+      <label style="font-size:12px;">Nome do bloco novo<br><input type="text" id="fabBlocoNovo" placeholder="ex.: BL5" style="width:120px;"></label>
+      <label class="btn" style="cursor:pointer;">Escolher PDFs (Itens, Cortes, Vidros, Montagem)<input type="file" accept=".pdf,application/pdf" multiple style="display:none" onchange="fabLer(this)"></label>
+      <span id="fabImpStatus" style="font-size:12px;"></span>
+    </div>
+    <div id="fabPreview"></div>
+    <div id="fabLotes" style="margin-top:14px;"></div>
+  </div></div>`;
+}
+function fabLotesFiltrados(){
+  const f = FAB_UI, b = f.busca.trim().toLowerCase();
+  return load('fabLotes').filter(l=>l.obraId===currentObraId && l.tipo===f.aba && (!f.bloco || l.blocoId===f.bloco)).filter(l=>{
+    if(b){ const tx = (l.codigo+' '+(l.perfil||'')+' '+(l.desc||'')+' '+(l.tipoTxt||'')+' '+(l.pos||'')+' '+(l.cor||'')).toLowerCase(); if(!tx.includes(b)) return false; }
+    if(f.st){ const t = fabTotalLote(l); const feito = l.tipo==='perfil' ? (fabEstagio(l,'usin')>=t) : (fabEstagio(l,'vid')>=t); const ini = l.tipo==='perfil' ? (fabEstagio(l,'corte')>0) : (fabEstagio(l,'vid')>0);
+      if(f.st==='pend' && ini) return false; if(f.st==='and' && (!ini || feito)) return false; if(f.st==='ok' && !feito) return false; }
+    return true; });
+}
+function fabAtualizarLotes(){
+  const box = document.getElementById('fabLotes'); if(!box) return;
+  const todos = load('fabLotes').filter(l=>l.obraId===currentObraId);
+  if(!todos.length){ box.innerHTML = '<div class="step-note">Nenhum perfil ou vidro importado nesta obra ainda. Escolha os PDFs acima — o sistema reconhece sozinho cada tipo de relatório.</div>'; return; }
+  const per = todos.filter(l=>l.tipo==='perfil'), vid = todos.filter(l=>l.tipo==='vidro');
+  const soma = (arr,c,key)=>arr.reduce((s,l)=>s+Math.min(fabEstagio(l,c),fabTotalLote(l)),0);
+  const tot = arr=>arr.reduce((s,l)=>s+fabTotalLote(l),0);
+  const kpi = (rot,a,b)=>`<div class="kpi"><div class="num">${b?Math.round(a/b*100):0}%</div><div class="lbl">${rot}<br>${fabFmt(a)} de ${fabFmt(b)}</div></div>`;
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId),'nome'), nb = id=>(blocos.find(b=>b.id===id)||{}).nome||'';
+  const lista = fabLotesFiltrados();
+  const pode = pliTemAcesso();
+  let h = `<div class="kpi-row">${kpi('Perfis cortados (barras)',soma(per,'corte'),tot(per))}${kpi('Perfis usinados (barras)',soma(per,'usin'),tot(per))}${kpi('Vidros prontos (colagem)',soma(vid,'vid'),tot(vid))}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center;">
+      <button class="btn small ${FAB_UI.aba==='perfil'?'':'secondary'}" onclick="FAB_UI.aba='perfil';fabAtualizarLotes()">Perfis (${per.length})</button>
+      <button class="btn small ${FAB_UI.aba==='vidro'?'':'secondary'}" onclick="FAB_UI.aba='vidro';fabAtualizarLotes()">Vidros (${vid.length})</button>
+      <input type="text" id="fabBusca" placeholder="Buscar" value="${esc(FAB_UI.busca)}" oninput="FAB_UI.busca=this.value;fabAtualizarLotes();document.getElementById('fabBusca').focus()" style="min-width:160px;">
+      <select onchange="FAB_UI.bloco=this.value;fabAtualizarLotes()"><option value="">Todos os blocos</option>${blocos.map(b=>`<option value="${b.id}" ${FAB_UI.bloco===b.id?'selected':''}>${esc(b.nome)}</option>`).join('')}</select>
+      <select onchange="FAB_UI.st=this.value;fabAtualizarLotes()"><option value="">Todos</option><option value="pend" ${FAB_UI.st==='pend'?'selected':''}>Não iniciados</option><option value="and" ${FAB_UI.st==='and'?'selected':''}>Em andamento</option><option value="ok" ${FAB_UI.st==='ok'?'selected':''}>Concluídos</option></select>
+      <button class="btn small" onclick="fabEtiquetas('${FAB_UI.aba}')">Etiquetas (QR + código de barras)</button>
+      <button class="btn small secondary" onclick="fabListaA4('${FAB_UI.aba}')">Lista A4 com código de barras</button>
+      ${pode?`<button class="btn small secondary" onclick="fabApagarSemBaixa()">Apagar importação sem baixas</button>`:''}
+    </div>`;
+  const cel = (l,c,lbl)=>{ const t = fabTotalLote(l), n = Math.min(fabEstagio(l,c),t), ok = n>=t; return `<td style="text-align:center;${ok?'color:#1f7a3a;font-weight:700;':(n>0?'color:#b26a00;':'')}">${n}/${t} ${ok?'✔':''}<div style="font-size:11px;"><a href="javascript:void(0)" onclick="fabParcial('${l.id}','${c}')">parcial</a>${pode&&n>0?` · <a href="javascript:void(0)" onclick="fabDesfazer('${l.id}','${c}')">desfazer</a>`:''}</div></td>`; };
+  if(FAB_UI.aba==='perfil'){
+    h += `<div style="overflow:auto;max-height:420px;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Código</th><th>Perfil</th><th>Descrição</th><th>Bloco</th><th style="text-align:right;">Barras</th><th style="text-align:right;">Peças</th><th>Corte</th><th>Usinagem</th></tr></thead><tbody>`
+      + lista.map(l=>`<tr><td><b>${esc(l.codigo)}</b></td><td>${esc(l.perfil)}</td><td>${esc(l.desc)}</td><td>${esc(nb(l.blocoId))}</td><td style="text-align:right;">${l.barras}×${l.comp}</td><td style="text-align:right;">${(l.pecas||[]).reduce((s,p)=>s+p.qtd,0)}</td>${cel(l,'corte')}${cel(l,'usin')}</tr>`).join('') + '</tbody></table></div>';
+  } else {
+    h += `<div style="overflow:auto;max-height:420px;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Código</th><th>Tipo</th><th>Posição</th><th>Vidro</th><th>Bloco</th><th style="text-align:right;">L × H</th><th>Pronto (colagem)</th></tr></thead><tbody>`
+      + lista.map(l=>`<tr><td><b>${esc(l.codigo)}</b></td><td>${esc(l.tipoTxt)}</td><td>${esc(l.pos)}</td><td>${esc(l.cor)}</td><td>${esc(nb(l.blocoId))}</td><td style="text-align:right;">${l.L} × ${l.H}</td>${cel(l,'vid')}</tr>`).join('') + '</tbody></table></div>';
+  }
+  h += `<div class="step-note" style="margin-top:6px;">Mostrando ${lista.length} de ${FAB_UI.aba==='perfil'?per.length:vid.length}. Leitura: use os modos <b>A · Corte</b>, <b>B · Usinagem</b> (perfil) e <b>C · Vidro</b> na caixa de leitura acima. Cada código só pode ser baixado <b>uma vez</b> por etapa; o 2º bip é recusado. "Parcial" soma só parte das barras/vidros (nunca acima do total).</div>`;
+  box.innerHTML = h;
+}
+function fabParcial(id, campo){
+  const lotes = load('fabLotes'), l = lotes.find(x=>x.id===id); if(!l) return;
+  const t = fabTotalLote(l), est = l[campo] || (l[campo]={n:0,hist:[]}), un = l.tipo==='perfil'?'barras':'vidros';
+  const lim = campo==='usin' ? Math.min(t, fabEstagio(l,'corte')) : t;
+  const r = prompt((l.tipo==='perfil'?'Perfil '+l.perfil:'Vidro '+l.tipoTxt)+' — quantas '+un+' já estão concluídas no total (0 a '+lim+')?', String(est.n));
+  if(r===null) return; const n = parseInt(String(r).trim(),10);
+  if(!isFinite(n) || n<0 || n>lim){ toast('Valor inválido: informe de 0 a '+lim+'.'); return; }
+  if(n===est.n) return;
+  if(n<est.n && !pliTemAcesso()){ toast('Só Gerente ou Coordenador pode reduzir uma baixa.'); return; }
+  est.hist = est.hist || []; est.hist.push({ n:n-est.n, de:est.n, em:new Date().toISOString(), por:expUsuario(), manual:true }); est.n = n;
+  if(campo==='corte' && fabEstagio(l,'usin')>n){ l.usin.n = n; }
+  save('fabLotes', lotes); fabAtualizarLotes();
+}
+function fabDesfazer(id, campo){
+  if(!pliTemAcesso()){ toast('Só Gerente ou Coordenador pode desfazer uma baixa.'); return; }
+  const lotes = load('fabLotes'), l = lotes.find(x=>x.id===id); if(!l) return;
+  if(!confirm('Desfazer a baixa de '+(campo==='corte'?'corte':campo==='usin'?'usinagem':'vidro')+' deste item? Fica registrado quem desfez.')) return;
+  const est = l[campo]; est.hist = est.hist || []; est.hist.push({ n:-est.n, de:est.n, em:new Date().toISOString(), por:expUsuario(), desfeito:true }); est.n = 0;
+  if(campo==='corte' && l.usin){ l.usin.hist.push({ n:-l.usin.n, de:l.usin.n, em:new Date().toISOString(), por:expUsuario(), desfeito:true }); l.usin.n = 0; }
+  save('fabLotes', lotes); fabAtualizarLotes();
+}
+function fabApagarSemBaixa(){
+  if(!pliTemAcesso()) return;
+  const lotes = load('fabLotes'), manter = lotes.filter(l=> l.obraId!==currentObraId || fabEstagio(l,'corte')>0 || fabEstagio(l,'usin')>0 || fabEstagio(l,'vid')>0);
+  const n = lotes.length - manter.length; if(!n){ toast('Nada para apagar: todos os lotes têm baixa.'); return; }
+  if(!confirm('Apagar '+n+' perfil(is)/vidro(s) desta obra que ainda não têm nenhuma baixa? (Os que já têm baixa ficam.)')) return;
+  save('fabLotes', manter); fabAtualizarLotes();
+}
+/* ---------- impressão ---------- */
+function fabImprimir(html, msg){
+  const area = document.getElementById('rdoPrintArea'); area.innerHTML = `<div class="etq-wrap">${html}</div>`; area.classList.add('etq-mode');
+  const depois = ()=>{ area.classList.remove('etq-mode'); window.removeEventListener('afterprint', depois); }; window.addEventListener('afterprint', depois);
+  toast(msg); window.print();
+}
+function fabEtiquetas(aba){
+  const cfg = expCfg(), L = cfg.preset==='custom' ? cfg.custom : EXP_ETQ_PRESETS[cfg.preset];
+  const lista = fabLotesFiltrados(); if(!lista.length){ toast('Nada para etiquetar com esse filtro.'); return; }
+  const obra = load('obras').find(o=>o.id===currentObraId)||{}, blocos = load('blocos'), nb = id=>(blocos.find(b=>b.id===id)||{}).nome||'';
+  const slots = []; lista.forEach(l=>{ for(let i=0;i<cfg.copias;i++) slots.push(l); });
+  const porFolha = L.cols*L.rows, off = Math.max(0,(cfg.inicio||1)-1)%porFolha, todos = new Array(off).fill(null).concat(slots);
+  const qrMm = Math.min(L.h-4, L.w*0.4), fs = Math.max(6.5, Math.min(11, L.h/4.2)), lin = 'font-size:'+fs+'px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  const etq = l=>{
+    let t1, t2, t3, t4;
+    if(l.tipo==='perfil'){ const tipos = [...new Set((l.pecas||[]).map(p=>p.tipo.replace(/\s*-\s*(H|L|A|-)$/,'')))];
+      t1 = 'PERFIL '+esc(l.perfil); t2 = esc(l.desc||''); t3 = l.barras+' barras × '+l.comp+' mm'; t4 = 'Atende '+tipos.length+' tipo(s): '+esc(tipos.slice(0,2).join(', '))+(tipos.length>2?'…':''); }
+    else { t1 = 'VIDRO '+esc(l.tipoTxt||''); t2 = esc(l.pos||'')+' · '+esc(l.cor||''); t3 = l.L+' × '+l.H+' mm · '+l.qtd+' un'; t4 = esc(l.descVidro||l.cod||''); }
+    return `<div style="display:flex;gap:1.5mm;width:100%;height:100%;box-sizing:border-box;padding:1.6mm;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#000;">
+      <div style="flex:0 0 ${qrMm}mm;height:${qrMm}mm;">${expSvgQR('SGPT:'+l.codigo)}</div>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="min-height:0;overflow:hidden;"><div style="font-size:${fs+3}px;font-weight:800;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t1}</div>
+          <div style="${lin}font-weight:700;">${t2}</div><div style="${lin}">${t3}</div><div style="${lin}">${esc(obra.nome||'')} · ${esc(nb(l.blocoId))}</div><div style="${lin}">${t4}</div></div>
+        <div><div style="height:${Math.max(5,L.h*0.2).toFixed(1)}mm;">${expSvgBarras(l.codigo)}</div><div style="font-size:${fs}px;text-align:center;letter-spacing:1px;">${esc(l.codigo)}</div></div></div></div>`; };
+  let html = '';
+  for(let f=0; f*porFolha<todos.length; f++){
+    html += `<div class="etq-folha" style="position:relative;width:210mm;height:297mm;overflow:hidden;page-break-after:always;break-after:page;">`;
+    for(let s=0; s<porFolha; s++){ const l = todos[f*porFolha+s]; if(!l) continue; const c = s%L.cols, r = Math.floor(s/L.cols);
+      html += `<div style="position:absolute;left:${(L.ml+c*L.px).toFixed(2)}mm;top:${(L.mt+r*L.py).toFixed(2)}mm;width:${L.w}mm;height:${L.h}mm;">${etq(l)}</div>`; }
+    html += '</div>';
+  }
+  const lotes = load('fabLotes'), ids = new Set(lista.map(l=>l.id)), agora = new Date().toISOString(); lotes.forEach(l=>{ if(ids.has(l.id)) l.etq = { em:agora, por:expUsuario() }; }); save('fabLotes', lotes);
+  fabImprimir(html, slots.length+' etiqueta(s) em '+Math.ceil(todos.length/porFolha)+' folha(s). Imprima em 100% (tamanho real).');
+}
+function fabListaA4(aba){
+  const lista = fabLotesFiltrados(); if(!lista.length){ toast('Nada para listar com esse filtro.'); return; }
+  const obra = load('obras').find(o=>o.id===currentObraId)||{}, blocos = load('blocos'), nb = id=>(blocos.find(b=>b.id===id)||{}).nome||'';
+  const porPag = 14; let html = '';
+  for(let i=0; i<lista.length; i+=porPag){
+    const fatia = lista.slice(i,i+porPag);
+    html += `<div style="width:210mm;height:297mm;box-sizing:border-box;padding:10mm;page-break-after:always;break-after:page;font-family:Arial,Helvetica,sans-serif;color:#000;">
+      <div style="font-size:15px;font-weight:800;">${aba==='perfil'?'Lista de perfis — corte e usinagem':'Lista de vidros — colagem'} · ${esc(obra.name||obra.nome||'')} · ${esc(nb(fatia[0].blocoId))}</div>
+      <div style="font-size:11px;margin-bottom:4px;">Leia o código na conclusão de cada etapa. Página ${i/porPag+1}/${Math.ceil(lista.length/porPag)}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#eee;"><th style="border:1px solid #888;padding:3px;width:62mm;">Código</th><th style="border:1px solid #888;padding:3px;">${aba==='perfil'?'Perfil / descrição':'Tipo / vidro'}</th><th style="border:1px solid #888;padding:3px;width:34mm;">${aba==='perfil'?'Barras':'Medida · qtd'}</th><th style="border:1px solid #888;padding:3px;width:16mm;">${aba==='perfil'?'Corte':'Pronto'}</th>${aba==='perfil'?'<th style="border:1px solid #888;padding:3px;width:16mm;">Usin.</th>':''}</tr></thead><tbody>`
+      + fatia.map(l=>`<tr><td style="border:1px solid #888;padding:3px;"><div style="height:11mm;">${expSvgBarras(l.codigo)}</div><div style="text-align:center;font-size:11px;letter-spacing:1px;">${esc(l.codigo)}</div></td>
+        <td style="border:1px solid #888;padding:3px;"><b>${esc(l.tipo==='perfil'?l.perfil:l.tipoTxt)}</b> ${esc(l.tipo==='perfil'?l.desc:l.pos)}<br><span style="font-size:10px;">${esc(l.tipo==='perfil'?l.trat:(l.cor+' · '+(l.descVidro||'')))}</span></td>
+        <td style="border:1px solid #888;padding:3px;">${l.tipo==='perfil'?l.barras+' × '+l.comp+' mm':l.L+' × '+l.H+' · '+l.qtd+' un'}</td><td style="border:1px solid #888;padding:3px;"></td>${aba==='perfil'?'<td style="border:1px solid #888;padding:3px;"></td>':''}</tr>`).join('') + '</tbody></table></div>';
+  }
+  fabImprimir(html, 'Lista com '+lista.length+' linha(s). Imprima em 100%.');
 }
 
 function openMaterialModal(id){
