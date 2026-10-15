@@ -11074,7 +11074,7 @@ async function pliImportarArquivo(ev){
         const ob = pliLerCronograma(it.wb, nm);
         const c = plcLoad();
         const ja = c.obras.findIndex(o=>o.nome.toLowerCase()===ob.nome.toLowerCase());
-        if(ja>=0){ ob.id = c.obras[ja].id; ['vinculo','obraSgptId','incluirMO','incluirInd','autoExcluidos','reparcelar','juntas','alvoDefinido','ajuste','ajusteAutoFeito'].forEach(k=>{ if(c.obras[ja][k]!==undefined) ob[k] = c.obras[ja][k]; }); if(c.obras[ja].alvoDefinido) ob.prem.alvo = c.obras[ja].prem.alvo;
+        if(ja>=0){ ob.id = c.obras[ja].id; ['orcam','vinculo','obraSgptId','incluirMO','incluirInd','autoExcluidos','reparcelar','juntas','alvoDefinido','ajuste','ajusteAutoFeito'].forEach(k=>{ if(c.obras[ja][k]!==undefined) ob[k] = c.obras[ja][k]; }); if(c.obras[ja].alvoDefinido) ob.prem.alvo = c.obras[ja].prem.alvo;
           ['marcos','fluxoPers','compraReal'].forEach(k=>{ if(c.obras[ja][k]!==undefined && ob[k]===undefined) ob[k] = c.obras[ja][k]; });
           ob.fases.forEach(f=>{ const ant = c.obras[ja].fases.find(x=>x.cod===f.cod); if(!ant) return; if(ant.nec) f.nec = ant.nec; if(ant.fatorInst!=null) f.fatorInst = ant.fatorInst;
             if(ant.kgCad!=null){ f.kgCad = f.kg; f.kg = ant.kg; if(ant.desc) f.desc = ant.desc; } });
@@ -11492,7 +11492,16 @@ function pliHtmlPremObraCard(k){
      <label>Preço do alumínio (R$/kg) ${ed('preco',p.preco,70)}</label>
      <label>Folha da fábrica (R$/mês) ${ed('folhaFab',p.folhaFab,90)}</label>
      <label>Alvo término instalação <input type="date" value="${p.alvo||''}" onchange="plcEditarData(${k},this.value)"></label>
-     <label>Componentes (fração do alumínio) ${ed('compPct',p.compPct,60)}</label>
+    </div>
+    <div class="pli-prev" style="margin-bottom:8px;">
+     <b>Orçamento Divisão Alumínio</b>
+     <label>Kg total ${(()=>{ const O=plcOrcamento(ob); return `<input type="number" step="any" value="${(ob.orcam||{}).kg||''}" placeholder="${Math.round(O.kgPlan)}" style="width:90px;" title="Vazio = kg do faseamento" onchange="plcEditarOrc(${k},'kg',this.value)">`; })()}</label>
+     <label>Componentes (% do alumínio) ${ed('compPct',p.compPct,60)}</label>
+     <label>MOF — R$/kg <input type="number" step="any" value="${(ob.orcam||{}).mof||''}" style="width:70px;" onchange="plcEditarOrc(${k},'mof',this.value)"></label>
+     <label>MOI — R$/kg <input type="number" step="any" value="${(ob.orcam||{}).moi||''}" style="width:70px;" onchange="plcEditarOrc(${k},'moi',this.value)"></label>
+     <label>Fábrica — R$/kg <input type="number" step="any" value="${(ob.orcam||{}).fab||''}" style="width:70px;" onchange="plcEditarOrc(${k},'fab',this.value)"></label>
+     <label>Vidro (R$) <input type="number" step="any" value="${(ob.orcam||{}).vidro||''}" style="width:110px;" onchange="plcEditarOrc(${k},'vidro',this.value)"></label>
+     ${(()=>{ const O=plcOrcamento(ob); return `<span class="pli-note" style="margin:0;">Alumínio ${pliFmtR(O.alum)} (${pliFmtT(O.kg,0)} kg × R$ ${pliFmtT(p.preco||0,2)}) + componentes ${pliFmtR(O.comp)} + MOF ${pliFmtR(O.mof)} + MOI ${pliFmtR(O.moi)} + fábrica ${pliFmtR(O.fab)} + vidro ${pliFmtR(O.vidro)} = <b>${pliFmtR(O.total)}</b>. É o orçamento oficial da Divisão de Alumínio para esta obra e alimenta o Cronograma Financeiro; o saldo de alumínio + componentes + MOF + MOI é rateado proporcionalmente nas parcelas futuras.</span>`; })()}
     </div>
     <div class="pli-prev">
      <b>Previsão de gastos da obra (Financeiro)</b>
@@ -12027,6 +12036,21 @@ function plcEditar(i, campo, valor){
   const c = plcLoad(); const v = parseFloat(String(valor).replace(',','.'));
   if(!c.obras[i] || !isFinite(v)) return;
   c.obras[i].prem[campo] = v; plcSave(c); renderPlanejInt();
+}
+function plcEditarOrc(i, campo, valor){
+  const c = plcLoad(); if(!c.obras[i]) return; const v = parseFloat(String(valor).replace(',','.'));
+  const o = c.obras[i].orcam = c.obras[i].orcam || {};
+  if(valor===''||!isFinite(v)) delete o[campo]; else o[campo] = v;
+  plcSave(c); renderPlanejInt();
+}
+// Orçamento da obra: kg total × (alumínio + componentes + MOF + MOI + fábrica) + vidro.
+function plcOrcamento(ob){
+  const o = ob.orcam || {}, p = ob.prem || {}; let kgPlan = 0;
+  try{ kgPlan = (plcCalc(ob).lotes||[]).reduce((a,l)=>a+l.kg,0); }catch(e){}
+  const kg = o.kg>0 ? o.kg : kgPlan, preco = p.preco||0, compPct = p.compPct||0;
+  const alum = kg*preco, comp = alum*compPct, mof = kg*(o.mof||0), moi = kg*(o.moi||0), fab = kg*(o.fab||0), vidro = o.vidro||0;
+  const definido = !!(o.mof>0 || o.moi>0 || o.fab>0 || o.vidro>0 || o.kg>0);
+  return { kg, kgPlan, alum, comp, mof, moi, fab, vidro, total: alum+comp+mof+moi+fab+vidro, definido };
 }
 function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; c.obras[i].alvoDefinido = true; plcSave(c); renderPlanejInt(); }
 function plcVincular(i, v){ const c = plcLoad(); if(!c.obras[i]) return; if(v==='') delete c.obras[i].vinculo; else c.obras[i].vinculo = v; plcSave(c); renderPlanejInt(); }
@@ -16840,22 +16864,37 @@ function cfCalcular(obraId){
   prevs.forEach(p=>{ const g=cfGrupoDe(p.categoria), m=cfMesDe(p.dataPrevista); prev[g][m]=(prev[g][m]||0)+(p.valor||0); todos.push(m); });
   todos.push(hojeM);
   const obras = load('obras').filter(o=>!obraId || o.id===obraId);
-  const orc = {}, tend = {}; let orcT=0, tendT=0;
+  const orc = {}, tend = {}; let orcT=0, tendT=0, orcDiv=false;
   CF_GRUPOS.forEach(g=>{ orc[g.k]=0; tend[g.k]=0; });
+  const cron = (()=>{ try{ return plcLoad().obras; }catch(e){ return []; } })();
   obras.forEach(o=>{ const fc=o.financeiroCategorias||{};
-    FIN_CATEGORIAS_ORCAMENTO.forEach(c=>{ const x=fc[c.key]||{}; orcT+=x.orcado||0; tendT+=x.tendencia||0; const g=CF_GRUPOS.find(q=>q.orc===c.key); if(g){ orc[g.k]+=x.orcado||0; tend[g.k]+=x.tendencia||0; } }); });
-  // Fechar valor cheio: se material / mão de obra ainda têm saldo (meta − realizado − previsto), o saldo é rateado nas parcelas futuras.
+    // orçamento definido em Premissas (Planejamento Integrado) tem prioridade sobre o orçado manual
+    const oc = { material:0, maoDeObra:0, operacional:0, vidro:0 }; let temOc = false;
+    cron.forEach(cb=>{ const sg = plcObraSgptDoCron(cb); if(!sg || sg.id!==o.id) return; const O = plcOrcamento(cb); if(!O.definido) return; temOc = true;
+      oc.material += O.alum+O.comp; oc.maoDeObra += O.mof+O.moi; oc.operacional += O.fab; oc.vidro += O.vidro; });
+    FIN_CATEGORIAS_ORCAMENTO.forEach(c=>{ const x=fc[c.key]||{}; const g=CF_GRUPOS.find(q=>q.orc===c.key);
+      if(temOc && g && (g.k in oc)) return;
+      orcT+=x.orcado||0; tendT+=x.tendencia||0; if(g){ orc[g.k]+=x.orcado||0; tend[g.k]+=x.tendencia||0; } });
+    if(temOc){ orcDiv = true; Object.keys(oc).forEach(k=>{ orc[k]+=oc[k]; orcT+=oc[k]; }); }
+  });
+  // Fechar valor cheio: o saldo do orçamento de alumínio+componentes+MOF+MOI (material + mão de obra) é rateado
+  // proporcionalmente entre todas as parcelas futuras desses grupos.
   const ajustes = {};
   if(CF_UI.fechar!==false){
-    ['material','maoDeObra'].forEach(k=>{
-      const meta = tend[k]>0 ? tend[k] : orc[k]; if(!(meta>0)) return;
-      const somaR = Object.values(real[k]).reduce((a,b)=>a+b,0), somaP = Object.values(prev[k]).reduce((a,b)=>a+b,0);
-      const gap = meta - somaR - somaP; if(gap < 1) return;
-      const ms = Object.keys(prev[k]).filter(m=>prev[k][m]>0).sort();
-      if(somaP>0){ const f = (somaP+gap)/somaP; ms.forEach(m=>{ prev[k][m] *= f; }); }
-      else { const fut=[]; let m=cfSomaMeses(hojeM,1); for(let i=0;i<3;i++){ fut.push(m); m=cfSomaMeses(m,1); } fut.forEach(m=>{ prev[k][m]=gap/fut.length; todos.push(m); }); }
-      ajustes[k]=gap;
-    });
+    const K = ['material','maoDeObra'];
+    const meta = K.reduce((a,k)=>a+(tend[k]>0?tend[k]:orc[k]),0);
+    const somaR = K.reduce((a,k)=>a+Object.values(real[k]).reduce((x,y)=>x+y,0),0);
+    const somaP = K.reduce((a,k)=>a+Object.values(prev[k]).reduce((x,y)=>x+y,0),0);
+    const gap = meta - somaR - somaP;
+    if(meta>0 && gap>=1){
+      if(somaP>0){
+        const f = (somaP+gap)/somaP;
+        K.forEach(k=>{ const parc = Object.values(prev[k]).reduce((x,y)=>x+y,0); if(parc>0) ajustes[k] = parc*(f-1); Object.keys(prev[k]).forEach(m=>{ prev[k][m] *= f; }); });
+      } else {
+        const fut=[]; let m=cfSomaMeses(hojeM,1); for(let i=0;i<3;i++){ fut.push(m); m=cfSomaMeses(m,1); }
+        K.forEach(k=>{ const g = (tend[k]>0?tend[k]:orc[k]) - Object.values(real[k]).reduce((x,y)=>x+y,0); if(g<1) return; fut.forEach(m=>{ prev[k][m]=(prev[k][m]||0)+g/fut.length; todos.push(m); }); ajustes[k]=g; });
+      }
+    }
   }
   todos.sort();
   let ini = todos[0], fim = todos[todos.length-1];
@@ -16869,7 +16908,7 @@ function cfCalcular(obraId){
   const totP = meses.map(m=>CF_GRUPOS.reduce((s,g)=>s+(prev[g.k][m]||0),0));
   const acR=[], acRP=[]; let a=antes.r, b=antes.r+antes.p;
   meses.forEach((m,i)=>{ a+=totR[i]; b+=totR[i]+totP[i]; acR.push(m<=hojeM?a:null); acRP.push(b); });
-  return { meses, hojeM, real, prev, totR, totP, acR, acRP, orc, tend, orcT, tendT, antes, ajustes };
+  return { meses, hojeM, real, prev, totR, totP, acR, acRP, orc, tend, orcT, tendT, antes, ajustes, orcDiv };
 }
 function cfGraficoSVG(D){
   const W=640, H=300, pl=58, pr=12, pt=16, pb=36, n=D.meses.length; if(!n) return '';
@@ -16881,7 +16920,7 @@ function cfGraficoSVG(D){
   let g = '';
   for(let t=0;t<=4;t++){ const v=maxV*t/4, y=Y(v); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v>=1e6?(v/1e6).toFixed(1)+' mi':Math.round(v/1e3)+' mil'}</text>`; }
   D.meses.forEach((m,i)=>{ if(i%Math.ceil(n/8)===0) g+=`<text x="${X(i)}" y="${H-14}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
-  if(D.orcT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.orcT)}" y2="${Y(D.orcT)}" stroke="currentColor" opacity=".45" stroke-dasharray="2 4"/><text x="${W-pr}" y="${Y(D.orcT)-4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">Orçado ${fmtMoeda(D.orcT)}</text>`;
+  if(D.orcT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.orcT)}" y2="${Y(D.orcT)}" stroke="currentColor" opacity=".45" stroke-dasharray="2 4"/><text x="${W-pr}" y="${Y(D.orcT)-4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${D.orcDiv?'Orç. Div. Alumínio':'Orçado'} ${fmtMoeda(D.orcT)}</text>`;
   if(D.tendT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.tendT)}" y2="${Y(D.tendT)}" stroke="currentColor" opacity=".7" stroke-dasharray="6 4"/><text x="${pl+4}" y="${Y(D.tendT)-4}" font-size="10" fill="currentColor" opacity=".85">Tendência ${fmtMoeda(D.tendT)}</text>`;
   const pts = arr => arr.map((v,i)=> v==null?null:`${X(i)},${Y(v)}`).filter(Boolean).join(' ');
   g+=`<polyline points="${pts(D.acRP)}" fill="none" stroke="${cor}" stroke-width="2" stroke-dasharray="5 4" opacity=".75"/>`;
@@ -16898,9 +16937,9 @@ function cfGraficoGrupo(D, k){
   const acR = [], acRP = [];
   D.meses.forEach(m=>{ const r = D.real[k][m]||0, p = D.prev[k][m]||0; a += r; b += r+p; acR.push(m<=D.hojeM ? a : null); acRP.push(b); });
   if(!(acRP[n-1]>0) && !(D.orc[k]>0)) return '<div class="step-note">Sem lançamentos nem previsão neste grupo.</div>';
-  return cfGraficoSVG({ meses:D.meses, hojeM:D.hojeM, acR, acRP, orcT:D.orc[k]||0, tendT:D.tend[k]||0 })
+  return cfGraficoSVG({ meses:D.meses, hojeM:D.hojeM, acR, acRP, orcT:D.orc[k]||0, tendT:D.tend[k]||0, orcDiv:D.orcDiv })
     + (D.ajustes&&D.ajustes[k]?`<div class="step-note" style="margin-top:4px;">↻ Saldo de <b>${fmtMoeda(D.ajustes[k])}</b> redistribuído nas parcelas futuras para fechar o valor cheio.</div>`:'')
-    + `<div class="step-note" style="margin-top:4px;">Realizado até hoje: <b>${fmtMoeda(acR.filter(v=>v!=null).pop()||0)}</b> · projeção final: <b>${fmtMoeda(acRP[n-1])}</b>${D.orc[k]>0?` · orçado: <b>${fmtMoeda(D.orc[k])}</b>`:''}</div>`;
+    + `<div class="step-note" style="margin-top:4px;">Realizado até hoje: <b>${fmtMoeda(acR.filter(v=>v!=null).pop()||0)}</b> · projeção final: <b>${fmtMoeda(acRP[n-1])}</b>${D.orc[k]>0?` · ${D.orcDiv?'orçamento Div. Alumínio':'orçado'}: <b>${fmtMoeda(D.orc[k])}</b>`:''}</div>`;
 }
 // Curva geral de execução física: média de fabricação e instalação (ponderadas por kg), planejado × realizado.
 function cfInstMapa(){
@@ -17017,7 +17056,7 @@ function renderCronogramaFinanceiro(){
     ['Realizado até hoje', fmtMoeda(gastoHoje), ''],
     ['Previsto a pagar', fmtMoeda(D.totP.reduce((a,b)=>a+b,0)+D.antes.p), ''],
     ['Projeção final (real + previsto)', fmtMoeda(projFinal), estouro?'color:#c62828;':''],
-    [D.tendT>0?'Tendência':'Orçado', ref>0?fmtMoeda(ref):'—', ''],
+    [D.tendT>0?'Tendência':(D.orcDiv?'Orçamento Divisão Alumínio':'Orçado'), ref>0?fmtMoeda(ref):'—', ''],
     ['Saldo projetado', ref>0?fmtMoeda(ref-projFinal):'—', estouro?'color:#c62828;':'']
   ].map(k=>`<div class="kpi"><div class="num" style="${k[2]}">${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
   try{ document.getElementById('cfExecucao').innerHTML = cfExecucaoHtml(CF_UI.obra); }catch(e){ console.error('Curva de execução', e); }
