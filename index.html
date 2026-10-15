@@ -16768,7 +16768,7 @@ function cfCalcular(obraId){
   return { meses, hojeM, real, prev, totR, totP, acR, acRP, orc, tend, orcT, tendT, antes };
 }
 function cfGraficoSVG(D){
-  const W=860, H=260, pl=64, pr=16, pt=16, pb=36, n=D.meses.length; if(!n) return '';
+  const W=960, H=270, pl=64, pr=16, pt=16, pb=36, n=D.meses.length; if(!n) return '';
   const ref = D.tendT>0 ? D.tendT : D.orcT;
   const maxV = Math.max(ref||0, ...D.acRP, ...(D.acR.filter(v=>v!=null)), 1)*1.08;
   const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/maxV);
@@ -16783,7 +16783,7 @@ function cfGraficoSVG(D){
   g+=`<polyline points="${pts(D.acRP)}" fill="none" stroke="${cor}" stroke-width="2" stroke-dasharray="5 4" opacity=".75"/>`;
   g+=`<polyline points="${pts(D.acR)}" fill="none" stroke="${cor}" stroke-width="2.6"/>`;
   const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:960px;max-height:290px;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
 }
 function renderCronogramaFinanceiro(){
   const sem = document.getElementById('cfSemAcesso'), cont = document.getElementById('cfConteudo');
