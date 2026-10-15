@@ -71,7 +71,7 @@
   /* ---- Cards / KPIs ---- */
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px;border-top:3px solid var(--red-2);}
-  .kpi .num{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--ink);}
+  .kpi .num{font-family:inherit;font-size:clamp(18px,1.7vw,25px);font-weight:700;color:var(--ink);line-height:1.15;overflow-wrap:anywhere;}
   .kpi .lbl{font-size:12px;color:var(--ink-soft);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
 
   .panel{background:var(--card);border:1px solid var(--line);border-radius:6px;margin-bottom:20px;overflow:hidden;}
@@ -233,6 +233,16 @@
   #rdoPrintArea .rdo-landscape-wrap{ page: rdo-landscape; }
   #rdoPrintArea .rdo-landscape-wrap h1{ font-size:17px; }
   #rdoPrintArea .rdo-landscape-wrap .meta{ font-size:10px; line-height:1.4; padding-bottom:8px; margin-bottom:6px; }
+  #rdoPrintArea .cf-pgrid{display:flex;gap:8px;align-items:flex-start;break-inside:avoid;}
+  #rdoPrintArea .cf-pgrid>div{flex:1 1 0;min-width:0;}
+  #rdoPrintArea .cf-pgrid h3{font-size:10px;margin:0 0 2px;}
+  #rdoPrintArea .cf-pgrid .step-note{font-size:7px;line-height:1.25;margin-top:2px;}
+  #rdoPrintArea .cf-pgrid svg{display:inline-block !important;vertical-align:top;width:100% !important;height:125px !important;}
+  #rdoPrintArea .kpi-row .kpi{padding:4px 8px;} #rdoPrintArea .kpi-row .kpi .num{font-size:13px;} #rdoPrintArea .kpi-row .kpi .lbl{font-size:8px;}
+  #rdoPrintArea .cf-compact thead th{color:#111 !important;font-weight:700;text-align:right;font-size:6px !important;letter-spacing:0 !important;padding:2px 1px !important;text-transform:none !important;border-bottom:1px solid #999;}
+  #rdoPrintArea .cf-compact th,#rdoPrintArea .cf-compact td{padding:2px 3px !important;position:static !important;white-space:nowrap;overflow:hidden;}
+  #rdoPrintArea .cf-compact thead th:first-child{text-align:left;}
+  #rdoPrintArea .cf-compact th:first-child,#rdoPrintArea .cf-compact td:first-child{width:120px;white-space:normal;}
   #rdoPrintArea .rdo-landscape-wrap table{ font-size:9.5px; table-layout:fixed; width:100%; margin:6px 0 14px; }
   #rdoPrintArea .rdo-landscape-wrap th{ padding:3px 4px; font-size:7.8px; line-height:1.15; vertical-align:bottom; overflow-wrap:break-word; word-break:break-word; hyphens:auto; }
   #rdoPrintArea .rdo-landscape-wrap td{ padding:3px 4px; line-height:1.3; overflow-wrap:break-word; word-break:break-word; }
@@ -526,6 +536,10 @@
     .form-grid, .form-grid.cols-3{grid-template-columns:1fr;}
   }
 
+  .cf-curvas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0;}
+  .cf-curvas .step-note{font-size:11px;line-height:1.35;}
+  @media(min-width:1900px){ .cf-curvas{grid-template-columns:repeat(4,minmax(0,1fr));} }
+  @media(max-width:900px){ .cf-curvas{grid-template-columns:minmax(0,1fr);} }
   /* ===== Chamados / Assistência técnica (nativo SGPT) ===== */
   .atc-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
   .atc-bar input,.atc-bar select{padding:7px 9px;font-size:13px;}
@@ -2073,15 +2087,16 @@
         <div id="cfConteudo">
           <div class="form-grid" style="margin-bottom:10px;">
             <div class="field"><label>Obra</label><select id="cfObra" onchange="CF_UI.obra=this.value;renderCronogramaFinanceiro()"></select></div>
-            <div class="field"><label>Janela</label><select id="cfJanela" onchange="CF_UI.meses=parseInt(this.value,10);renderCronogramaFinanceiro()"><option value="6">Últimos 6 meses + futuro</option><option value="12">Últimos 12 meses + futuro</option><option value="24">Últimos 24 meses + futuro</option><option value="0">Tudo</option></select></div>
+            <div class="field"><label>Janela</label><select id="cfJanela" onchange="CF_UI.meses=parseInt(this.value,10);renderCronogramaFinanceiro()"><option value="-1">De hoje para o futuro</option><option value="6">Últimos 6 meses + futuro</option><option value="12">Últimos 12 meses + futuro</option><option value="24">Últimos 24 meses + futuro</option><option value="0">Tudo</option></select></div>
+            <div class="field" style="align-self:end;"><label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;"><input type="checkbox" id="cfFechar" checked style="width:auto;" onchange="CF_UI.fechar=this.checked;renderCronogramaFinanceiro()"> Fechar valor cheio (material e mão de obra)</label></div>
             <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn small secondary" style="width:auto;" onclick="cfExportarCSV()">Exportar CSV</button><button class="btn small secondary" style="width:auto;" onclick="cfImprimir()">Imprimir</button></div>
           </div>
           <div class="kpi-row" id="cfKpis"></div>
-          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Curva S financeira</h3><div id="cfGrafico"></div></div>
-          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Curva S de execução da obra (físico)</h3><div id="cfExecucao"></div></div>
-          <div id="cfGrupos" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:10px;margin:10px 0;">
-            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Curva S — Materiais</h3><div id="cfGraficoMat"></div></div>
-            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Curva S — Mão de obra</h3><div id="cfGraficoMdo"></div></div>
+          <div class="cf-curvas">
+            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S financeira</h3><div id="cfGrafico"></div></div>
+            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Execução da obra (físico)</h3><div id="cfExecucao"></div></div>
+            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S — Materiais</h3><div id="cfGraficoMat"></div></div>
+            <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S — Mão de obra</h3><div id="cfGraficoMdo"></div></div>
           </div>
           <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Fluxo mensal por grupo de custo</h3><div id="cfTabela"></div></div>
         </div>
@@ -11231,7 +11246,7 @@ function pliHtmlIndireto(P, R){
   </div>`;
 }
 function pliHtmlPremissas(P, R){
-  return pliHtmlIndireto(P, R) + `
+  return `
   <div class="pli-grid2">
    <div class="pli-card"><h3>Geral</h3>
     <table class="pli-t"><tbody>
@@ -11483,7 +11498,7 @@ function pliHtmlPremObraCard(k){
      <b>Previsão de gastos da obra (Financeiro)</b>
      <label>Lançar na obra <select onchange="plcEditarObraSgpt(${k},this.value)"><option value="" ${!ob.obraSgptId?'selected':''}>Automático${infoPrev.autoNome?' ('+esc(infoPrev.autoNome)+')':' (nenhuma obra com esse nome)'}</option>${load('obras').map(o=>`<option value="${o.id}" ${ob.obraSgptId===o.id?'selected':''}>${esc(o.nome)}</option>`).join('')}<option value="-" ${ob.obraSgptId==='-'?'selected':''}>Não lançar</option></select></label>
      <label><input type="checkbox" ${ob.incluirMO!==false?'checked':''} onchange="plcToggleMO(${k},this.checked)"> incluir mão de obra (fábrica e instalação)</label>
-     <label><input type="checkbox" ${ob.incluirInd!==false?'checked':''} onchange="plcToggleInd(${k},this.checked)"> incluir mão de obra indireta rateada (configure em Premissas)</label>
+     <label><input type="checkbox" ${ob.incluirInd!==false?'checked':''} onchange="plcToggleInd(${k},this.checked)"> incluir mão de obra indireta rateada</label>
      <span class="pli-note" style="margin:0;">${infoPrev.alvo?`${infoPrev.n} previsões pendentes em <b>${esc(infoPrev.alvo.nome)}</b> somando <b>${pliFmtR(infoPrev.total)}</b>${infoPrev.pagas?` · ${infoPrev.pagas} já pagas`:''}. Atualizadas sozinhas a cada importação ou alteração.`:'Nenhuma obra do sistema recebe as previsões ainda.'}</span>
      <button class="btn small secondary" onclick="plcSincronizarAgora(${k})">Sincronizar agora</button>
     </div>
@@ -16803,7 +16818,7 @@ const CF_GRUPOS = [
   { k:'equip', nome:'Equipamentos / Administrativo', orc:null },
   { k:'outros', nome:'Outros', orc:'outros' }
 ];
-let CF_UI = { obra:'', meses:12 };
+let CF_UI = { obra:'', meses:12, fechar:true };
 function cfGrupoDe(cat){
   if(cat==='maoDeObra') return 'maoDeObra';
   if(cat==='material'||cat==='aluminio'||cat==='acessorios') return 'material';
@@ -16824,26 +16839,40 @@ function cfCalcular(obraId){
   lancs.forEach(l=>{ const g=cfGrupoDe(l.categoria), m=cfMesDe(l.data); real[g][m]=(real[g][m]||0)+(l.valor||0); todos.push(m); });
   prevs.forEach(p=>{ const g=cfGrupoDe(p.categoria), m=cfMesDe(p.dataPrevista); prev[g][m]=(prev[g][m]||0)+(p.valor||0); todos.push(m); });
   todos.push(hojeM);
-  todos.sort();
-  let ini = todos[0], fim = todos[todos.length-1];
-  if(CF_UI.meses>0){ const lim = cfSomaMeses(hojeM, -(CF_UI.meses-1)); if(ini<lim) ini=lim; }   // janela dos últimos N meses
-  const meses=[]; for(let m=ini; m<=fim; m=cfSomaMeses(m,1)) meses.push(m);
-  // meses anteriores à janela entram como saldo inicial acumulado
-  const antes = {r:0,p:0};
-  CF_GRUPOS.forEach(g=>{ Object.keys(real[g.k]).forEach(m=>{ if(m<ini) antes.r+=real[g.k][m]; }); Object.keys(prev[g.k]).forEach(m=>{ if(m<ini) antes.p+=prev[g.k][m]; }); });
   const obras = load('obras').filter(o=>!obraId || o.id===obraId);
   const orc = {}, tend = {}; let orcT=0, tendT=0;
   CF_GRUPOS.forEach(g=>{ orc[g.k]=0; tend[g.k]=0; });
   obras.forEach(o=>{ const fc=o.financeiroCategorias||{};
     FIN_CATEGORIAS_ORCAMENTO.forEach(c=>{ const x=fc[c.key]||{}; orcT+=x.orcado||0; tendT+=x.tendencia||0; const g=CF_GRUPOS.find(q=>q.orc===c.key); if(g){ orc[g.k]+=x.orcado||0; tend[g.k]+=x.tendencia||0; } }); });
+  // Fechar valor cheio: se material / mão de obra ainda têm saldo (meta − realizado − previsto), o saldo é rateado nas parcelas futuras.
+  const ajustes = {};
+  if(CF_UI.fechar!==false){
+    ['material','maoDeObra'].forEach(k=>{
+      const meta = tend[k]>0 ? tend[k] : orc[k]; if(!(meta>0)) return;
+      const somaR = Object.values(real[k]).reduce((a,b)=>a+b,0), somaP = Object.values(prev[k]).reduce((a,b)=>a+b,0);
+      const gap = meta - somaR - somaP; if(gap < 1) return;
+      const ms = Object.keys(prev[k]).filter(m=>prev[k][m]>0).sort();
+      if(somaP>0){ const f = (somaP+gap)/somaP; ms.forEach(m=>{ prev[k][m] *= f; }); }
+      else { const fut=[]; let m=cfSomaMeses(hojeM,1); for(let i=0;i<3;i++){ fut.push(m); m=cfSomaMeses(m,1); } fut.forEach(m=>{ prev[k][m]=gap/fut.length; todos.push(m); }); }
+      ajustes[k]=gap;
+    });
+  }
+  todos.sort();
+  let ini = todos[0], fim = todos[todos.length-1];
+  if(CF_UI.meses<0){ if(ini<hojeM) ini=hojeM; }   // de hoje para o futuro
+  else if(CF_UI.meses>0){ const lim = cfSomaMeses(hojeM, -(CF_UI.meses-1)); if(ini<lim) ini=lim; }   // janela dos últimos N meses
+  const meses=[]; for(let m=ini; m<=fim; m=cfSomaMeses(m,1)) meses.push(m);
+  // meses anteriores à janela entram como saldo inicial acumulado
+  const antes = {r:0,p:0};
+  CF_GRUPOS.forEach(g=>{ Object.keys(real[g.k]).forEach(m=>{ if(m<ini) antes.r+=real[g.k][m]; }); Object.keys(prev[g.k]).forEach(m=>{ if(m<ini) antes.p+=prev[g.k][m]; }); });
   const totR = meses.map(m=>CF_GRUPOS.reduce((s,g)=>s+(real[g.k][m]||0),0));
   const totP = meses.map(m=>CF_GRUPOS.reduce((s,g)=>s+(prev[g.k][m]||0),0));
   const acR=[], acRP=[]; let a=antes.r, b=antes.r+antes.p;
   meses.forEach((m,i)=>{ a+=totR[i]; b+=totR[i]+totP[i]; acR.push(m<=hojeM?a:null); acRP.push(b); });
-  return { meses, hojeM, real, prev, totR, totP, acR, acRP, orc, tend, orcT, tendT, antes };
+  return { meses, hojeM, real, prev, totR, totP, acR, acRP, orc, tend, orcT, tendT, antes, ajustes };
 }
 function cfGraficoSVG(D){
-  const W=960, H=270, pl=64, pr=16, pt=16, pb=36, n=D.meses.length; if(!n) return '';
+  const W=640, H=300, pl=58, pr=12, pt=16, pb=36, n=D.meses.length; if(!n) return '';
   const ref = D.tendT>0 ? D.tendT : D.orcT;
   const maxV = Math.max(ref||0, ...D.acRP, ...(D.acR.filter(v=>v!=null)), 1)*1.08;
   const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/maxV);
@@ -16851,14 +16880,14 @@ function cfGraficoSVG(D){
   const cor = estouro ? '#c62828' : 'currentColor';
   let g = '';
   for(let t=0;t<=4;t++){ const v=maxV*t/4, y=Y(v); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v>=1e6?(v/1e6).toFixed(1)+' mi':Math.round(v/1e3)+' mil'}</text>`; }
-  D.meses.forEach((m,i)=>{ if(n<=14 || i%2===0) g+=`<text x="${X(i)}" y="${H-14}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
+  D.meses.forEach((m,i)=>{ if(i%Math.ceil(n/8)===0) g+=`<text x="${X(i)}" y="${H-14}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
   if(D.orcT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.orcT)}" y2="${Y(D.orcT)}" stroke="currentColor" opacity=".45" stroke-dasharray="2 4"/><text x="${W-pr}" y="${Y(D.orcT)-4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">Orçado ${fmtMoeda(D.orcT)}</text>`;
   if(D.tendT>0) g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(D.tendT)}" y2="${Y(D.tendT)}" stroke="currentColor" opacity=".7" stroke-dasharray="6 4"/><text x="${pl+4}" y="${Y(D.tendT)-4}" font-size="10" fill="currentColor" opacity=".85">Tendência ${fmtMoeda(D.tendT)}</text>`;
   const pts = arr => arr.map((v,i)=> v==null?null:`${X(i)},${Y(v)}`).filter(Boolean).join(' ');
   g+=`<polyline points="${pts(D.acRP)}" fill="none" stroke="${cor}" stroke-width="2" stroke-dasharray="5 4" opacity=".75"/>`;
   g+=`<polyline points="${pts(D.acR)}" fill="none" stroke="${cor}" stroke-width="2.6"/>`;
   const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:960px;max-height:290px;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
 }
 // Curva S de um único grupo de custo (materiais, mão de obra...), com o mesmo desenho da curva geral.
 function cfGraficoGrupo(D, k){
@@ -16870,6 +16899,7 @@ function cfGraficoGrupo(D, k){
   D.meses.forEach(m=>{ const r = D.real[k][m]||0, p = D.prev[k][m]||0; a += r; b += r+p; acR.push(m<=D.hojeM ? a : null); acRP.push(b); });
   if(!(acRP[n-1]>0) && !(D.orc[k]>0)) return '<div class="step-note">Sem lançamentos nem previsão neste grupo.</div>';
   return cfGraficoSVG({ meses:D.meses, hojeM:D.hojeM, acR, acRP, orcT:D.orc[k]||0, tendT:D.tend[k]||0 })
+    + (D.ajustes&&D.ajustes[k]?`<div class="step-note" style="margin-top:4px;">↻ Saldo de <b>${fmtMoeda(D.ajustes[k])}</b> redistribuído nas parcelas futuras para fechar o valor cheio.</div>`:'')
     + `<div class="step-note" style="margin-top:4px;">Realizado até hoje: <b>${fmtMoeda(acR.filter(v=>v!=null).pop()||0)}</b> · projeção final: <b>${fmtMoeda(acRP[n-1])}</b>${D.orc[k]>0?` · orçado: <b>${fmtMoeda(D.orc[k])}</b>`:''}</div>`;
 }
 // Curva geral de execução física: média de fabricação e instalação (ponderadas por kg), planejado × realizado.
@@ -16916,18 +16946,18 @@ function cfExecucaoDados(obraId){
   return { meses, plan, real, fabR, instR, hojeM, obras:lista.map(x=>x.ob.nome) };
 }
 function cfExecucaoSVG(E){
-  const W=960, H=270, pl=44, pr=16, pt=16, pb=34, n=E.meses.length;
+  const W=640, H=300, pl=40, pr=12, pt=16, pb=34, n=E.meses.length;
   const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/100);
   let g='';
   [0,25,50,75,100].forEach(v=>{ g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v}%</text>`; });
-  E.meses.forEach((m,i)=>{ if(n<=14 || i%2===0) g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
+  E.meses.forEach((m,i)=>{ if(i%Math.ceil(n/8)===0) g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
   const pts = a => a.map((v,i)=>v==null?null:`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(' ');
   g+=`<polyline points="${pts(E.plan)}" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4" opacity=".75"/>`;
   g+=`<polyline points="${pts(E.fabR)}" fill="none" stroke="#bd0c1d" stroke-width="1.6" opacity=".85"/>`;
   g+=`<polyline points="${pts(E.instR)}" fill="none" stroke="#1565c0" stroke-width="1.6" opacity=".85"/>`;
   g+=`<polyline points="${pts(E.real)}" fill="none" stroke="currentColor" stroke-width="2.8"/>`;
   const hi = E.meses.indexOf(E.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:960px;max-height:290px;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S de execução física">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S de execução física">${g}</svg>`;
 }
 function cfExecucaoHtml(obraId){
   const E = cfExecucaoDados(obraId);
@@ -16944,10 +16974,9 @@ function cfImprimir(){
   document.getElementById('rdoPrintArea').innerHTML = `<div class="rdo-landscape-wrap"><h1>Cronograma Financeiro — Divisão de Alumínio</h1>
     <div class="meta">${esc(obra)} · gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
     <div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">${g('cfKpis')}</div>
-    <h3>Curva S financeira</h3>${g('cfGrafico')}
-    <h3>Curva S de execução da obra (físico)</h3>${g('cfExecucao')}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;page-break-inside:avoid;"><div><h3>Curva S — Materiais</h3>${g('cfGraficoMat')}</div><div><h3>Curva S — Mão de obra</h3>${g('cfGraficoMdo')}</div></div>
-    <h3 style="page-break-before:always;">Fluxo mensal por grupo de custo</h3>${g('cfTabela')}</div>`;
+    <div class="cf-pgrid"><div><h3>Curva S financeira</h3>${g('cfGrafico')}</div><div><h3>Execução da obra (físico)</h3>${g('cfExecucao')}</div>
+    <div><h3>Curva S — Materiais</h3>${g('cfGraficoMat')}</div><div><h3>Curva S — Mão de obra</h3>${g('cfGraficoMdo')}</div></div>
+    <h3 style="margin-top:10px;">Fluxo mensal por grupo de custo</h3>${cfTabelaHtml(cfCalcular(CF_UI.obra), (()=>{const D=cfCalcular(CF_UI.obra);return D.tendT>0?D.tendT:D.orcT;})(), true)}</div>`;
   window.print();
 }
 function pcpImprimir(){
@@ -16956,6 +16985,22 @@ function pcpImprimir(){
   clone.querySelectorAll('button,input,select').forEach(e=>e.remove());
   document.getElementById('rdoPrintArea').innerHTML = `<div class="rdo-landscape-wrap"><h1>PCP de fabricação — ${esc(((document.getElementById('pcpMesTit')||{}).textContent)||'')}</h1><div class="meta">Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>${clone.innerHTML}</div>`;
   window.print();
+}
+function cfTabelaHtml(D, ref, compact){
+  const hojeM = D.hojeM, fm = v => v? (compact? Math.round(v/1000).toLocaleString('pt-BR') : Math.round(v).toLocaleString('pt-BR')) : '';
+  const n = D.meses.length;
+  let h = (compact ? `<table class="data-table cf-compact" style="width:100%;table-layout:fixed;font-size:8px;">` : `<div style="overflow:auto;"><table class="data-table" style="min-width:${220+n*86+300}px;font-size:12px;">`) + `<thead><tr><th style="position:sticky;left:0;background:var(--card,#fff);">Grupo de custo</th>${D.meses.map(m=>`<th style="text-align:right;${m===hojeM?'text-decoration:underline;':''}">${mesLabelCurto(m)}</th>`).join('')}<th style="text-align:right;">Total</th><th style="text-align:right;">Orçado</th><th style="text-align:right;">Tendência</th></tr></thead><tbody>`;
+  CF_GRUPOS.forEach(g=>{
+    const rs = D.meses.map(m=>D.real[g.k][m]||0), ps = D.meses.map(m=>D.prev[g.k][m]||0);
+    const tot = rs.reduce((a,b)=>a+b,0)+ps.reduce((a,b)=>a+b,0);
+    if(!tot && !D.orc[g.k]) return;
+    h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);"><b>${g.nome}</b></td>${D.meses.map((m,i)=>`<td style="text-align:right;">${rs[i]?fm(rs[i]):''}${ps[i]?`<div style="opacity:.55;font-style:italic;">${fm(ps[i])}</div>`:''}</td>`).join('')}<td style="text-align:right;"><b>${fm(tot)}</b></td><td style="text-align:right;">${fm(D.orc[g.k])}</td><td style="text-align:right;">${fm(D.tend[g.k])}</td></tr>`;
+  });
+  h += `<tr style="border-top:2px solid currentColor;"><td style="position:sticky;left:0;background:var(--card,#fff);"><b>Total do mês</b></td>${D.meses.map((m,i)=>`<td style="text-align:right;"><b>${fm(D.totR[i]+D.totP[i])}</b></td>`).join('')}<td style="text-align:right;"><b>${fm(D.totR.reduce((a,b)=>a+b,0)+D.totP.reduce((a,b)=>a+b,0))}</b></td><td style="text-align:right;">${fm(D.orcT)}</td><td style="text-align:right;">${fm(D.tendT)}</td></tr>`;
+  h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);">Acumulado (real + previsto)</td>${D.acRP.map(v=>`<td style="text-align:right;${ref>0&&v>ref?'color:#c62828;font-weight:600;':''}">${fm(v)}</td>`).join('')}<td></td><td></td><td></td></tr>`;
+  if(D.orcT>0) h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);">% do orçado</td>${D.acRP.map(v=>`<td style="text-align:right;opacity:.75;">${Math.round(v/D.orcT*100)}%</td>`).join('')}<td></td><td></td><td></td></tr>`;
+  h += compact ? `</tbody></table><div class="step-note" style="margin-top:4px;font-size:8px;">Valores em R$ mil · normal = realizado · <i>itálico = previsto</i>.</div>` : `</tbody></table></div><div class="step-note" style="margin-top:6px;">Números normais = realizado (lançamentos financeiros) · <i>itálico = previsto</i> (previsões de gasto em aberto, incluindo as geradas pelo Planejamento Integrado). Mão de obra e custo operacional entram pelo Rateio mensal.${D.antes.r||D.antes.p?` Meses anteriores à janela somam ${fmtMoeda(D.antes.r+D.antes.p)} no acumulado.`:''}</div>`;
+  return h;
 }
 function renderCronogramaFinanceiro(){
   const sem = document.getElementById('cfSemAcesso'), cont = document.getElementById('cfConteudo');
@@ -16978,18 +17023,7 @@ function renderCronogramaFinanceiro(){
   try{ document.getElementById('cfExecucao').innerHTML = cfExecucaoHtml(CF_UI.obra); }catch(e){ console.error('Curva de execução', e); }
   try{ document.getElementById('cfGraficoMat').innerHTML = cfGraficoGrupo(D,'material'); document.getElementById('cfGraficoMdo').innerHTML = cfGraficoGrupo(D,'maoDeObra'); }catch(e){ console.error('Curvas por grupo', e); }
   document.getElementById('cfGrafico').innerHTML = cfGraficoSVG(D) + `<div class="step-note" style="margin-top:4px;">Linha cheia = realizado acumulado · tracejada = realizado + previsto · pontilhada/tracejada horizontal = orçado/tendência${estouro?' · <b style="color:#c62828;">projeção acima da referência</b>':''}</div>`;
-  const hojeM = D.hojeM, fm = v => v? Math.round(v).toLocaleString('pt-BR') : '';
-  let h = `<div style="overflow:auto;"><table class="data-table" style="min-width:${220+n*86+300}px;font-size:12px;"><thead><tr><th style="position:sticky;left:0;background:var(--card,#fff);">Grupo de custo</th>${D.meses.map(m=>`<th style="text-align:right;${m===hojeM?'text-decoration:underline;':''}">${mesLabelCurto(m)}</th>`).join('')}<th style="text-align:right;">Total</th><th style="text-align:right;">Orçado</th><th style="text-align:right;">Tendência</th></tr></thead><tbody>`;
-  CF_GRUPOS.forEach(g=>{
-    const rs = D.meses.map(m=>D.real[g.k][m]||0), ps = D.meses.map(m=>D.prev[g.k][m]||0);
-    const tot = rs.reduce((a,b)=>a+b,0)+ps.reduce((a,b)=>a+b,0);
-    if(!tot && !D.orc[g.k]) return;
-    h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);"><b>${g.nome}</b></td>${D.meses.map((m,i)=>`<td style="text-align:right;">${rs[i]?fm(rs[i]):''}${ps[i]?`<div style="opacity:.55;font-style:italic;">${fm(ps[i])}</div>`:''}</td>`).join('')}<td style="text-align:right;"><b>${fm(tot)}</b></td><td style="text-align:right;">${fm(D.orc[g.k])}</td><td style="text-align:right;">${fm(D.tend[g.k])}</td></tr>`;
-  });
-  h += `<tr style="border-top:2px solid currentColor;"><td style="position:sticky;left:0;background:var(--card,#fff);"><b>Total do mês</b></td>${D.meses.map((m,i)=>`<td style="text-align:right;"><b>${fm(D.totR[i]+D.totP[i])}</b></td>`).join('')}<td style="text-align:right;"><b>${fm(D.totR.reduce((a,b)=>a+b,0)+D.totP.reduce((a,b)=>a+b,0))}</b></td><td style="text-align:right;">${fm(D.orcT)}</td><td style="text-align:right;">${fm(D.tendT)}</td></tr>`;
-  h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);">Acumulado (real + previsto)</td>${D.acRP.map(v=>`<td style="text-align:right;${ref>0&&v>ref?'color:#c62828;font-weight:600;':''}">${fm(v)}</td>`).join('')}<td></td><td></td><td></td></tr>`;
-  if(D.orcT>0) h += `<tr><td style="position:sticky;left:0;background:var(--card,#fff);">% do orçado</td>${D.acRP.map(v=>`<td style="text-align:right;opacity:.75;">${Math.round(v/D.orcT*100)}%</td>`).join('')}<td></td><td></td><td></td></tr>`;
-  h += `</tbody></table></div><div class="step-note" style="margin-top:6px;">Números normais = realizado (lançamentos financeiros) · <i>itálico = previsto</i> (previsões de gasto em aberto, incluindo as geradas pelo Planejamento Integrado). Mão de obra e custo operacional entram pelo Rateio mensal.${D.antes.r||D.antes.p?` Meses anteriores à janela somam ${fmtMoeda(D.antes.r+D.antes.p)} no acumulado.`:''}</div>`;
+  const h = cfTabelaHtml(D, ref, false);
   document.getElementById('cfTabela').innerHTML = h;
 }
 function cfExportarCSV(){
@@ -20481,7 +20515,8 @@ function atcAbrir(id){
       ${c ? `<button class="btn secondary" onclick="atcImprimirOS('${c.id}')">Imprimir OS</button>
       <button class="btn secondary" onclick="atcLaudo('${c.id}')">Laudo (.doc)</button>
       ${atcFim(c) ? `<button class="btn secondary" onclick="atcReabrir('${c.id}')">Reabrir</button>` : ''}
-      ${atcPodeGerir() && c.status!=='Cancelado' ? `<button class="btn danger" onclick="atcCancelar('${c.id}')">Cancelar chamado</button>` : ''}` : ''}
+      ${atcPodeGerir() && c.status!=='Cancelado' ? `<button class="btn danger" onclick="atcCancelar('${c.id}')">Cancelar chamado</button>` : ''}
+      ${atcPodeGerir() ? `<button class="btn danger" onclick="atcExcluir('${c.id}')">Excluir chamado</button>` : ''}` : ''}
       <button class="btn secondary" onclick="closeModal('modalChamadoAT')">Fechar</button>
     </div>`;
   atcRenderPecas(); atcRenderFotos(); openModal('modalChamadoAT');
@@ -20567,6 +20602,14 @@ function atcReabrir(id){
   const c = atcLista().find(x=>x.id===id); if(!c) return;
   atcHist(c, `Reaberto (estava ${c.status})`); c.status = 'Aberto'; c.dataConclusao = ''; c.retorno = 'Sim';
   atcSalvarChamado(c); closeModal('modalChamadoAT'); renderAssistencia(); toast('Chamado reaberto.');
+}
+function atcExcluir(id){
+  if(!atcPodeGerir()){ toast('Somente gerente ou coordenador pode excluir chamados.'); return; }
+  const c = atcLista().find(x=>x.id===id); if(!c) return;
+  if(!confirm(`Excluir DEFINITIVAMENTE o chamado ${atcNum(c.numero)} (${c.empreendimento||''}${c.unidade?' · '+c.unidade:''})?\nEsta ação não pode ser desfeita.`)) return;
+  save('chamadosAT', atcLista().filter(x=>x.id!==id));
+  try{ save('chamadosFotos', atcFotos().filter(f=>f.chamadoId!==id)); }catch(e){}
+  closeModal('modalChamadoAT'); renderAssistencia(); toast(`Chamado ${atcNum(c.numero)} excluído.`);
 }
 function atcCancelar(id){
   const c = atcLista().find(x=>x.id===id); if(!c) return;
