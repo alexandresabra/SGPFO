@@ -536,6 +536,8 @@
     .form-grid, .form-grid.cols-3{grid-template-columns:1fr;}
   }
 
+  .qs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0;}
+  @media(max-width:900px){ .qs-grid{grid-template-columns:minmax(0,1fr);} }
   .cf-curvas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0;}
   .cf-curvas .step-note{font-size:11px;line-height:1.35;}
   @media(min-width:1900px){ .cf-curvas{grid-template-columns:repeat(4,minmax(0,1fr));} }
@@ -727,6 +729,7 @@
       <div class="nav-group-label" id="navGrpPlanej" style="display:none;">Planejamento (Gerência)</div>
       <div class="nav-item" id="navPlanejInt" data-section="planejint" style="display:none;"><span class="ico">📈</span><span class="label">Planejamento Integrado de Alumínio</span></div>
       <div class="nav-item" id="navPCP" data-section="pcp" style="display:none;"><span class="ico">🏭</span><span class="label">PCP de Fabricação</span></div>
+      <div class="nav-item" id="navInst" data-section="instalacao" style="display:none;"><span class="ico">🔧</span><span class="label">Cronograma de Instalação</span></div>
 
       <div class="nav-group-label" id="navGrpCoord" style="display:none;">Coordenação</div>
       <div class="nav-item" id="navPainel" data-section="painel" style="display:none;"><span class="ico">🚨</span><span class="label">Painel de Pendências</span><span id="navPainelBadge" style="display:none;margin-left:auto;background:#bd0c1d;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;font-weight:700"></span></div>
@@ -739,6 +742,8 @@
       <div class="nav-group-label">Assistência Técnica</div>
       <div class="nav-item" data-section="assistencia"><span class="ico">☏</span><span class="label">Chamados / Assist. técnica</span><span id="navAssistBadge" style="display:none;background:#c62828;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;margin-left:6px;"></span></div>
 
+      <div class="nav-group-label">Qualidade e Segurança</div>
+      <div class="nav-item" data-section="qualidade"><span class="ico">✔</span><span class="label">FVS / EPO / Segurança</span></div>
       <div class="nav-group-label">Almoxarifado</div>
       <div class="nav-item" data-section="almoxarifado"><span class="ico">📦</span><span class="label">Almoxarifado</span></div>
     </nav>
@@ -2102,6 +2107,23 @@
         </div>
       </section>
 
+      <section class="section" id="sec-qualidade">
+        <div id="qsTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div id="qsConteudo"></div>
+      </section>
+      <section class="section" id="sec-instalacao">
+        <div id="instSemAcesso" class="empty-state" style="display:none;"><div class="big">🔒</div>Acesso restrito à Gerência e Coordenação.</div>
+        <div id="instConteudo">
+          <div class="form-grid" style="margin-bottom:10px;">
+            <div class="field"><label>Obra</label><select id="instObra" onchange="INST_UI.obra=this.value;renderInstalacao()"></select></div>
+            <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn small secondary" style="width:auto;" onclick="instExportarCSV()">Exportar CSV</button><button class="btn small secondary" style="width:auto;" onclick="instImprimir()">Imprimir</button></div>
+          </div>
+          <div class="kpi-row" id="instKpis"></div>
+          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S de instalação (kg acumulado)</h3><div id="instGrafico"></div></div>
+          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;font-size:15px;">Fases</h3><div id="instFases"></div></div>
+          <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Mensal</h3><div id="instMensal"></div></div>
+        </div>
+      </section>
       <section class="section" id="sec-pcp">
         <div id="pcpSemAcesso" class="empty-state" style="display:none;"><div class="big">🔒</div>Acesso restrito à Gerência e Coordenação.</div>
         <div id="pcpConteudo">
@@ -3398,6 +3420,12 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalQS">
+  <div class="modal" style="max-width:860px;width:96%;">
+    <div class="modal-head"><h3 id="qsModalTitulo">Inspeção</h3><button class="modal-close" onclick="closeModal('modalQS')">&times;</button></div>
+    <div class="modal-body" id="qsModalBody"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="modalChamadoAT">
   <div class="modal" style="max-width:940px;width:96%;">
     <div class="modal-head"><h3 id="atcModalTitulo">Chamado</h3><button class="modal-close" onclick="closeModal('modalChamadoAT')">&times;</button></div>
@@ -6999,6 +7027,8 @@ const sectionTitles = {
   setores: ['Setores','Cadastro de setores da divisão'],
   tarefas: ['Tarefas por Setor','Controle de tarefas por setor'],
   metas: ['Metas por Setor','Acompanhamento de metas por setor'],
+  qualidade: ['Qualidade e Segurança','FVS, EPO e inspeções de segurança, com não conformidades e ações corretivas'],
+  instalacao: ['Cronograma de Instalação','Curva S de instalação por obra: planejado × realizado, fases, ritmo e término projetado'],
   pcp: ['PCP de Fabricação','Plano mensal de fabricação por obra e fase, capacidade da fábrica e realizado (peças liberadas por QR Code)'],
   cronfin: ['Cronograma Financeiro','Fluxo mensal de todos os custos (mão de obra, materiais, custo operacional...), realizado × previsto e curva S'],
   solicitacoes: ['Solicitações de Compra','Esteira: Solicitante → ADM → Coordenador → Gerente → Suprimentos Calper'],
@@ -7064,6 +7094,8 @@ function showSection(id){
     if(id==='solicitacoes') renderSolicitacoes();
     if(id==='cronfin') renderCronogramaFinanceiro();
     if(id==='pcp') renderPCP();
+    if(id==='instalacao') renderInstalacao();
+    if(id==='qualidade') renderQualidade();
     if(id==='rateiomdo') renderRateioMaoDeObra();
     if(id==='planejint') renderPlanejInt();
     if(id==='painel') renderPainel();
@@ -10988,7 +11020,7 @@ function pliAtualizarMenu(){
   const v = pliTemAcesso() ? '' : 'none';
   if(it) it.style.display = v;
   if(lb) lb.style.display = v;
-  { const pc = document.getElementById('navPCP'); if(pc) pc.style.display = v; }
+  { const pc = document.getElementById('navPCP'); if(pc) pc.style.display = v; const ni = document.getElementById('navInst'); if(ni) ni.style.display = v; }
   try{ coordAtualizarMenu(); }catch(e){}
 }
 
@@ -17151,6 +17183,314 @@ function pcpRealObra(mapa, obraId, ym){ const r = (mapa[obraId]||{})[ym]; return
 function pcpRealAcum(mapa, obraId, ym){ let t=0; Object.keys(mapa[obraId]||{}).forEach(m=>{ if(m<=ym) t+=mapa[obraId][m].kg; }); return t/1000; }
 function pcpMudarMes(n){ PCP_UI.mes = pcpMesSoma(PCP_UI.mes, n); renderPCP(); }
 function pcpIrMes(v){ if(/^\d{4}-\d{2}$/.test(v)){ PCP_UI.mes = v; renderPCP(); } }
+/* ===== Cronograma de Instalação com Curva S ===== */
+let INST_UI = { obra:'' };
+function instObras(){ try{ return plcLoad().obras||[]; }catch(e){ return []; } }
+function instMesDe(iso){ return (iso||'').slice(0,7); }
+// kg instalados por fase do cronograma (via Ordem de produção: bloco+tipo → fase) e por mês
+function instRealDados(ob){
+  const sg = plcObraSgptDoCron(ob), out = { porFase:{}, semFase:0, total:0, porMes:{}, ultimo:'' };
+  if(!sg) return out;
+  const ordem = load('fabOrdem').filter(e=>e.obraId===sg.id), itens = load('itensObra').filter(i=>i.obraId===sg.id && itemAtivo(i));
+  const faseDoItem = it=>{ const e = ordem.find(x=>x.blocoId===it.blocoId && (x.key===it.chaveCem || x.key===fabKey(it.nomenclatura))); return e && e.fase ? e.fase : ''; };
+  itens.forEach(it=>{
+    const kgUn = parseFloat(it.pesoLiquido)||0, fase = faseDoItem(it);
+    expPecas(it).forEach(p=>{
+      const h = expHist(p).filter(x=>x.tipo==='inst').sort((a,b)=>(a.em||'').localeCompare(b.em||''))[0]; if(!h || !h.em) return;
+      const ym = instMesDe(new Date(h.em).toISOString()); if(!ym) return;
+      out.total += kgUn; out.porMes[ym] = (out.porMes[ym]||0)+kgUn; if(h.em > out.ultimo) out.ultimo = h.em;
+      if(fase) out.porFase[fase] = (out.porFase[fase]||0)+kgUn; else out.semFase += kgUn;
+    });
+  });
+  return out;
+}
+function instFracData(d, a, b){ return d <= a ? 0 : (d >= b ? 1 : (b===a ? 1 : pliDiffDias(d, a)/pliDiffDias(b, a))); }
+function instDados(ob){
+  let R, S; try{ R = plcCalc(ob); S = plcCurvaS(ob, R); }catch(e){ return null; }
+  if(!S) return null;
+  const L = (R.lotes||[]).filter(l=>l.iniInst && l.fimInst); if(!L.length) return null;
+  const totKg = L.reduce((a,l)=>a+l.kg,0) || 1, hoje = todayISO(), hojeM = hoje.slice(0,7);
+  const real = instRealDados(ob);
+  // fases
+  const por = {};
+  L.forEach(l=>{ const a = por[l.fase] || (por[l.fase] = { cod:l.fase, desc:l.desc||'', kg:0, ini:l.iniInst, fim:l.fimInst, lotes:[] }); a.kg += l.kg; if(l.iniInst<a.ini) a.ini=l.iniInst; if(l.fimInst>a.fim) a.fim=l.fimInst; a.lotes.push(l); });
+  const fases = Object.values(por).sort((a,b)=>a.ini.localeCompare(b.ini) || String(a.cod).localeCompare(String(b.cod),'pt-BR',{numeric:true}));
+  fases.forEach(f=>{
+    f.planHoje = f.lotes.reduce((s,l)=>s+l.kg*instFracData(hoje,l.iniInst,l.fimInst),0)/f.kg*100;
+    f.kgReal = Math.min(f.kg, real.porFase[f.cod]||0); f.pctReal = f.kg ? f.kgReal/f.kg*100 : 0;
+    f.status = f.pctReal>=99.5 ? 'Concluída' : (hoje > f.fim ? 'Atrasada' : (f.planHoje>0 && f.pctReal+5 < f.planHoje ? 'Atrasada' : (f.pctReal>0 || f.planHoje>0 ? 'Em andamento' : 'Não iniciada')));
+  });
+  // curva mensal (kg/mês planejado = distribuição uniforme por lote)
+  const iniM = L.map(l=>l.iniInst).sort()[0].slice(0,7);
+  let fimM = L.map(l=>l.fimInst).sort().slice(-1)[0].slice(0,7);
+  const mesesReal = Object.keys(real.porMes).sort(); if(mesesReal.length){ if(mesesReal[0]<iniM) {/* real antes do plano */} if(mesesReal[mesesReal.length-1]>fimM) fimM = mesesReal[mesesReal.length-1]; }
+  const ini2 = mesesReal.length && mesesReal[0]<iniM ? mesesReal[0] : iniM;
+  const meses = pliMesesEntre(ini2, fimM);
+  const planAc = meses.map(m=>{ const fimMes = pliAddDias(m+'-01', 0); const [y,mm]=m.split('-').map(Number); const ult = new Date(Date.UTC(y,mm,0)).toISOString().slice(0,10); return L.reduce((s,l)=>s+l.kg*instFracData(ult,l.iniInst,l.fimInst),0)/totKg*100; });
+  const planMes = planAc.map((v,i)=> (v-(i?planAc[i-1]:0))/100*totKg);
+  let a = 0; const realAc = [], realMes = meses.map(m=>real.porMes[m]||0);
+  meses.forEach((m,i)=>{ a += realMes[i]; realAc.push(m<=hojeM ? a/totKg*100 : null); });
+  const planHoje = L.reduce((s,l)=>s+l.kg*instFracData(hoje,l.iniInst,l.fimInst),0)/totKg*100;
+  const pctReal = Math.min(100, real.total/totKg*100);
+  // ritmo: média dos últimos 3 meses fechados + atual
+  const ult3 = [0,1,2].map(n=>pcpMesSoma(hojeM,-n)).map(m=>real.porMes[m]||0), ritmo = ult3.reduce((x,y)=>x+y,0)/3;
+  const resta = Math.max(0, totKg-real.total);
+  const mesesFalta = ritmo>0 && resta/ritmo<=60 ? resta/ritmo : null;
+  const fimProj = resta<=0 ? 'Concluída' : (mesesFalta!=null ? pliAddDias(hoje, Math.round(mesesFalta*30.4)) : '');
+  const iniPlan = L.map(l=>l.iniInst).sort()[0], fimPlan = L.map(l=>l.fimInst).sort().slice(-1)[0];
+  // projeção (linha tracejada): do mês atual seguindo o ritmo
+  let proj = null;
+  if(ritmo>0 && resta>0){ let ac = real.total; proj = meses.map(m=>{ if(m<hojeM) return null; if(m===hojeM) return pctReal; ac = Math.min(totKg, ac+ritmo); return ac/totKg*100; }); }
+  return { ob, S, meses, planAc, planMes, realAc, realMes, proj, fases, totKg, planHoje, pctReal, real, ritmo, resta, fimProj, iniPlan, fimPlan, hoje, hojeM, efetivo:ob.prem&&ob.prem.efetivo };
+}
+function instSvg(D){
+  const W=760, H=300, pl=44, pr=14, pt=14, pb=34, n=D.meses.length;
+  const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/100);
+  let g='';
+  [0,25,50,75,100].forEach(v=>{ g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v}%</text>`; });
+  D.meses.forEach((m,i)=>{ if(i%Math.ceil(n/12)===0) g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
+  const pts = a => a.map((v,i)=>v==null?null:`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(' ');
+  const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
+  g+=`<polyline points="${pts(D.planAc)}" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4" opacity=".75"/>`;
+  if(D.proj) g+=`<polyline points="${pts(D.proj)}" fill="none" stroke="#e08a00" stroke-width="2" stroke-dasharray="2 3"/>`;
+  g+=`<polyline points="${pts(D.realAc)}" fill="none" stroke="#1565c0" stroke-width="2.8"/>`;
+  g+=`<g font-size="10.5" fill="currentColor"><line x1="${pl+8}" x2="${pl+30}" y1="${pt+8}" y2="${pt+8}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4"/><text x="${pl+34}" y="${pt+12}">Planejado</text><line x1="${pl+110}" x2="${pl+132}" y1="${pt+8}" y2="${pt+8}" stroke="#1565c0" stroke-width="2.8"/><text x="${pl+136}" y="${pt+12}">Realizado</text>${D.proj?`<line x1="${pl+210}" x2="${pl+232}" y1="${pt+8}" y2="${pt+8}" stroke="#e08a00" stroke-width="2" stroke-dasharray="2 3"/><text x="${pl+236}" y="${pt+12}">Projeção no ritmo atual</text>`:''}</g>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S de instalação">${g}</svg>`;
+}
+const INST_COR = { 'Concluída':'#2e7d32', 'Em andamento':'#1565c0', 'Atrasada':'#c62828', 'Não iniciada':'#777' };
+function instKpisHtml(D){
+  const desv = D.pctReal - D.planHoje, fk = v=>Math.round(v).toLocaleString('pt-BR');
+  const k = (n,l,st)=>`<div class="kpi"><div class="num" style="${st||''}">${n}</div><div class="lbl">${l}</div></div>`;
+  const atraso = D.fimProj && D.fimProj!=='Concluída' && D.fimProj > D.fimPlan;
+  return k(fk(D.totKg/1000*1000)+' kg','Peso total a instalar')
+   + k(pliFmtT(D.pctReal,1)+'%','Instalado ('+fk(D.real.total)+' kg)')
+   + k(pliFmtT(D.planHoje,1)+'%','Planejado até hoje')
+   + k((desv>=0?'+':'−')+pliFmtT(Math.abs(desv),1)+' p.p.','Desvio vs plano', desv<-5?'color:#c62828;':(desv>=0?'color:#2e7d32;':''))
+   + k(pliFmtT(D.ritmo/1000,2)+' t/mês','Ritmo (média 3 meses)')
+   + k(pliFmtData(D.fimPlan),'Término planejado')
+   + k(D.fimProj==='Concluída'?'Concluída':(D.fimProj?pliFmtData(D.fimProj):'—'),'Término projetado (ritmo atual)', atraso?'color:#c62828;':'');
+}
+function instTabelaFases(D){
+  let h = `<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Fase</th><th>Descrição</th><th style="text-align:right;">Peso (kg)</th><th>Início</th><th>Fim</th><th style="text-align:right;">Plan. hoje</th><th style="text-align:right;">Realizado</th><th style="text-align:right;">Instalado (kg)</th><th>Situação</th></tr></thead><tbody>`;
+  D.fases.forEach(f=>{ h += `<tr><td><b>${esc(String(f.cod))}</b></td><td>${esc(f.desc)}</td><td style="text-align:right;">${Math.round(f.kg).toLocaleString('pt-BR')}</td><td>${pliFmtData(f.ini)}</td><td>${pliFmtData(f.fim)}</td><td style="text-align:right;">${pliFmtT(f.planHoje,0)}%</td><td style="text-align:right;"><b>${pliFmtT(f.pctReal,0)}%</b></td><td style="text-align:right;">${Math.round(f.kgReal).toLocaleString('pt-BR')}</td><td><span style="color:#fff;background:${INST_COR[f.status]};border-radius:10px;padding:1px 8px;font-size:11px;white-space:nowrap;">${f.status}</span></td></tr>`; });
+  if(D.real.semFase>0) h += `<tr><td colspan="7" style="opacity:.7;">Instalado sem fase definida na Ordem de produção</td><td style="text-align:right;">${Math.round(D.real.semFase).toLocaleString('pt-BR')}</td><td></td></tr>`;
+  return h + '</tbody></table></div>';
+}
+function instTabelaMensal(D, compact){
+  const fk = v=>v? Math.round(v).toLocaleString('pt-BR') : '';
+  let h = `<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Mês</th><th style="text-align:right;">Plan. (kg)</th><th style="text-align:right;">Real. (kg)</th><th style="text-align:right;">Plan. acum.</th><th style="text-align:right;">Real. acum.</th><th style="text-align:right;">Desvio</th></tr></thead><tbody>`;
+  D.meses.forEach((m,i)=>{ const r = D.realAc[i], d = r==null?null:r-D.planAc[i];
+    h += `<tr${m===D.hojeM?' style="font-weight:700;"':''}><td>${mesLabelCurto(m)}</td><td style="text-align:right;">${fk(D.planMes[i])}</td><td style="text-align:right;">${fk(D.realMes[i])}</td><td style="text-align:right;">${pliFmtT(D.planAc[i],0)}%</td><td style="text-align:right;">${r==null?'':pliFmtT(r,0)+'%'}</td><td style="text-align:right;${d!=null&&d<-5?'color:#c62828;':''}">${d==null?'':(d>=0?'+':'−')+pliFmtT(Math.abs(d),0)+' p.p.'}</td></tr>`; });
+  return h + '</tbody></table></div>';
+}
+function renderInstalacao(){
+  const sem = document.getElementById('instSemAcesso'), cont = document.getElementById('instConteudo');
+  if(!pliTemAcesso()){ sem.style.display='block'; cont.style.display='none'; return; }
+  sem.style.display='none'; cont.style.display='block';
+  const obras = instObras().filter(o=>{ try{ return !!instDados(o); }catch(e){ return false; } });
+  const sel = document.getElementById('instObra');
+  sel.innerHTML = obras.map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  if(!obras.length){ document.getElementById('instKpis').innerHTML=''; ['instGrafico','instFases','instMensal'].forEach(i=>document.getElementById(i).innerHTML=''); document.getElementById('instGrafico').innerHTML='<div class="empty-state"><div class="big">🔧</div>Sem cronograma de instalação. Importe o cronograma da obra em Planejamento Integrado → Cronograma financeiro.</div>'; return; }
+  if(!obras.some(o=>o.id===INST_UI.obra)) INST_UI.obra = obras[0].id;
+  sel.value = INST_UI.obra;
+  const D = instDados(obras.find(o=>o.id===INST_UI.obra));
+  document.getElementById('instKpis').innerHTML = instKpisHtml(D);
+  document.getElementById('instGrafico').innerHTML = instSvg(D) + `<div class="step-note" style="margin-top:4px;">Realizado = peças com baixa de instalação (leitura de QR Code). Efetivo planejado: <b>${D.efetivo||'—'}</b> pessoas.${D.real.total<=0?' <b>Nenhuma baixa de instalação registrada ainda.</b>':''}</div>`;
+  document.getElementById('instFases').innerHTML = instTabelaFases(D);
+  document.getElementById('instMensal').innerHTML = instTabelaMensal(D);
+}
+function instImprimir(){
+  const ob = instObras().find(o=>o.id===INST_UI.obra); const D = ob && instDados(ob); if(!D) return;
+  document.getElementById('rdoPrintArea').innerHTML = `<div class="rdo-landscape-wrap"><h1>Cronograma de Instalação — ${esc(ob.nome)}</h1><div class="meta">Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
+    <div class="kpi-row" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px;">${instKpisHtml(D)}</div>
+    <div style="max-width:620px;">${instSvg(D)}</div><h3>Fases</h3>${instTabelaFases(D)}</div>`;
+  window.print();
+}
+function instExportarCSV(){
+  const ob = instObras().find(o=>o.id===INST_UI.obra); const D = ob && instDados(ob); if(!D) return;
+  const rows = [['Fase','Descrição','Peso (kg)','Início','Fim','Planejado hoje (%)','Realizado (%)','Instalado (kg)','Situação']];
+  D.fases.forEach(f=>rows.push([f.cod,f.desc,Math.round(f.kg),f.ini,f.fim,Math.round(f.planHoje),Math.round(f.pctReal),Math.round(f.kgReal),f.status]));
+  rows.push([]); rows.push(['Mês','Plan. (kg)','Real. (kg)','Plan. acum. (%)','Real. acum. (%)']);
+  D.meses.forEach((m,i)=>rows.push([m,Math.round(D.planMes[i]),Math.round(D.realMes[i]),Math.round(D.planAc[i]),D.realAc[i]==null?'':Math.round(D.realAc[i])]));
+  const csv = '﻿'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download = 'cronograma-instalacao-'+ob.nome.replace(/\s+/g,'_')+'.csv'; a.click();
+}
+/* ===== Qualidade e Segurança: FVS, EPO e inspeções de segurança ===== */
+const QS_TIPOS = { FVS:'FVS — Verificação de serviço', EPO:'EPO — Procedimento operacional', SEG:'Inspeção de segurança' };
+const QS_COR = { FVS:'#1565c0', EPO:'#6a1b9a', SEG:'#e08a00' };
+const QS_PADRAO = [
+ { tipo:'FVS', local:'Fábrica', nome:'FVS — Corte e usinagem', itens:['Medidas e ângulos de corte conforme plano de corte','Ausência de rebarbas e deformações','Furos e rasgos conforme desenho / gabarito','Identificação das peças (etiqueta / código)'] },
+ { tipo:'FVS', local:'Fábrica', nome:'FVS — Montagem e colagem', itens:['Esquadro e planicidade do quadro','Cantos e cavilhas / parafusos conforme projeto','Vedações e escovas montadas','Tempo de cura da cola respeitado','Funcionamento de folhas e ferragens'] },
+ { tipo:'FVS', local:'Fábrica', nome:'FVS — Vidro', itens:['Tipo e espessura conforme projeto','Dimensões (largura × altura) conforme pedido','Ausência de lascas, riscos e bolhas','Calços e fixação do vidro'] },
+ { tipo:'FVS', local:'Fábrica', nome:'FVS — Embalagem e expedição', itens:['Identificação por QR Code / código de barras','Proteção contra riscos e umidade','Quantidade conferida com a remessa'] },
+ { tipo:'FVS', local:'Obra', nome:'FVS — Contramarco', itens:['Prumo, nível e esquadro','Vão conforme projeto (folgas)','Fixação e chumbamento','Alinhamento entre pavimentos'] },
+ { tipo:'FVS', local:'Obra', nome:'FVS — Instalação de esquadria', itens:['Prumo e nível','Folgas perimetrais uniformes','Fixação conforme projeto','Funcionamento (abrir/fechar/travar)','Ausência de riscos e amassados','Estanqueidade (teste de água, quando aplicável)'] },
+ { tipo:'FVS', local:'Obra', nome:'FVS — Vedação e acabamento', itens:['Selante em cordão contínuo e bem aplicado','Limpeza e remoção da película protetora','Ferragens e acabamentos completos'] },
+ { tipo:'EPO', local:'Obra', nome:'EPO — Recebimento de materiais', itens:['Conferência da remessa com a nota / romaneio','Verificação visual de avarias','Identificação e armazenamento adequados','Divergências registradas'] },
+ { tipo:'EPO', local:'Obra', nome:'EPO — Liberação da frente de instalação', itens:['Contramarcos liberados e conferidos','Pontos de apoio / andaime disponíveis','Equipe e EPIs conferidos','Material no pavimento / local correto'] },
+ { tipo:'SEG', local:'Fábrica', nome:'Inspeção de segurança — Fábrica', itens:['EPIs em uso (óculos, luvas, protetor auricular, calçado)','Proteções de máquinas íntegras','Extintores no prazo e sinalizados / saídas livres','Organização e limpeza (5S)','Armazenamento seguro de perfis e vidros','Ferramentas elétricas e cabos em bom estado'] },
+ { tipo:'SEG', local:'Obra', nome:'Inspeção de segurança — Obra', itens:['EPIs em uso (capacete, óculos, luvas, calçado)','Trabalho em altura: cinto, talabarte e linha de vida','Andaimes / plataformas / balancins conferidos','Movimentação de vidros e esquadrias (içamento, ventosas)','Ferramentas elétricas e ligações provisórias','Isolamento e sinalização da área','Organização e limpeza da frente de serviço'] }
+];
+let QS_UI = { aba:'painel', fTipo:'', fObra:'', fStatus:'', atual:null };
+function qsModelos(){ let l = load('qsModelos'); if(!l.length){ l = QS_PADRAO.map(m=>Object.assign({ id:uid() }, m)); save('qsModelos', l); } return l; }
+function qsInsp(){ return load('qsInsp'); }
+function qsNCs(){ return load('qsNC'); }
+function qsHoje(){ return atcHoje(); }
+function qsNum(prefixo, lista){ const ano = new Date().getFullYear(); const n = lista.filter(x=>String(x.numero||'').startsWith(prefixo+'-'+ano)).length+1; return prefixo+'-'+ano+'-'+String(n).padStart(3,'0'); }
+function qsPodeGerir(){ return atcPodeGerir(); }
+function qsAba(a){ QS_UI.aba = a; renderQualidade(); }
+function qsConf(i){ const it = i.itens||[]; const c = it.filter(x=>x.r==='C').length, nc = it.filter(x=>x.r==='NC').length; return { c, nc, pct: c+nc ? Math.round(c/(c+nc)*100) : null }; }
+function qsNCVencida(n){ return n.status!=='Resolvida' && n.status!=='Verificada' && n.prazo && n.prazo < qsHoje(); }
+function qsPill(t, cor){ return `<span class="atc-badge" style="background:${cor}">${esc(t)}</span>`; }
+const QS_STCOR = { 'Aberta':'#c62828', 'Em tratamento':'#e08a00', 'Resolvida':'#2e7d32', 'Verificada':'#1b5e20' };
+
+function renderQualidade(){
+  qsModelos();
+  const abas = [['painel','Painel'],['insp','Inspeções'],['nc','Não conformidades'],['modelos','Modelos de checklist']];
+  document.getElementById('qsTabs').innerHTML = abas.map(([k,t])=>`<button class="btn small ${QS_UI.aba===k?'':'secondary'}" style="width:auto;" onclick="qsAba('${k}')">${t}${k==='nc'?(()=>{ const n = qsNCs().filter(x=>x.status==='Aberta'||x.status==='Em tratamento').length; return n?` (${n})`:''; })():''}</button>`).join('');
+  const el = document.getElementById('qsConteudo');
+  el.innerHTML = QS_UI.aba==='painel' ? qsHtmlPainel() : QS_UI.aba==='insp' ? qsHtmlInsp() : QS_UI.aba==='nc' ? qsHtmlNC() : qsHtmlModelos();
+}
+function qsFiltroObras(sel){ return `<option value="">Todas as obras</option>`+load('obras').map(o=>`<option value="${o.id}" ${sel===o.id?'selected':''}>${esc(o.nome)}</option>`).join(''); }
+function qsHtmlPainel(){
+  const I = qsInsp(), N = qsNCs(), mes = qsHoje().slice(0,7);
+  const doMes = I.filter(i=>(i.data||'').startsWith(mes));
+  const tot = I.reduce((a,i)=>{ const q = qsConf(i); a.c+=q.c; a.nc+=q.nc; return a; },{c:0,nc:0});
+  const pct = tot.c+tot.nc ? Math.round(tot.c/(tot.c+tot.nc)*100) : null;
+  const abertas = N.filter(n=>n.status==='Aberta'||n.status==='Em tratamento'), venc = N.filter(qsNCVencida);
+  const k = (n,l,st)=>`<div class="kpi"><div class="num" style="${st||''}">${n}</div><div class="lbl">${l}</div></div>`;
+  const porTipo = Object.keys(QS_TIPOS).map(t=>{ const ii = I.filter(i=>i.tipo===t), a = ii.reduce((s,i)=>{ const q=qsConf(i); s.c+=q.c; s.nc+=q.nc; return s; },{c:0,nc:0}); const p = a.c+a.nc?Math.round(a.c/(a.c+a.nc)*100):null;
+    return `<tr><td>${qsPill(t, QS_COR[t])} ${esc(QS_TIPOS[t])}</td><td style="text-align:right;">${ii.length}</td><td style="text-align:right;">${ii.filter(i=>(i.data||'').startsWith(mes)).length}</td><td style="text-align:right;">${p==null?'—':p+'%'}</td><td style="text-align:right;">${N.filter(n=>n.tipo===t&&(n.status==='Aberta'||n.status==='Em tratamento')).length}</td></tr>`; }).join('');
+  const obras = load('obras'), porObra = obras.map(o=>{ const ii = I.filter(i=>i.obraId===o.id); if(!ii.length && !N.some(n=>n.obraId===o.id)) return ''; const a = ii.reduce((s,i)=>{ const q=qsConf(i); s.c+=q.c; s.nc+=q.nc; return s; },{c:0,nc:0}); const p = a.c+a.nc?Math.round(a.c/(a.c+a.nc)*100):null;
+    return `<tr><td>${esc(o.nome)}</td><td style="text-align:right;">${ii.length}</td><td style="text-align:right;">${p==null?'—':p+'%'}</td><td style="text-align:right;">${N.filter(n=>n.obraId===o.id&&(n.status==='Aberta'||n.status==='Em tratamento')).length}</td></tr>`; }).join('');
+  const lv = venc.sort((a,b)=>(a.prazo||'').localeCompare(b.prazo||'')).slice(0,8).map(n=>`<tr><td>${esc(n.numero)}</td><td>${esc(n.empreendimento||'')}</td><td>${esc(n.item||'')}</td><td>${esc(n.responsavelNome||'—')}</td><td style="color:#c62828;">${fmtDate(n.prazo)}</td><td><button class="btn small secondary" style="width:auto;" onclick="qsAbrirNC('${n.id}')">Abrir</button></td></tr>`).join('');
+  return `<div class="kpi-row">${k(doMes.length,'Inspeções no mês')}${k(pct==null?'—':pct+'%','Conformidade geral (itens)', pct!=null&&pct<80?'color:#c62828;':'')}${k(abertas.length,'Não conformidades abertas', abertas.length?'color:#e08a00;':'')}${k(venc.length,'NCs com prazo vencido', venc.length?'color:#c62828;':'')}${k(N.filter(n=>n.status==='Resolvida'||n.status==='Verificada').length,'NCs resolvidas')}</div>
+   <div class="qs-grid"><div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Por tipo de inspeção</h3><table class="data-table" style="font-size:12px;"><thead><tr><th>Tipo</th><th style="text-align:right;">Total</th><th style="text-align:right;">No mês</th><th style="text-align:right;">Conformidade</th><th style="text-align:right;">NCs abertas</th></tr></thead><tbody>${porTipo}</tbody></table></div>
+   <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Por obra</h3>${porObra?`<table class="data-table" style="font-size:12px;"><thead><tr><th>Obra</th><th style="text-align:right;">Inspeções</th><th style="text-align:right;">Conformidade</th><th style="text-align:right;">NCs abertas</th></tr></thead><tbody>${porObra}</tbody></table>`:'<div class="step-note">Nenhuma inspeção registrada ainda.</div>'}</div></div>
+   <div class="card" style="padding:12px;margin-top:10px;"><h3 style="margin:0 0 6px;font-size:15px;">Ações com prazo vencido</h3>${lv?`<table class="data-table" style="font-size:12px;"><thead><tr><th>Nº</th><th>Obra</th><th>Item</th><th>Responsável</th><th>Prazo</th><th></th></tr></thead><tbody>${lv}</tbody></table>`:'<div class="step-note">Nenhuma ação vencida.</div>'}</div>
+   <div style="margin-top:10px;"><button class="btn" style="width:auto;" onclick="qsNovaInsp()">+ Nova inspeção</button></div>`;
+}
+function qsHtmlInsp(){
+  let I = qsInsp().slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'') || String(b.numero).localeCompare(String(a.numero)));
+  if(QS_UI.fTipo) I = I.filter(i=>i.tipo===QS_UI.fTipo); if(QS_UI.fObra) I = I.filter(i=>i.obraId===QS_UI.fObra);
+  const linhas = I.map(i=>{ const q = qsConf(i); return `<tr><td><b>${esc(i.numero)}</b></td><td>${fmtDate(i.data)}</td><td>${qsPill(i.tipo, QS_COR[i.tipo]||'#777')}</td><td>${esc(i.modeloNome||'')}</td><td>${esc(i.empreendimento||(i.local||''))}${i.referencia?' · '+esc(i.referencia):''}</td><td>${esc(i.inspetor||'')}</td><td style="text-align:right;">${q.pct==null?'—':q.pct+'%'}</td><td>${q.nc?qsPill(q.nc+' NC','#c62828'):qsPill('Conforme','#2e7d32')}</td><td><button class="btn small secondary" style="width:auto;" onclick="qsAbrirInsp('${i.id}')">Abrir</button></td></tr>`; }).join('');
+  return `<div class="form-grid" style="margin-bottom:10px;"><div class="field"><label>Tipo</label><select onchange="QS_UI.fTipo=this.value;renderQualidade()"><option value="">Todos</option>${Object.keys(QS_TIPOS).map(t=>`<option value="${t}" ${QS_UI.fTipo===t?'selected':''}>${esc(QS_TIPOS[t])}</option>`).join('')}</select></div><div class="field"><label>Obra</label><select onchange="QS_UI.fObra=this.value;renderQualidade()">${qsFiltroObras(QS_UI.fObra)}</select></div><div style="align-self:end;display:flex;gap:8px;"><button class="btn small" style="width:auto;" onclick="qsNovaInsp()">+ Nova inspeção</button><button class="btn small secondary" style="width:auto;" onclick="qsExportarCSV()">Exportar CSV</button></div></div>
+   ${linhas?`<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Nº</th><th>Data</th><th>Tipo</th><th>Checklist</th><th>Local</th><th>Inspetor</th><th style="text-align:right;">Conf.</th><th>Resultado</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`:'<div class="empty-state"><div class="big">✔</div>Nenhuma inspeção registrada. Clique em "+ Nova inspeção".</div>'}`;
+}
+function qsHtmlNC(){
+  let N = qsNCs().slice().sort((a,b)=>(a.prazo||'9999').localeCompare(b.prazo||'9999'));
+  if(QS_UI.fTipo) N = N.filter(n=>n.tipo===QS_UI.fTipo); if(QS_UI.fObra) N = N.filter(n=>n.obraId===QS_UI.fObra); if(QS_UI.fStatus) N = N.filter(n=>n.status===QS_UI.fStatus);
+  const linhas = N.map(n=>`<tr><td><b>${esc(n.numero)}</b></td><td>${qsPill(n.tipo, QS_COR[n.tipo]||'#777')}</td><td>${esc(n.empreendimento||n.local||'')}</td><td>${esc(n.item||'')}${n.obs?`<div class="step-note">${esc(n.obs)}</div>`:''}</td><td>${esc(n.criticidade||'')}</td><td>${esc(n.responsavelNome||'—')}</td><td${qsNCVencida(n)?' style="color:#c62828;font-weight:700;"':''}>${n.prazo?fmtDate(n.prazo):'—'}</td><td>${qsPill(n.status, QS_STCOR[n.status]||'#777')}</td><td><button class="btn small secondary" style="width:auto;" onclick="qsAbrirNC('${n.id}')">Tratar</button></td></tr>`).join('');
+  return `<div class="form-grid" style="margin-bottom:10px;"><div class="field"><label>Tipo</label><select onchange="QS_UI.fTipo=this.value;renderQualidade()"><option value="">Todos</option>${Object.keys(QS_TIPOS).map(t=>`<option value="${t}" ${QS_UI.fTipo===t?'selected':''}>${esc(QS_TIPOS[t])}</option>`).join('')}</select></div><div class="field"><label>Obra</label><select onchange="QS_UI.fObra=this.value;renderQualidade()">${qsFiltroObras(QS_UI.fObra)}</select></div><div class="field"><label>Situação</label><select onchange="QS_UI.fStatus=this.value;renderQualidade()"><option value="">Todas</option>${Object.keys(QS_STCOR).map(s=>`<option ${QS_UI.fStatus===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+   ${linhas?`<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Nº</th><th>Tipo</th><th>Local</th><th>Item / descrição</th><th>Criticidade</th><th>Responsável</th><th>Prazo</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`:'<div class="empty-state"><div class="big">✔</div>Nenhuma não conformidade.</div>'}`;
+}
+function qsHtmlModelos(){
+  const M = qsModelos();
+  return `<div class="step-note" style="margin-bottom:8px;">Modelos de checklist usados nas inspeções. ${qsPodeGerir()?'Gerente e coordenador podem criar, editar e excluir modelos.':'Edição restrita a gerente e coordenador.'}</div>
+   ${qsPodeGerir()?`<div style="margin-bottom:10px;"><button class="btn small" style="width:auto;" onclick="qsEditarModelo('')">+ Novo modelo</button></div>`:''}
+   <div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Tipo</th><th>Local</th><th>Modelo</th><th style="text-align:right;">Itens</th><th></th></tr></thead><tbody>${M.map(m=>`<tr><td>${qsPill(m.tipo, QS_COR[m.tipo]||'#777')}</td><td>${esc(m.local||'')}</td><td>${esc(m.nome)}</td><td style="text-align:right;">${(m.itens||[]).length}</td><td>${qsPodeGerir()?`<button class="btn small secondary" style="width:auto;" onclick="qsEditarModelo('${m.id}')">Editar</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+/* ---- modelos ---- */
+function qsEditarModelo(id){
+  if(!qsPodeGerir()) return;
+  const m = id ? qsModelos().find(x=>x.id===id) : { tipo:'FVS', local:'Obra', nome:'', itens:[''] };
+  QS_UI.atual = id;
+  const body = `<div class="form-grid"><div class="field"><label>Tipo</label><select id="qsm_tipo">${Object.keys(QS_TIPOS).map(t=>`<option value="${t}" ${m.tipo===t?'selected':''}>${esc(QS_TIPOS[t])}</option>`).join('')}</select></div>
+   <div class="field"><label>Local</label><select id="qsm_local"><option ${m.local==='Fábrica'?'selected':''}>Fábrica</option><option ${m.local==='Obra'?'selected':''}>Obra</option></select></div>
+   <div class="field" style="grid-column:1/-1;"><label>Nome do modelo</label><input id="qsm_nome" value="${esc(m.nome)}"></div>
+   <div class="field" style="grid-column:1/-1;"><label>Itens de verificação (um por linha)</label><textarea id="qsm_itens" rows="9">${esc((m.itens||[]).join('\n'))}</textarea></div></div>
+   <div class="form-actions"><button class="btn" onclick="qsSalvarModelo()">Salvar</button>${id?`<button class="btn danger" onclick="qsExcluirModelo('${id}')">Excluir</button>`:''}<button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`;
+  qsModal('Modelo de checklist', body);
+}
+function qsSalvarModelo(){
+  const nome = document.getElementById('qsm_nome').value.trim(), itens = document.getElementById('qsm_itens').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  if(!nome || !itens.length){ toast('Informe o nome e ao menos um item.'); return; }
+  const l = qsModelos(), id = QS_UI.atual; const dados = { tipo:document.getElementById('qsm_tipo').value, local:document.getElementById('qsm_local').value, nome, itens };
+  if(id){ const m = l.find(x=>x.id===id); if(m) Object.assign(m, dados); } else l.push(Object.assign({ id:uid() }, dados));
+  save('qsModelos', l); closeModal('modalQS'); renderQualidade(); toast('Modelo salvo.');
+}
+function qsExcluirModelo(id){ if(!confirm('Excluir este modelo? As inspeções já feitas são mantidas.')) return; save('qsModelos', qsModelos().filter(x=>x.id!==id)); closeModal('modalQS'); renderQualidade(); }
+function qsModal(titulo, body){ document.getElementById('qsModalTitulo').textContent = titulo; document.getElementById('qsModalBody').innerHTML = body; openModal('modalQS'); }
+/* ---- inspeções ---- */
+let QS_TMP = null;
+function qsNovaInsp(){
+  const M = qsModelos();
+  const body = `<div class="form-grid"><div class="field"><label>Checklist</label><select id="qsn_modelo">${['FVS','EPO','SEG'].map(t=>`<optgroup label="${esc(QS_TIPOS[t])}">${M.filter(m=>m.tipo===t).map(m=>`<option value="${m.id}">${esc(m.nome)} (${esc(m.local||'')})</option>`).join('')}</optgroup>`).join('')}</select></div>
+   <div class="field"><label>Obra</label><select id="qsn_obra"><option value="">— Fábrica / sem obra —</option>${load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('')}</select></div></div>
+   <div class="form-actions"><button class="btn" onclick="qsIniciarInsp()">Iniciar</button><button class="btn secondary" onclick="closeModal('modalQS')">Cancelar</button></div>`;
+  qsModal('Nova inspeção', body);
+}
+function qsIniciarInsp(){
+  const m = qsModelos().find(x=>x.id===document.getElementById('qsn_modelo').value); if(!m) return;
+  const obraId = document.getElementById('qsn_obra').value, obra = load('obras').find(o=>o.id===obraId);
+  QS_TMP = { id:'', tipo:m.tipo, modeloId:m.id, modeloNome:m.nome, local:m.local, obraId, empreendimento:obra?obra.nome:'', referencia:'', data:qsHoje(), inspetor:scUsuario(), itens:m.itens.map(t=>({ t, r:'', obs:'' })), obs:'' };
+  qsRenderInsp();
+}
+function qsAbrirInsp(id){ const i = qsInsp().find(x=>x.id===id); if(!i){ toast('Inspeção não encontrada.'); return; } QS_TMP = JSON.parse(JSON.stringify(i)); qsRenderInsp(); }
+function qsRenderInsp(){
+  const I = QS_TMP, novo = !I.id, q = qsConf(I);
+  const itens = I.itens.map((x,n)=>`<tr><td style="width:30px;">${n+1}</td><td>${esc(x.t)}<input type="text" placeholder="Observação" value="${esc(x.obs||'')}" style="width:100%;margin-top:3px;font-size:12px;" onchange="QS_TMP.itens[${n}].obs=this.value"></td>
+    ${['C','NC','NA'].map(r=>`<td style="text-align:center;width:54px;"><input type="radio" name="qsr${n}" ${x.r===r?'checked':''} onchange="qsMarcar(${n},'${r}')" style="width:auto;"></td>`).join('')}</tr>`).join('');
+  qsModal((novo?'Nova inspeção':'Inspeção '+I.numero)+' — '+I.modeloNome, `<div class="form-grid">
+    <div class="field"><label>Data</label><input type="date" value="${I.data||''}" onchange="QS_TMP.data=this.value"></div>
+    <div class="field"><label>Obra</label><input value="${esc(I.empreendimento||I.local||'')}" disabled></div>
+    <div class="field"><label>Referência (unidade / lote / fase / OP)</label><input value="${esc(I.referencia||'')}" onchange="QS_TMP.referencia=this.value"></div>
+    <div class="field"><label>Inspetor</label><input value="${esc(I.inspetor||'')}" onchange="QS_TMP.inspetor=this.value"></div></div>
+   <table class="data-table" style="font-size:13px;margin-top:8px;"><thead><tr><th>#</th><th>Item de verificação</th><th style="text-align:center;">Conforme</th><th style="text-align:center;">Não conf.</th><th style="text-align:center;">N/A</th></tr></thead><tbody>${itens}</tbody></table>
+   <div class="field" style="margin-top:8px;"><label>Observações gerais</label><textarea rows="2" onchange="QS_TMP.obs=this.value">${esc(I.obs||'')}</textarea></div>
+   <div class="step-note" style="margin-top:6px;">Cada item “Não conforme” gera uma ação corretiva em Não conformidades.</div>
+   <div class="form-actions" style="flex-wrap:wrap;margin-top:12px;"><button class="btn" onclick="qsSalvarInsp()">Salvar inspeção</button>${novo?'':`<button class="btn secondary" onclick="qsImprimirInsp('${I.id}')">Imprimir ficha</button>${qsPodeGerir()?`<button class="btn danger" onclick="qsExcluirInsp('${I.id}')">Excluir</button>`:''}`}<button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`);
+}
+function qsMarcar(n, r){ QS_TMP.itens[n].r = r; }
+function qsSalvarInsp(){
+  const I = QS_TMP; if(I.itens.some(x=>!x.r)){ toast('Marque Conforme, Não conforme ou N/A em todos os itens.'); return; }
+  const lista = qsInsp(), ncs = qsNCs(); const novo = !I.id;
+  if(novo){ I.id = uid(); I.numero = qsNum(I.tipo, lista); I.criadoEm = new Date().toISOString(); }
+  const i0 = lista.findIndex(x=>x.id===I.id); if(i0>=0) lista[i0] = I; else lista.push(I);
+  // gera ações para os itens NC ainda sem ação
+  let novas = 0;
+  I.itens.forEach((x,n)=>{ if(x.r!=='NC') return; if(ncs.some(c=>c.inspId===I.id && c.idx===n)) return;
+    ncs.push({ id:uid(), numero:qsNum('NC', ncs), inspId:I.id, idx:n, inspNumero:I.numero, tipo:I.tipo, local:I.local, obraId:I.obraId, empreendimento:I.empreendimento, item:x.t, obs:x.obs||'', criticidade:I.tipo==='SEG'?'Alta':'Média', responsavel:'', responsavelNome:'', prazo:'', status:'Aberta', criadoEm:new Date().toISOString(), hist:[{ em:new Date().toISOString(), por:scUsuario(), ev:'Aberta na inspeção '+I.numero }] }); novas++; });
+  save('qsInsp', lista); if(novas) save('qsNC', ncs);
+  closeModal('modalQS'); renderQualidade(); toast(`Inspeção ${I.numero} salva${novas?` — ${novas} não conformidade(s) aberta(s)`:''}.`);
+}
+function qsExcluirInsp(id){ if(!qsPodeGerir()) return; if(!confirm('Excluir esta inspeção e as não conformidades geradas por ela?')) return; save('qsInsp', qsInsp().filter(x=>x.id!==id)); save('qsNC', qsNCs().filter(x=>x.inspId!==id)); closeModal('modalQS'); renderQualidade(); }
+function qsImprimirInsp(id){
+  const I = qsInsp().find(x=>x.id===id); if(!I) return; const q = qsConf(I); const rot = { C:'Conforme', NC:'NÃO CONFORME', NA:'N/A' };
+  document.getElementById('rdoPrintArea').innerHTML = `<h1>${esc(I.modeloNome)}</h1><div class="meta">Ficha ${esc(I.numero)} · ${fmtDate(I.data)} · ${esc(I.empreendimento||I.local||'')}${I.referencia?' · '+esc(I.referencia):''} · Inspetor: ${esc(I.inspetor||'')}</div>
+   <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;border-bottom:1px solid #999;">#</th><th style="text-align:left;border-bottom:1px solid #999;">Item</th><th style="border-bottom:1px solid #999;">Resultado</th><th style="text-align:left;border-bottom:1px solid #999;">Observação</th></tr></thead><tbody>${I.itens.map((x,n)=>`<tr><td style="padding:4px;border-bottom:1px solid #ddd;">${n+1}</td><td style="padding:4px;border-bottom:1px solid #ddd;">${esc(x.t)}</td><td style="padding:4px;border-bottom:1px solid #ddd;text-align:center;${x.r==='NC'?'font-weight:700;color:#c62828;':''}">${rot[x.r]||''}</td><td style="padding:4px;border-bottom:1px solid #ddd;">${esc(x.obs||'')}</td></tr>`).join('')}</tbody></table>
+   <p style="font-size:12px;">Conformidade: <b>${q.pct==null?'—':q.pct+'%'}</b> (${q.c} conformes · ${q.nc} não conformes)${I.obs?'<br>Obs.: '+esc(I.obs):''}</p><div style="margin-top:40px;font-size:12px;">______________________________<br>${esc(I.inspetor||'Inspetor')}</div>`;
+  window.print();
+}
+/* ---- não conformidades ---- */
+function qsAbrirNC(id){
+  const n = qsNCs().find(x=>x.id===id); if(!n){ toast('Não conformidade não encontrada.'); return; }
+  QS_UI.atual = id; const pessoas = (()=>{ try{ return atcPessoas(); }catch(e){ return []; } })();
+  qsModal('Não conformidade '+n.numero, `<div class="step-note" style="margin-bottom:8px;">${esc(QS_TIPOS[n.tipo]||'')} · inspeção ${esc(n.inspNumero||'')} · ${esc(n.empreendimento||n.local||'')}</div>
+   <div class="field"><label>Item não conforme</label><input value="${esc(n.item)}" disabled></div>
+   <div class="form-grid"><div class="field"><label>Criticidade</label><select id="qsnc_crit">${['Baixa','Média','Alta'].map(c=>`<option ${n.criticidade===c?'selected':''}>${c}</option>`).join('')}</select></div>
+   <div class="field"><label>Responsável pela correção</label><select id="qsnc_resp"><option value="">—</option>${pessoas.map(p=>`<option value="${esc(p.ref)}" ${n.responsavel===p.ref?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
+   <div class="field"><label>Prazo</label><input type="date" id="qsnc_prazo" value="${n.prazo||''}"></div>
+   <div class="field"><label>Situação</label><select id="qsnc_st">${Object.keys(QS_STCOR).map(s=>`<option ${n.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+   <div class="field"><label>Ação corretiva / solução aplicada</label><textarea id="qsnc_acao" rows="3">${esc(n.acao||'')}</textarea></div>
+   <div class="atc-sec" style="margin-top:10px;">Histórico</div><div class="atc-hist">${(n.hist||[]).slice().reverse().map(h=>`<div><b>${esc(atcFmtDH(h.em))}</b> — ${esc(h.por)}<br>${esc(h.ev)}</div>`).join('')}</div>
+   <div class="form-actions" style="margin-top:12px;"><button class="btn" onclick="qsSalvarNC()">Salvar</button><button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`);
+}
+function qsSalvarNC(){
+  const l = qsNCs(), n = l.find(x=>x.id===QS_UI.atual); if(!n) return;
+  const st = document.getElementById('qsnc_st').value, ref = document.getElementById('qsnc_resp').value, prazo = document.getElementById('qsnc_prazo').value, acao = document.getElementById('qsnc_acao').value.trim();
+  if((st==='Resolvida'||st==='Verificada') && !acao){ toast('Descreva a ação corretiva para resolver.'); return; }
+  const ev = []; if(n.status!==st) ev.push('Situação: '+n.status+' → '+st); if((n.responsavel||'')!==ref) ev.push('Responsável: '+atcPessoaNome(ref)); if((n.prazo||'')!==prazo) ev.push('Prazo: '+(prazo?fmtDate(prazo):'—'));
+  Object.assign(n, { criticidade:document.getElementById('qsnc_crit').value, responsavel:ref, responsavelNome:ref?atcPessoaNome(ref):'', prazo, status:st, acao });
+  if(ev.length) n.hist.push({ em:new Date().toISOString(), por:scUsuario(), ev:ev.join(' · ') });
+  save('qsNC', l); closeModal('modalQS'); renderQualidade(); toast('Não conformidade atualizada.');
+}
+function qsExportarCSV(){
+  const rows = [['Nº','Data','Tipo','Checklist','Obra/Local','Referência','Inspetor','Conformidade %','NCs']];
+  qsInsp().forEach(i=>{ const q = qsConf(i); rows.push([i.numero,i.data,i.tipo,i.modeloNome,i.empreendimento||i.local,i.referencia||'',i.inspetor||'',q.pct==null?'':q.pct,q.nc]); });
+  const csv = '﻿'+rows.map(r=>r.map(c=>`"${String(c==null?'':c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download = 'inspecoes-qualidade-seguranca.csv'; a.click();
+}
 function renderPCP(){
   const sem = document.getElementById('pcpSemAcesso'), cont = document.getElementById('pcpConteudo');
   if(!pliTemAcesso()){ sem.style.display='block'; cont.style.display='none'; return; }
