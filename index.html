@@ -988,8 +988,9 @@
       <div class="nav-item" id="navPainel" data-section="painel" style="display:none;"><span class="ico">🚨</span><span class="label">Painel de Pendências</span><span id="navPainelBadge" style="display:none;margin-left:auto;background:#bd0c1d;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;font-weight:700"></span></div>
       <div class="nav-item" id="navBackup" data-section="backup" style="display:none;"><span class="ico">💾</span><span class="label">Backup, Versões e Acessos</span></div>
 
-      <div class="nav-group-label">Suprimentos</div>
-      <div class="nav-item" data-section="materiaisgeral"><span class="ico">▧</span><span class="label">Materiais — Visão Geral</span></div>
+      <div class="nav-group-label">Compras</div>
+      <div class="nav-item" data-section="solicitacoes"><span class="ico">✎</span><span class="label">Solicitações de Compra</span><span id="navComprasBadge" style="display:none;background:#c62828;color:#fff;border-radius:10px;padding:0 7px;font-size:11px;margin-left:6px;"></span></div>
+      <div class="nav-item" data-section="materiaisgeral"><span class="ico">▧</span><span class="label">Compras — Pedidos</span></div>
 
       <div class="nav-group-label">Assistência Técnica</div>
       <div class="nav-item" data-section="chamados"><span class="ico">☏</span><span class="label">Revisão de Esquadrias</span></div>
@@ -1195,7 +1196,7 @@
               <button class="btn small secondary ow-tab-btn" data-tab="producao" onclick="showObraTab('producao')">Produção</button>
               <button class="btn small secondary ow-tab-btn" data-tab="instalacao" onclick="showObraTab('instalacao')">Instalação</button>
               <button class="btn small secondary ow-tab-btn" data-tab="expedicao" onclick="showObraTab('expedicao')">Expedição / Rastreio</button>
-              <button class="btn small secondary ow-tab-btn" data-tab="materiais" onclick="showObraTab('materiais')">Materiais</button>
+              <button class="btn small secondary ow-tab-btn" data-tab="materiais" onclick="showObraTab('materiais')">Compras</button>
               <button class="btn small secondary ow-tab-btn" data-tab="vento" onclick="showObraTab('vento')">Pressão de Vento</button>
               <button class="btn small secondary ow-tab-btn" data-tab="perfis" onclick="showObraTab('perfis')">Cálculo de Perfis</button>
               <button class="btn small secondary ow-tab-btn" data-tab="vidro" onclick="showObraTab('vidro')">Cálculo de Vidro</button>
@@ -2333,6 +2334,25 @@
               </div>
               <div id="admRateioResultado" style="margin-top:14px;"></div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-solicitacoes">
+        <div class="panel">
+          <div class="panel-head">Solicitações de compra — esteira de aprovações</div>
+          <div class="panel-body">
+            <div class="step-note" style="margin-bottom:10px;">Fluxo: <b>Solicitante</b> abre a solicitação ao <b>ADM</b> → ADM confere e envia para aprovação do <b>Coordenador</b> → <b>Gerente</b> (aprovação final) → ADM envia para <b>Suprimentos da Calper</b> → pedido realizado. Aprovadores podem reprovar ou devolver com observação; tudo fica no histórico.</div>
+            <div class="toolbar" style="gap:8px;flex-wrap:wrap;">
+              <button class="btn small" onclick="novaSolicitacao()">+ Nova solicitação</button>
+              <button class="btn small" data-scf="minhas" onclick="scFiltrar('minhas')"></button>
+              <button class="btn small secondary" data-scf="andamento" onclick="scFiltrar('andamento')"></button>
+              <button class="btn small secondary" data-scf="concluidas" onclick="scFiltrar('concluidas')"></button>
+              <button class="btn small secondary" data-scf="encerradas" onclick="scFiltrar('encerradas')"></button>
+              <button class="btn small secondary" data-scf="todas" onclick="scFiltrar('todas')"></button>
+              <select id="scFiltroObra" onchange="SC_UI.obra=this.value;renderSolicitacoes()"></select>
+            </div>
+            <div id="scLista" style="margin-top:12px;"></div>
           </div>
         </div>
       </section>
@@ -3838,6 +3858,38 @@
         <button class="btn" onclick="saveFuncionario()">Salvar funcionário</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalSolicitacao">
+  <div class="modal">
+    <div class="modal-head"><h3 id="scModalTitulo">Nova solicitação de compra</h3><button class="modal-close" onclick="closeModal('modalSolicitacao')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="scId">
+      <div class="form-grid">
+        <div class="field"><label>Obra</label><select id="scObra"></select></div>
+        <div class="field"><label>Tipo</label><select id="scTipo"><option value="material">Material</option><option value="aluminio">Alumínio / perfis</option><option value="acessorios">Acessórios</option><option value="vidro">Vidro</option><option value="servico">Serviço</option><option value="outros">Outros</option></select></div>
+        <div class="field"><label>Prioridade</label><select id="scPrioridade"><option value="normal">Normal</option><option value="urgente">Urgente</option></select></div>
+        <div class="field"><label>Necessário até</label><input type="date" id="scPrazo"></div>
+        <div class="field"><label>Valor estimado (R$, opcional)</label><input type="number" step="0.01" id="scValor"></div>
+        <div class="field"><label>Solicitante</label><input type="text" id="scSolicitante"></div>
+        <div class="field full"><label>Justificativa</label><input type="text" id="scJustificativa" placeholder="Por que precisa e para qual fase/etapa"></div>
+      </div>
+      <h4 style="margin:10px 0 6px;font-family:var(--serif);">Itens</h4>
+      <div id="scItens"></div>
+      <button type="button" class="btn small secondary" onclick="scAddItem()">+ Adicionar item</button>
+      <div class="form-actions">
+        <button class="btn secondary" onclick="closeModal('modalSolicitacao')">Cancelar</button>
+        <button class="btn" onclick="salvarSolicitacao()">Enviar ao ADM</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalSolicitacaoDet">
+  <div class="modal" style="max-width:860px;">
+    <div class="modal-head"><h3 id="scDetTitulo">Solicitação</h3><button class="modal-close" onclick="closeModal('modalSolicitacaoDet')">&times;</button></div>
+    <div class="modal-body" id="scDetCorpo"></div>
   </div>
 </div>
 
@@ -7384,7 +7436,8 @@ const sectionTitles = {
   setores: ['Setores','Cadastro de setores da divisão'],
   tarefas: ['Tarefas por Setor','Controle de tarefas por setor'],
   metas: ['Metas por Setor','Acompanhamento de metas por setor'],
-  materiaisgeral: ['Materiais — Visão Geral','Todos os pedidos de material, agrupados por obra'],
+  solicitacoes: ['Solicitações de Compra','Esteira: Solicitante → ADM → Coordenador → Gerente → Suprimentos Calper'],
+  materiaisgeral: ['Compras — Pedidos','Todos os pedidos de compra de material, agrupados por obra'],
   painel: ['Painel de Pendências','Atrasos e pendências de todas as áreas (Gerência e Coordenação)'],
   backup: ['Backup, Versões e Acessos','Cópia de segurança, versões do plano e acessos totais'],
   planejint: ['Planejamento Integrado de Alumínio','Fábrica, instalação, compras e cronograma financeiro por obra (somente Gerência)'],
@@ -7449,6 +7502,7 @@ function showSection(id){
     if(id==='tarefas'){ refreshTarefaFiltroSetor(); refreshTarefaSetorSelect(); refreshTarefaResponsavelSelect(); renderTarefas(); }
     if(id==='metas'){ refreshMetaFiltroSetor(); refreshMetaSetorSelect(); renderMetas(); }
     if(id==='materiaisgeral') renderMateriaisGeral();
+    if(id==='solicitacoes') renderSolicitacoes();
     if(id==='rateiomdo') renderRateioMaoDeObra();
     if(id==='planejint') renderPlanejInt();
     if(id==='painel') renderPainel();
@@ -11862,7 +11916,7 @@ function pliHtmlCronFin(){
     <div class="pli-note">Componentes: ${pliFmtT(p.compPct*100,0)}% do valor do alumínio de cada grupo, faturados em 2 parcelas (${p.comp1} e ${p.comp2} dias após a 1ª parcela do grupo).</div></div>
    <div class="pli-card"><h3>Curva mensal — material, fábrica, instalação e efetivo</h3><div class="pli-scroll"><table class="pli-t pli-m"><thead><tr><th class="rot"></th>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
   const rel = `<div class="pli-card" style="background:transparent;border:0;padding:0;"><h3 style="margin:0 0 8px;">Relatório financeiro — ${esc(ob.nome)}</h3>${pliHtmlRelFin(ob)}</div>`;
-  return barra + pliHtmlEditor() + notaPl + kpi + pliHtmlMetaMO(ob, R, k) + pliHtmlCronFase(ob, R) + pliHtmlFluxoEtapas(ob, R) + rel + prem + graf + resumo + lotes;
+  return barra + pliHtmlEditor() + notaPl + kpi + pliHtmlCronFase(ob, R) + pliHtmlFluxoEtapas(ob, R) + rel + prem + graf + resumo + lotes;
 }
 
 function pliEditarCarga(obra, ym, valor){
@@ -12250,6 +12304,7 @@ function plcMetaCorpo(ob, R){
   return setor('Instalação (Obra)', D.inst, '−'+D.M.instPct+'%') + setor('Fábrica', D.fab, 'mesmo time produzindo +'+D.M.fabPct+'%')
     + `<div class="pli-note">Pagamento previsto no encerramento da obra${D.fimObra?' (instalação termina em '+pliFmtData(D.fimObra)+')':''}. A economia só gera premiação se a estimativa final ficar dentro da meta. Colaboradores PJ não participam da premiação.</div>`;
 }
+// Meta de MO e premiação: retirada da tela do Planejamento Integrado; funções plcMeta* mantidas para reaproveitar em outro lugar.
 function pliHtmlMetaMO(ob, R, k){
   const M = plcMetaDef(ob);
   const inp = (campo, v, w) => `<input type="number" step="any" min="0" value="${v}" style="width:${w||60}px;" onchange="plcMetaSet(${k},'${campo}',this.value)">`;
@@ -16934,6 +16989,169 @@ function renderMateriais(){
 }
 document.getElementById('matSearch').addEventListener('input', renderMateriais);
 
+/* ===================== COMPRAS — Solicitações de compra e esteira de aprovações =====================
+   Fluxo (manual de processos): Solicitante → ADM (confere) → Coordenador → Gerente (aprovação final) → ADM envia a Suprimentos Calper → Pedido.
+   Dados: lista "solicitacoesCompra" (sincronizada por item). Cada ação grava no histórico (quem, quando, observação). */
+const SC_ETAPAS = [
+  { k:'solicitada', rot:'ADM confere' }, { k:'aprov_coord', rot:'Coordenador' }, { k:'aprov_ger', rot:'Gerente' },
+  { k:'aprovada', rot:'Enviar a Suprimentos' }, { k:'suprimentos', rot:'Suprimentos / Pedido' }
+];
+const SC_STATUS_ROT = { solicitada:'Aguardando ADM', aprov_coord:'Aprovação do Coordenador', aprov_ger:'Aprovação do Gerente', aprovada:'Aprovada — enviar a Suprimentos', suprimentos:'Em Suprimentos Calper', concluida:'Pedido realizado', devolvida:'Devolvida ao solicitante', reprovada:'Reprovada', cancelada:'Cancelada' };
+let SC_UI = { filtro:'minhas', obra:'', abertaId:null };
+function scUsuario(){ const s = getCurrentUserSelection(); return s && s.registro ? s.registro.nome : (souGerente() ? 'Gerente' : 'Usuário'); }
+function souAdm(){
+  if(contaSemCadastroVinculado) return false;
+  const sel = getCurrentUserSelection(); if(!sel) return true;
+  if(sel.tipo === 'responsavel') return papelConcedeAcesso(sel.registro.papel, ['Administrativo','ADM']);
+  return /administr|\badm\b/.test(normalizarTextoPapel(sel.registro.cargo)) || souGerente();
+}
+// quem pode agir em cada etapa
+function scPodeAgir(status){
+  if(status === 'solicitada' || status === 'aprovada' || status === 'suprimentos') return souAdm() || souGerente();
+  if(status === 'aprov_coord') return souCoordenador() || souGerente();
+  if(status === 'aprov_ger') return souGerente();
+  return false;
+}
+function scProximoNumero(){
+  const ano = new Date().getFullYear(), pref = 'SC-'+ano+'-';
+  const max = load('solicitacoesCompra').filter(s=>String(s.numero||'').indexOf(pref)===0).reduce((m,s)=>Math.max(m, parseInt(String(s.numero).slice(pref.length))||0), 0);
+  return pref + String(max+1).padStart(3,'0');
+}
+function scHist(s, etapa, decisao, obs){ (s.historico = s.historico||[]).push({ etapa, decisao, por: scUsuario(), em: new Date().toISOString(), obs: obs||'' }); }
+function scSalvar(s){ const l = load('solicitacoesCompra'), i = l.findIndex(x=>x.id===s.id); if(i>=0) l[i] = s; else l.push(s); save('solicitacoesCompra', l); }
+function scTrilha(s){
+  const idx = SC_ETAPAS.findIndex(e=>e.k===s.status);
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">` + SC_ETAPAS.map((e,i)=>{
+    let cor = '#e5e5e5', txt = '#666';
+    if(s.status==='concluida' || (idx>=0 && i<idx)){ cor = '#2e7d32'; txt = '#fff'; }
+    else if(i===idx){ cor = (s.status==='suprimentos') ? '#2e7d32' : '#b8860b'; txt = '#fff'; }
+    else if((s.status==='reprovada'||s.status==='devolvida') && i===(s.etapaFalha!=null?s.etapaFalha:0)){ cor = '#c62828'; txt = '#fff'; }
+    return `<span style="background:${cor};color:${txt};border-radius:12px;padding:2px 8px;font-size:11px;white-space:nowrap">${i+1}. ${e.rot}</span>`;
+  }).join('') + `</div>`;
+}
+function scAtualizarBadge(){
+  try{
+    const n = load('solicitacoesCompra').filter(s=>scPodeAgir(s.status)).length;
+    const el = document.getElementById('navComprasBadge'); if(!el) return;
+    el.textContent = n; el.style.display = n ? 'inline-block' : 'none';
+  }catch(e){}
+}
+function renderSolicitacoes(){
+  const obras = load('obras'), lista = load('solicitacoesCompra').slice().sort((a,b)=>String(b.numero).localeCompare(String(a.numero)));
+  const selObra = document.getElementById('scFiltroObra');
+  if(selObra){ const v = SC_UI.obra; selObra.innerHTML = '<option value="">Todas as obras</option>' + obras.map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join(''); selObra.value = v; }
+  const emFluxo = s=>['solicitada','aprov_coord','aprov_ger','aprovada','suprimentos'].includes(s.status);
+  const filtros = { minhas: s=>scPodeAgir(s.status), andamento: emFluxo, concluidas: s=>s.status==='concluida', encerradas: s=>['reprovada','cancelada','devolvida'].includes(s.status), todas: ()=>true };
+  const cont = k => lista.filter(filtros[k]).length;
+  document.querySelectorAll('[data-scf]').forEach(b=>{ const k = b.dataset.scf; b.classList.toggle('secondary', k!==SC_UI.filtro); b.textContent = {minhas:'Para eu agir',andamento:'Em andamento',concluidas:'Concluídas',encerradas:'Devolvidas / reprovadas',todas:'Todas'}[k]+' ('+cont(k)+')'; });
+  const vis = lista.filter(filtros[SC_UI.filtro]).filter(s=>!SC_UI.obra || s.obraId===SC_UI.obra);
+  document.getElementById('scLista').innerHTML = vis.length ? `<table><thead><tr><th>Nº</th><th>Obra</th><th>Solicitante</th><th>Itens</th><th>Prioridade</th><th>Necessário até</th><th>Etapa</th><th></th></tr></thead><tbody>${vis.map(s=>{
+    const o = obras.find(x=>x.id===s.obraId);
+    return `<tr><td><strong>${esc(s.numero)}</strong></td><td>${esc(o?o.nome:'—')}</td><td>${esc(s.solicitante||'—')}</td><td>${(s.itens||[]).length}</td>
+      <td>${s.prioridade==='urgente'?'<b style="color:#c62828">Urgente</b>':'Normal'}</td><td>${s.prazoNecessario?esc(fmtDate(s.prazoNecessario)):'—'}</td>
+      <td>${scTrilha(s)}<div class="step-note">${esc(SC_STATUS_ROT[s.status]||s.status)}</div></td>
+      <td><button class="btn small ${scPodeAgir(s.status)?'':'secondary'}" onclick="abrirSolicitacao('${s.id}')">${scPodeAgir(s.status)?'Analisar':'Abrir'}</button></td></tr>`;
+  }).join('')}</tbody></table>` : '<div class="empty-state">Nenhuma solicitação nesta visão.</div>';
+  scAtualizarBadge();
+}
+function scFiltrar(k){ SC_UI.filtro = k; renderSolicitacoes(); }
+// ---- nova solicitação / edição (solicitante) ----
+let scItensTemp = [];
+function novaSolicitacao(id){
+  const s = id ? load('solicitacoesCompra').find(x=>x.id===id) : null;
+  document.getElementById('scId').value = s ? s.id : '';
+  document.getElementById('scObra').innerHTML = '<option value="">Selecione</option>' + load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('');
+  document.getElementById('scObra').value = s ? s.obraId : '';
+  document.getElementById('scTipo').value = s ? (s.tipo||'material') : 'material';
+  document.getElementById('scPrioridade').value = s ? (s.prioridade||'normal') : 'normal';
+  document.getElementById('scPrazo').value = s ? (s.prazoNecessario||'') : '';
+  document.getElementById('scValor').value = s ? (s.valorEstimado||'') : '';
+  document.getElementById('scSolicitante').value = s ? (s.solicitante||'') : scUsuario();
+  document.getElementById('scJustificativa').value = s ? (s.justificativa||'') : '';
+  scItensTemp = s ? (s.itens||[]).map(i=>({...i})) : [{ descricao:'', qtd:'', un:'un' }];
+  document.getElementById('scModalTitulo').textContent = s ? 'Editar solicitação '+s.numero : 'Nova solicitação de compra';
+  scRenderItensTemp(); openModal('modalSolicitacao');
+}
+function scRenderItensTemp(){
+  document.getElementById('scItens').innerHTML = scItensTemp.map((it,i)=>`<div class="form-grid" style="grid-template-columns:3fr 1fr 1fr auto;align-items:end;margin-bottom:6px;">
+    <div class="field"><label>${i===0?'Item / especificação':''}</label><input type="text" value="${esc(it.descricao||'')}" oninput="scItensTemp[${i}].descricao=this.value" placeholder="Ex.: Perfil alumínio 6063 — referência, cor, medida"></div>
+    <div class="field"><label>${i===0?'Quantidade':''}</label><input type="number" step="any" value="${it.qtd||''}" oninput="scItensTemp[${i}].qtd=this.value"></div>
+    <div class="field"><label>${i===0?'Un.':''}</label><input type="text" value="${esc(it.un||'')}" oninput="scItensTemp[${i}].un=this.value"></div>
+    <div class="field"><button type="button" class="btn small danger" onclick="scItensTemp.splice(${i},1);if(!scItensTemp.length)scItensTemp.push({descricao:'',qtd:'',un:'un'});scRenderItensTemp()">×</button></div></div>`).join('');
+}
+function scAddItem(){ scItensTemp.push({ descricao:'', qtd:'', un:'un' }); scRenderItensTemp(); }
+function salvarSolicitacao(){
+  const obraId = document.getElementById('scObra').value;
+  if(!obraId){ toast('Selecione a obra.'); return; }
+  const itens = scItensTemp.filter(i=>(i.descricao||'').trim()).map(i=>({ descricao:i.descricao.trim(), qtd:parseFloat(i.qtd)||0, un:(i.un||'').trim() }));
+  if(!itens.length){ toast('Informe ao menos um item.'); return; }
+  const id = document.getElementById('scId').value;
+  let s = id ? load('solicitacoesCompra').find(x=>x.id===id) : null;
+  const dados = { obraId, tipo:document.getElementById('scTipo').value, prioridade:document.getElementById('scPrioridade').value, prazoNecessario:document.getElementById('scPrazo').value,
+    valorEstimado:parseFloat(document.getElementById('scValor').value)||0, solicitante:document.getElementById('scSolicitante').value.trim(), justificativa:document.getElementById('scJustificativa').value.trim(), itens };
+  if(!s){
+    s = Object.assign({ id: uid(), numero: scProximoNumero(), criadaEm: new Date().toISOString(), status:'solicitada', historico:[] }, dados);
+    scHist(s, 'Solicitante', 'Solicitação criada', dados.justificativa);
+  } else {
+    Object.assign(s, dados);
+    if(s.status==='devolvida'){ s.status = 'solicitada'; scHist(s, 'Solicitante', 'Corrigida e reenviada ao ADM', ''); }
+    else scHist(s, 'Solicitante', 'Solicitação editada', '');
+  }
+  scSalvar(s); closeModal('modalSolicitacao'); renderSolicitacoes(); toast('Solicitação '+s.numero+' enviada ao ADM.');
+}
+// ---- análise / decisão ----
+function abrirSolicitacao(id){ SC_UI.abertaId = id; scRenderDetalhe(); openModal('modalSolicitacaoDet'); }
+function scRenderDetalhe(){
+  const s = load('solicitacoesCompra').find(x=>x.id===SC_UI.abertaId); if(!s){ closeModal('modalSolicitacaoDet'); return; }
+  const o = load('obras').find(x=>x.id===s.obraId), pode = scPodeAgir(s.status);
+  document.getElementById('scDetTitulo').textContent = s.numero+' — '+(o?o.nome:'—');
+  const fmtDH = iso=>{ try{ return new Date(iso).toLocaleString('pt-BR'); }catch(e){ return iso; } };
+  const acao = (rot, fn, cls) => `<button class="btn small ${cls||''}" onclick="${fn}">${rot}</button>`;
+  let botoes = '';
+  if(pode){
+    const obs = '<div class="field full" style="margin-top:8px;"><label>Observação (obrigatória para reprovar/devolver)</label><input type="text" id="scObsDecisao" placeholder="Motivo, orientação, nº do protocolo Sienge..."></div>';
+    if(s.status==='solicitada') botoes = obs+`<div class="form-actions">${acao('Enviar para aprovação','scDecidir(\'enviar\')')}${acao('Devolver ao solicitante','scDecidir(\'devolver\')','secondary')}${acao('Cancelar solicitação','scDecidir(\'cancelar\')','danger')}</div>`;
+    else if(s.status==='aprov_coord') botoes = obs+`<div class="form-actions">${acao('Aprovar (segue ao Gerente)','scDecidir(\'aprovar\')')}${acao('Devolver ao ADM','scDecidir(\'devolverAdm\')','secondary')}${acao('Reprovar','scDecidir(\'reprovar\')','danger')}</div>`;
+    else if(s.status==='aprov_ger') botoes = obs+`<div class="form-actions">${acao('Aprovar (aprovação final)','scDecidir(\'aprovar\')')}${acao('Devolver ao ADM','scDecidir(\'devolverAdm\')','secondary')}${acao('Reprovar','scDecidir(\'reprovar\')','danger')}</div>`;
+    else if(s.status==='aprovada') botoes = obs+`<div class="form-actions">${acao('Enviar para Suprimentos Calper','scDecidir(\'suprimentos\')')}</div>`;
+    else if(s.status==='suprimentos') botoes = obs+`<div class="form-actions">${acao('Pedido realizado — concluir','scDecidir(\'concluir\')')}</div>`;
+  } else if(['solicitada','aprov_coord','aprov_ger','aprovada','suprimentos'].includes(s.status)){
+    const quem = {solicitada:'o ADM', aprov_coord:'o Coordenador', aprov_ger:'o Gerente', aprovada:'o ADM', suprimentos:'o ADM'}[s.status];
+    botoes = `<div class="step-note" style="margin-top:8px;">Aguardando ${quem}.</div>`;
+  }
+  if(s.status==='devolvida') botoes += `<div class="form-actions">${acao('Corrigir e reenviar','closeModal(\'modalSolicitacaoDet\');novaSolicitacao(\''+s.id+'\')')}</div>`;
+  document.getElementById('scDetCorpo').innerHTML = `
+    <div style="margin-bottom:10px;">${scTrilha(s)}<div class="step-note">${esc(SC_STATUS_ROT[s.status]||s.status)}</div></div>
+    <div class="form-grid" style="margin-bottom:8px;">
+      <div><b>Solicitante:</b> ${esc(s.solicitante||'—')}</div><div><b>Tipo:</b> ${esc(s.tipo||'—')}</div>
+      <div><b>Prioridade:</b> ${s.prioridade==='urgente'?'<b style="color:#c62828">Urgente</b>':'Normal'}</div><div><b>Necessário até:</b> ${s.prazoNecessario?esc(fmtDate(s.prazoNecessario)):'—'}</div>
+      <div><b>Valor estimado:</b> ${s.valorEstimado?fmtMoeda(s.valorEstimado):'—'}</div><div><b>Criada em:</b> ${esc(fmtDH(s.criadaEm))}</div>
+      ${s.protocoloSuprimentos?`<div class="full"><b>Protocolo Suprimentos/Sienge:</b> ${esc(s.protocoloSuprimentos)}</div>`:''}
+    </div>
+    ${s.justificativa?`<div class="step-note" style="margin-bottom:8px;"><b>Justificativa:</b> ${esc(s.justificativa)}</div>`:''}
+    <table><thead><tr><th>Item</th><th>Qtd.</th><th>Un.</th></tr></thead><tbody>${(s.itens||[]).map(i=>`<tr><td>${esc(i.descricao)}</td><td>${i.qtd||''}</td><td>${esc(i.un||'')}</td></tr>`).join('')}</tbody></table>
+    ${botoes}
+    <h4 style="margin:14px 0 6px;font-family:var(--serif);">Histórico</h4>
+    <table><thead><tr><th>Quando</th><th>Etapa</th><th>Decisão</th><th>Por</th><th>Observação</th></tr></thead><tbody>${(s.historico||[]).slice().reverse().map(h=>`<tr><td>${esc(fmtDH(h.em))}</td><td>${esc(h.etapa)}</td><td><b>${esc(h.decisao)}</b></td><td>${esc(h.por)}</td><td>${esc(h.obs||'')}</td></tr>`).join('')}</tbody></table>`;
+}
+function scDecidir(acao){
+  const s = load('solicitacoesCompra').find(x=>x.id===SC_UI.abertaId); if(!s) return;
+  if(!scPodeAgir(s.status)){ toast('Você não tem permissão para decidir nesta etapa.'); return; }
+  const obs = ((document.getElementById('scObsDecisao')||{}).value||'').trim();
+  if(['reprovar','devolver','devolverAdm','cancelar'].includes(acao) && !obs){ toast('Informe o motivo na observação.'); return; }
+  const et = {solicitada:'ADM', aprov_coord:'Coordenador', aprov_ger:'Gerente', aprovada:'ADM', suprimentos:'ADM'}[s.status];
+  const idxAtual = SC_ETAPAS.findIndex(e=>e.k===s.status);
+  if(acao==='enviar'){ s.status = 'aprov_coord'; scHist(s, et, 'Conferida e enviada para aprovação do Coordenador', obs); }
+  else if(acao==='aprovar'){ if(s.status==='aprov_coord'){ s.status = 'aprov_ger'; scHist(s, et, 'Aprovada pelo Coordenador — segue ao Gerente', obs); } else { s.status = 'aprovada'; scHist(s, et, 'Aprovação final do Gerente', obs); } }
+  else if(acao==='reprovar'){ s.etapaFalha = idxAtual; s.status = 'reprovada'; scHist(s, et, 'Reprovada', obs); }
+  else if(acao==='devolver'){ s.etapaFalha = 0; s.status = 'devolvida'; scHist(s, et, 'Devolvida ao solicitante', obs); }
+  else if(acao==='devolverAdm'){ s.status = 'solicitada'; scHist(s, et, 'Devolvida ao ADM para ajustes', obs); }
+  else if(acao==='cancelar'){ s.status = 'cancelada'; scHist(s, et, 'Cancelada', obs); }
+  else if(acao==='suprimentos'){ s.status = 'suprimentos'; s.enviadaSuprimentosEm = new Date().toISOString(); if(obs) s.protocoloSuprimentos = obs; scHist(s, et, 'Enviada para Suprimentos Calper', obs); }
+  else if(acao==='concluir'){ s.status = 'concluida'; scHist(s, et, 'Pedido realizado em Suprimentos', obs); }
+  scSalvar(s); scRenderDetalhe(); renderSolicitacoes();
+}
+
 function openMaterialModal(id){
   document.getElementById('modalMaterialTitle').textContent = id ? 'Editar pedido de material' : 'Novo pedido de material';
   ['matId','matFornecedor','matNumPedido','matDataPedido','matDataPrevista','matObs'].forEach(f=>document.getElementById(f).value='');
@@ -19266,6 +19484,7 @@ function renderDashboard(){
     : `Mostrando apenas as tarefas atribuídas a ${currentUser.nome}.`;
 
   if(isManager){
+    try{ scAtualizarBadge(); }catch(e){}
     document.getElementById('kpiObras').textContent = obras.length;
     document.getElementById('kpiFuncionarios').textContent = funcionarios.filter(f=>f.status==='ativo').length;
     document.getElementById('kpiTecnicos').textContent = tecnicos.filter(t=>t.status==='ativo').length;
