@@ -1059,12 +1059,14 @@
                 </div>
                 <div style="display:flex;gap:8px;">
                   <button class="btn secondary" onclick="openBlocoModal()">+ Novo bloco</button>
+                  <label class="btn secondary" style="cursor:pointer;">Importar relatório de itens (CEM Pro)<input type="file" accept=".pdf,application/pdf" style="display:none" onchange="projLerRelatorio(this)"></label>
                   <button class="btn secondary" onclick="gerarTarefasModulo('projeto')">Gerar tarefas</button>
                   <button class="btn secondary" onclick="gerarRelatorioItensIncompletos()">Relatório de itens incompletos</button>
                   <button class="btn secondary" onclick="gerarRelatorioTodosItens()">Relatório de todos os itens</button>
                   <button class="btn" onclick="openItemModal()">+ Novo item</button>
                 </div>
               </div>
+              <div id="projPorFase"></div>
               <div id="projBlocosGroups"></div>
               <div class="empty-state" id="projEmpty" style="display:none;">
                 <div class="big">⛭</div>Nenhum bloco cadastrado para esta obra ainda.<br>
@@ -2134,9 +2136,13 @@
             <input type="month" id="pcpMesInput" onchange="pcpIrMes(this.value)">
             <button class="btn small secondary" onclick="pcpImprimir()">Imprimir</button>
           </div>
+          <div style="display:flex;gap:6px;margin-bottom:10px;"><button class="btn small" id="pcpAbaMes" style="width:auto;" onclick="pcpAba('mes')">Mensal</button><button class="btn small secondary" id="pcpAbaSem" style="width:auto;" onclick="pcpAba('sem')">Programação semanal</button></div>
+          <div id="pcpMesBox">
           <div class="kpi-row" id="pcpKpis"></div>
           <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;">Panorama da fábrica (t/mês)</h3><div id="pcpPanorama"></div></div>
           <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;">Plano de fabricação do mês × liberado para expedição, por obra e fase</h3><div id="pcpTabela"></div></div>
+          </div>
+          <div id="pcpSemBox" style="display:none;"></div>
         </div>
       </section>
 
@@ -7305,6 +7311,8 @@ function expProcessar(txt, modo, extra){
   } else if(modo==='exp'){
     if(!expTem(p,'pronto')) return { nivel:'erro', msg:nome+' ainda NÃO foi liberada pela fábrica — faça a leitura "Liberar da fábrica" antes.' };
     if(expTem(p,'exp')) return { nivel:'aviso', msg:nome+' já foi expedida.' };
+    { const bloq = (function(){ try{ return load('qsNC').find(n=>n.tipo==='CQ' && n.obraId===p.it.obraId && n.blocoId && n.blocoId===p.it.blocoId && (n.status==='Aberta'||n.status==='Em tratamento')); }catch(e){ return null; } })();
+      if(bloq) return { nivel:'erro', msg:nome+' — expedição BLOQUEADA: CQ com não conformidade aberta ('+bloq.numero+': '+bloq.item+'). Trate a não conformidade no módulo Qualidade e Segurança.' }; }
   } else if(modo==='rec'){
     if(!expTem(p,'exp')) return { nivel:'erro', msg:nome+' não consta como expedida — não dá para receber na obra.' };
     if(expTem(p,'rec')) return { nivel:'aviso', msg:nome+' já foi recebida na obra.' };
@@ -10184,7 +10192,7 @@ function plcOtmAvaliar(C, base, par, capNova){
     const mo = (R.custoFab||[]).reduce((a,b)=>a+b,0) + (R.custoInst||[]).reduce((a,b)=>a+b,0), prev = base.__mo ? base.__mo[ob.id] : null;
     if(par.moLim && prev!=null && mo > prev+1) excMO += mo-prev;
     if(par.gastoLim!==0) excMO += plcGastoExcesso(ob, R);
-    custo += c; porObra[ob.id] = { gTot:(R.pagto||[]).reduce((a,b)=>a+b,0)+(R.comp||[]).reduce((a,b)=>a+b,0)+mo, ag:0, mo, moPrev:prev, fim:x.fim, ok:x.ok, atraso:at, custo:c, primeira:((R.fluxo||[]).map(p=>p.venc).filter(Boolean).sort()[0])||'' };
+    custo += c; porObra[ob.id] = { gTot:(R.pagto||[]).reduce((a,b)=>a+b,0)+(R.comp||[]).reduce((a,b)=>a+b,0)+mo, ag:plcAGastar(ob).valor, mo, moPrev:prev, fim:x.fim, ok:x.ok, atraso:at, custo:c, primeira:((R.fluxo||[]).map(p=>p.venc).filter(Boolean).sort()[0])||'' };
   });
   let excesso = excMO, pico = 0; Object.values(mes).forEach(v=>{ if(v>pico) pico = v; if(par.teto>0 && v>par.teto) excesso += v-par.teto; });
   return { atraso, excesso, custo, pico, porObra, mes };
@@ -10778,9 +10786,28 @@ function pliHtmlOtimizador(){
       <button class="btn small" onclick="this.disabled=true;this.textContent='Calculando…';setTimeout(plcOtmCalcular,30)">Otimizar</button></div>${res}</div>`;
 }
 /* ---------- À GASTAR: verba por obra (insumos + material + mão de obra) e % de compra de insumos por mês ---------- */
+// À GASTAR (manual, seção 1): saldo do orçamento de alumínio + componentes + mão de obra. Calculado:
+// meta (tendência, se informada; senão orçamento) − realizado lançado em material e mão de obra da obra.
+const _plcAG = { t:0, k:'', v:null };
+function plcAGastar(ob){
+  const k = ob.id+'|'+(ob.updAG||''); const agora = Date.now();
+  if(_plcAG.k===k && agora-_plcAG.t<2000 && _plcAG.v) return _plcAG.v;
+  let r = { valor: ob.aGastar||0, meta:0, real:0, origem: ob.aGastar>0 ? 'manual' : '' };
+  try{
+    const O = plcOrcamento(ob), T = plcOrcamento(ob,'tend'), sg = plcObraSgptDoCron(ob);
+    if(O.definido || T.definido){
+      const pool = x => x.alum + x.comp + x.mof + x.moi;
+      const meta = T.definido ? pool(T) : pool(O);
+      let real = 0;
+      if(sg) load('lancamentosFinanceiros').forEach(l=>{ if(l.tipo==='despesa' && l.obraId===sg.id){ const g = cfGrupoDe(l.categoria); if(g==='material' || g==='maoDeObra') real += l.valor||0; } });
+      r = { valor: Math.max(0, meta-real), meta, real, origem: T.definido ? 'tendência' : 'orçamento' };
+    }
+  }catch(e){}
+  _plcAG.t = agora; _plcAG.k = k; _plcAG.v = r; return r;
+}
 function plcGasto(ob, R){
   const soma = a => (a||[]).reduce((s,v)=>s+(v||0),0);
-  const pct = plcCfg().pctInsumoMes || 0, ag = 0;   // 'à gastar' retirado: a verba agora é o Orçamento / Tendência das Premissas
+  const pct = plcCfg().pctInsumoMes || 0, ag = plcAGastar(ob).valor;   // à gastar = orçamento (ou tendência) − realizado; sem orçamento definido, usa o valor antigo digitado
   const alu = soma(R.pagto), comp = soma(R.comp), fab = soma(R.custoFab), inst = soma(R.custoInst), total = alu+comp+fab+inst;
   const lim = (ag>0 && pct>0) ? ag*pct/100 : 0;
   const meses = R.meses || [], ins0 = meses.map((m,i)=>(R.pagto[i]||0)+(R.comp[i]||0));
@@ -11025,10 +11052,12 @@ function pliAtualizarMenu(){
 }
 
 /* ---------- interface ---------- */
+// Abas enxutas: Ocupação da fábrica, Instalação e efetivo, Custo × Orçado e Compras viraram atalhos para os módulos
+// PCP, Cronograma de Instalação, Cronograma Financeiro e Compras (as funções antigas continuam no código, sem uso).
 const PLI_TABS = [
-  ['premissas','Premissas'], ['resumo','Resumo'], ['fabrica','Ocupação da fábrica'], ['instalacao','Instalação e efetivo'],
-  ['custo','Custo × Orçado'], ['compras','Compras'], ['gantt','Gantt por obra'], ['cruz','Cruzamento'], ['cronfin','Cronograma financeiro']
+  ['premissas','Premissas'], ['resumo','Resumo'], ['gantt','Gantt por obra'], ['cruz','Cruzamento'], ['cronfin','Cronograma por obra']
 ];
+const PLI_ATALHOS = [['pcp','PCP de Fabricação'], ['instalacao','Cronograma de Instalação'], ['cronfin','Cronograma Financeiro'], ['solicitacoes','Compras']];
 
 function renderPlanejInt(){
   const semAcesso = document.getElementById('pliSemAcesso');
@@ -11039,7 +11068,9 @@ function renderPlanejInt(){
   pliAutoReajuste();
   semAcesso.style.display='none'; conteudo.style.display='block';
   const P = pliLoadX();
-  document.getElementById('pliTabs').innerHTML = PLI_TABS.map(([k,l])=>`<button class="btn small ${PLI_UI.tab===k?'':'secondary'}" onclick="pliSetTab('${k}')">${l}</button>`).join('');
+  if(!PLI_TABS.some(t=>t[0]===PLI_UI.tab)) PLI_UI.tab = 'resumo';
+  document.getElementById('pliTabs').innerHTML = PLI_TABS.map(([k,l])=>`<button class="btn small ${PLI_UI.tab===k?'':'secondary'}" onclick="pliSetTab('${k}')">${l}</button>`).join('')
+    + `<span class="pli-note" style="margin:0 4px 0 14px;align-self:center;">Ver também:</span>` + PLI_ATALHOS.map(([sec,l])=>`<button class="btn small secondary" style="border-style:dashed;" onclick="showSection('${sec}')">${l} ↗</button>`).join('');
   const area = document.getElementById('pliArea');
   const nCron = plcLoad().obras.length;
   document.getElementById('pliStatus').innerHTML = P
@@ -12095,7 +12126,7 @@ function pliHtmlOrcBloco(k, ob, qual){
      <label>Fábrica — R$/kg ${inp('fab',70)}</label>
      <label>Vidro (R$) ${inp('vidro',110)}</label>
      <span class="pli-note" style="margin:0;"><b>Alumínio + componentes</b> ${pliFmtR(O.alum+O.comp)} (${pliFmtT(O.kg,0)} kg × R$ ${pliFmtT(O.preco,2)} + ${pliFmtT(O.compPct*100,0)}%) · <b>Mão de obra</b> ${pliFmtR(O.mo)} (MOF ${pliFmtR(O.mof)} + MOI ${pliFmtR(O.moi)}) · Fábrica ${pliFmtR(O.fab)} · <b>Vidro</b> ${pliFmtR(O.vidro)} = <b>${pliFmtR(O.total)}</b>${T ? (O.definido ? '' : ' (não informada: usa o orçamento como referência)') : '. É o orçamento oficial da Divisão de Alumínio para esta obra e alimenta o Cronograma Financeiro; o saldo de alumínio + componentes + MO é rateado proporcionalmente nas parcelas futuras.'}</span>
-    </div>`;
+    </div>${T ? '' : (()=>{ const A = plcAGastar(ob); if(!A.origem) return ''; const pct = plcCfg().pctInsumoMes||0; return `<div class="pli-prev" style="margin-bottom:8px;"><b>À gastar</b> <span class="pli-note" style="margin:0;">Meta (${A.origem}: alumínio + componentes + MOF + MOI) <b>${pliFmtR(A.meta)}</b> − realizado lançado <b>${pliFmtR(A.real)}</b> = <b>${pliFmtR(A.valor)}</b>${pct>0?` · teto mensal de insumos: ${pliFmtR(A.valor*pct/100)} (${String(pct).replace('.',',')}%)`:''}.</span> <label>% máx. de compra de insumos por mês (0 = sem limite) <input type="text" value="${String(pct).replace('.',',')}" style="width:60px" onchange="plcSetCfg('pctInsumoMes',this.value)"></label></div>`; })()}`;
 }
 function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; c.obras[i].alvoDefinido = true; plcSave(c); renderPlanejInt(); }
 function plcVincular(i, v){ const c = plcLoad(); if(!c.obras[i]) return; if(v==='') delete c.obras[i].vinculo; else c.obras[i].vinculo = v; plcSave(c); renderPlanejInt(); }
@@ -16203,6 +16234,7 @@ function showTarefaFase(fase){
 const TAREFA_FASE_LABEL = { projeto:'Projeto', producao:'Produção', instalacao:'Instalação', outras:'Outras' };
 
 function renderTarefas(){
+  try{ projMigrarTarefas(); }catch(e){ console.error(e); }
   const tarefas = load('tarefas');
   const setores = load('setores');
   const funcs = load('funcionarios');
@@ -16233,7 +16265,7 @@ function renderTarefas(){
     const respNome = (funcs.find(f=>f.id===t.responsavel)||{}).nome || '— Não atribuído —';
     const obraNome = (obras.find(o=>o.id===t.obraId)||{}).nome || '—';
     return `<tr>
-      <td><strong>${esc(t.titulo)}</strong>${t.descricao?`<div class="step-note">${esc(t.descricao)}</div>`:''}</td>
+      <td><strong>${esc(t.titulo)}</strong>${t.descricao?`<div class="step-note">${esc(t.descricao)}</div>`:''}${t.origemFaseKey==='checklist'?projTarefaChecklistHtml(t, itens.find(i=>i.id===t.origemItemId)):''}</td>
       <td>${esc(obraNome)}</td>
       <td><span class="tag">${esc(setorNome)}</span></td>
       <td>${esc(respNome)}</td>
@@ -16339,7 +16371,8 @@ function saveTarefa(){
     obraId: obraSelecionada || (existente ? existente.obraId : null),
     origemModulo: existente ? existente.origemModulo : null,
     origemItemId: existente ? existente.origemItemId : null,
-    origemUnitKey: existente ? existente.origemUnitKey : null
+    origemUnitKey: existente ? existente.origemUnitKey : null,
+    origemFaseKey: existente ? existente.origemFaseKey : undefined
   };
   const idx = tarefas.findIndex(t=>t.id===id);
   if(idx>=0) tarefas[idx] = record; else tarefas.push(record);
@@ -17183,6 +17216,126 @@ function pcpRealObra(mapa, obraId, ym){ const r = (mapa[obraId]||{})[ym]; return
 function pcpRealAcum(mapa, obraId, ym){ let t=0; Object.keys(mapa[obraId]||{}).forEach(m=>{ if(m<=ym) t+=mapa[obraId][m].kg; }); return t/1000; }
 function pcpMudarMes(n){ PCP_UI.mes = pcpMesSoma(PCP_UI.mes, n); renderPCP(); }
 function pcpIrMes(v){ if(/^\d{4}-\d{2}$/.test(v)){ PCP_UI.mes = v; renderPCP(); } }
+/* ================= PCP SEMANAL — grade por setor × dia ================= */
+const PCPS_SETORES = [['corte','Corte','kg'],['usin','Usinagem','kg'],['mont','Montagem','pessoas'],['vidro','Vidro / colagem','kg'],['exp','Expedição','kg']];
+const PCPS_DIAS = ['Seg','Ter','Qua','Qui','Sex','Sáb'];
+function pcpsSegunda(iso){ const d = new Date(iso+'T12:00:00'); const w = (d.getDay()+6)%7; return pliAddDias(iso, -w); }
+function pcpsCfg(){
+  let c = load('pcpSemCfg'); if(!c || Array.isArray(c)) c = {};
+  c.cap = c.cap || {}; if(c.sabado===undefined) c.sabado = false; return c;
+}
+function pcpsCapDia(setor){
+  const c = pcpsCfg(); if(c.cap[setor]!=null && c.cap[setor]!=='') return +c.cap[setor];
+  const m = Math.round(pcpCapMes(PCP_UI.mes||atcHoje().slice(0,7))*1000/22);
+  return ({ corte:m, usin:m, vidro:Math.round(m/2), mont:6, exp:0 })[setor]||0;
+}
+function pcpsCapSet(setor, v){ const c = pcpsCfg(); const n = parseFloat(String(v).replace(',','.')); c.cap[setor] = isFinite(n)?n:''; save('pcpSemCfg', c); renderPcpSem(); }
+function pcpsSabado(v){ const c = pcpsCfg(); c.sabado = !!v; save('pcpSemCfg', c); renderPcpSem(); }
+function pcpsItens(){ return load('pcpSem'); }
+function pcpsMudar(n){ PCP_UI.semIni = pliAddDias(PCP_UI.semIni, 7*n); renderPcpSem(); }
+function pcpsHojeSem(){ PCP_UI.semIni = pcpsSegunda(atcHoje()); renderPcpSem(); }
+function pcpAba(a){ PCP_UI.aba = a; renderPCP(); }
+function pcpsAlertas(it, f){
+  const a = [];
+  if(['corte','usin','mont'].includes(it.setor) && f && f.pronto && f.pronto > it.dia) a.push('aguarda material (liberado '+pliFmtData(f.pronto)+')');
+  if(it.setor==='exp' && it.sgId && qsNCs().some(n=>n.tipo==='CQ' && n.obraId===it.sgId && (n.status==='Aberta'||n.status==='Em tratamento'))) a.push('CQ com NC aberta');
+  return a;
+}
+function renderPcpSem(){
+  const box = document.getElementById('pcpSemBox'); if(!box) return;
+  if(!PCP_UI.semIni) PCP_UI.semIni = pcpsSegunda(atcHoje());
+  const ini = PCP_UI.semIni, cfg = pcpsCfg(), nd = cfg.sabado ? 6 : 5;
+  const dias = []; for(let i=0;i<nd;i++) dias.push(pliAddDias(ini,i));
+  const fases = pcpFases(), fmap = {}; fases.forEach(f=>fmap[f.obraId+'||'+f.cod] = f);
+  const todos = pcpsItens(), its = todos.filter(x=>x.sem===ini);
+  const prev = todos.filter(x=>x.sem===pliAddDias(ini,-7));
+  const fechados = prev.filter(x=>x.status==='feito'||x.status==='nao');
+  const ader = fechados.length ? Math.round(fechados.filter(x=>x.status==='feito').length/fechados.length*100)+'%' : '—';
+  const ader0 = its.filter(x=>x.status==='feito'||x.status==='nao');
+  const aderAtual = ader0.length ? Math.round(ader0.filter(x=>x.status==='feito').length/ader0.length*100)+'%' : '—';
+  let semMat = 0, acima = 0;
+  const cel = (setor, dia) => its.filter(x=>x.setor===setor && x.dia===dia);
+  const tot = (setor, dia) => cel(setor,dia).reduce((s,x)=>s+(setor==='mont' ? (+x.pessoas||0) : (+x.kg||0)),0);
+  its.forEach(x=>{ if(pcpsAlertas(x, fmap[x.obraId+'||'+x.fase]).length) semMat++; });
+  const kgProg = its.filter(x=>x.setor==='corte').reduce((s,x)=>s+(+x.kg||0),0);
+  const fmtD = iso => iso.slice(8,10)+'/'+iso.slice(5,7);
+  const vermelho = 'color:#c62828;';
+  const K = [['Programado (corte)', pliFmtT(kgProg,0)+' kg',''],['Aderência semana anterior', ader,''],['Aderência desta semana', aderAtual,''],['Com pendência', String(semMat), semMat?vermelho:'']];
+  let h = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+    <button class="btn small secondary" onclick="pcpsMudar(-1)">‹</button>
+    <h3 style="margin:0;min-width:210px;text-align:center;">Semana ${fmtD(ini)} a ${fmtD(pliAddDias(ini,nd-1))}</h3>
+    <button class="btn small secondary" onclick="pcpsMudar(1)">›</button>
+    <button class="btn small secondary" onclick="pcpsHojeSem()">Hoje</button>
+    <button class="btn small secondary" onclick="pcpsCopiar()">Copiar semana anterior</button>
+    <label style="font-size:12.5px;display:flex;gap:4px;align-items:center;"><input type="checkbox" ${cfg.sabado?'checked':''} onchange="pcpsSabado(this.checked)"> Sábado</label></div>
+    <div class="kpi-row">${K.map(k=>`<div class="kpi"><div class="num" style="${k[2]}">${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('')}</div>
+    <div style="overflow:auto;margin-top:10px;"><table class="data-table" style="font-size:12px;table-layout:fixed;min-width:${150+nd*140}px;"><thead><tr><th style="width:150px;">Setor · capacidade/dia</th>${dias.map((d,i)=>`<th>${PCPS_DIAS[i]} ${fmtD(d)}</th>`).join('')}</tr></thead><tbody>`;
+  PCPS_SETORES.forEach(([k,nome,un])=>{
+    const cap = pcpsCapDia(k);
+    h += `<tr><td style="vertical-align:top;"><b>${nome}</b><div style="font-size:11px;opacity:.8;margin-top:3px;">${k==='exp'?'após liberação do CQ':`<input type="number" step="any" value="${cap||''}" style="width:70px;" onchange="pcpsCapSet('${k}',this.value)"> ${un==='kg'?'kg':'pessoas'}`}</div></td>`;
+    dias.forEach(d=>{
+      const c = cel(k,d), t = tot(k,d), over = cap>0 && t>cap+0.001;
+      if(over) acima++;
+      h += `<td style="vertical-align:top;${over?'background:rgba(198,40,40,.08);':''}">`;
+      c.forEach(x=>{
+        const al = pcpsAlertas(x, fmap[x.obraId+'||'+x.fase]);
+        let bg='rgba(33,102,199,.12)', bd='rgba(33,102,199,.4)', mk='';
+        if(x.status==='feito'){ bg='rgba(46,125,50,.14)'; bd='rgba(46,125,50,.5)'; mk='✓ '; }
+        else if(x.status==='nao'){ bg='rgba(198,40,40,.12)'; bd='rgba(198,40,40,.5)'; mk='✗ '; }
+        else if(al.length){ bg='rgba(230,150,0,.16)'; bd='rgba(230,150,0,.6)'; }
+        h += `<div onclick="pcpsAbrir('${x.id}')" style="cursor:pointer;background:${bg};border:1px solid ${bd};border-radius:6px;padding:3px 6px;margin-bottom:4px;line-height:1.35;">${mk}<b>${esc(x.obra)}</b> · ${esc(x.fase)}<br>${k==='mont'?(x.pessoas||0)+' pessoas':pliFmtT(+x.kg||0,0)+' kg'}${x.nota?`<br><span style="font-size:11px;opacity:.85;">${esc(x.nota)}</span>`:''}${al.length?`<br><span style="font-size:11px;">⚠ ${esc(al.join(' · '))}</span>`:''}</div>`;
+      });
+      if(c.length && cap>0) h += `<div style="font-size:11px;${over?vermelho+'font-weight:700;':'opacity:.7;'}">${pliFmtT(t,0)} / ${pliFmtT(cap,0)}${over?' · acima':''}</div>`;
+      h += `<a href="javascript:void(0)" onclick="pcpsNovo('${k}','${d}')" style="font-size:11px;opacity:.6;">+ programar</a></td>`;
+    });
+    h += '</tr>';
+  });
+  h += `</tbody></table></div><div class="step-note" style="margin-top:6px;">Clique num bloco para editar e marcar <b>feito</b> ou <b>não realizado</b> — a aderência da semana vem dessas marcações. Amarelo = depende de material (data de liberação da fase) ou de CQ liberar a expedição; vermelho no setor = acima da capacidade/dia. Capacidade sugerida a partir da capacidade mensal das premissas; edite no setor para fixar.</div>`;
+  box.innerHTML = h;
+}
+function pcpsOpcFases(selVal){
+  const ini = PCP_UI.semIni, fim = pliAddDias(ini,6), fases = pcpFases();
+  const ativ = f => f.ini <= fim && f.fim >= ini;
+  const ord = fases.slice().sort((a,b)=> (ativ(b)-ativ(a)) || a.obra.localeCompare(b.obra) || a.ini.localeCompare(b.ini));
+  return ord.map(f=>{ const v = f.obraId+'||'+f.cod; return `<option value="${esc(v)}" ${selVal===v?'selected':''}>${ativ(f)?'● ':''}${esc(f.obra)} · ${esc(f.cod)}</option>`; }).join('');
+}
+function pcpsNovo(setor, dia){ pcpsForm({ id:'', sem:PCP_UI.semIni, setor, dia, obraId:'', obra:'', fase:'', kg:'', pessoas:'', nota:'', status:'' }); }
+function pcpsAbrir(id){ const x = pcpsItens().find(i=>i.id===id); if(x) pcpsForm(x); }
+function pcpsForm(x){
+  const nome = (PCPS_SETORES.find(s=>s[0]===x.setor)||[])[1], mont = x.setor==='mont';
+  const dias = []; for(let i=0;i<6;i++) dias.push(pliAddDias(PCP_UI.semIni,i));
+  PCP_UI.sForm = x;
+  document.getElementById('qsModalTitulo').textContent = 'Programação semanal — '+nome;
+  document.getElementById('qsModalBody').innerHTML = `<div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div style="grid-column:1/-1;"><label>Obra · fase</label><select id="pcpsFase"><option value="">— selecione —</option>${pcpsOpcFases(x.obraId+'||'+x.fase)}</select></div>
+    <div><label>Dia</label><select id="pcpsDia">${dias.map((d,i)=>`<option value="${d}" ${d===x.dia?'selected':''}>${PCPS_DIAS[i]} ${d.slice(8,10)}/${d.slice(5,7)}</option>`).join('')}</select></div>
+    <div><label>${mont?'Pessoas':'Quantidade (kg)'}</label><input id="pcpsQtd" type="number" step="any" value="${mont?(x.pessoas||''):(x.kg||'')}"></div>
+    <div style="grid-column:1/-1;"><label>Observação</label><input id="pcpsNota" type="text" value="${esc(x.nota||'')}"></div>
+    ${x.id?`<div style="grid-column:1/-1;"><label>Resultado</label><select id="pcpsSt"><option value="" ${!x.status?'selected':''}>Programado</option><option value="feito" ${x.status==='feito'?'selected':''}>Feito</option><option value="nao" ${x.status==='nao'?'selected':''}>Não realizado</option></select></div>`:''}
+  </div><div style="display:flex;gap:8px;margin-top:12px;"><button class="btn" onclick="pcpsSalvar()">Salvar</button>${x.id?`<button class="btn secondary" onclick="pcpsExcluir('${x.id}')">Excluir</button>`:''}<button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`;
+  openModal('modalQS');
+}
+function pcpsSalvar(){
+  const x = PCP_UI.sForm, v = document.getElementById('pcpsFase').value; if(!v){ toast('Selecione a obra e a fase.'); return; }
+  const [obraId, cod] = v.split('||'), f = pcpFases().find(z=>z.obraId===obraId && z.cod===cod); if(!f){ toast('Fase não encontrada.'); return; }
+  const q = parseFloat(String(document.getElementById('pcpsQtd').value).replace(',','.'))||0;
+  const l = pcpsItens(); let it = x.id ? l.find(i=>i.id===x.id) : null;
+  if(!it){ it = { id:uid(), sem:PCP_UI.semIni, setor:x.setor }; l.push(it); }
+  it.dia = document.getElementById('pcpsDia').value; it.obraId = obraId; it.obra = f.obra; it.fase = cod; it.sgId = f.sgId||'';
+  if(x.setor==='mont'){ it.pessoas = q; it.kg = 0; } else { it.kg = q; it.pessoas = 0; }
+  it.nota = document.getElementById('pcpsNota').value.trim();
+  const st = document.getElementById('pcpsSt'); if(st) it.status = st.value;
+  save('pcpSem', l); closeModal('modalQS'); renderPcpSem();
+}
+function pcpsExcluir(id){ if(!confirm('Excluir este item da programação?')) return; save('pcpSem', pcpsItens().filter(i=>i.id!==id)); closeModal('modalQS'); renderPcpSem(); }
+function pcpsCopiar(){
+  const ant = pliAddDias(PCP_UI.semIni,-7), l = pcpsItens(), src = l.filter(i=>i.sem===ant);
+  if(!src.length){ toast('A semana anterior não tem programação.'); return; }
+  if(l.some(i=>i.sem===PCP_UI.semIni) && !confirm('Esta semana já tem itens. Copiar mesmo assim (os itens atuais serão mantidos)?')) return;
+  src.forEach(i=>l.push(Object.assign({}, i, { id:uid(), sem:PCP_UI.semIni, dia:pliAddDias(i.dia,7), status:'' })));
+  save('pcpSem', l); renderPcpSem(); toast(src.length+' itens copiados.');
+}
+
 /* ===== Cronograma de Instalação com Curva S ===== */
 let INST_UI = { obra:'' };
 function instObras(){ try{ return plcLoad().obras||[]; }catch(e){ return []; } }
@@ -17315,24 +17468,41 @@ function instExportarCSV(){
   const csv = '﻿'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download = 'cronograma-instalacao-'+ob.nome.replace(/\s+/g,'_')+'.csv'; a.click();
 }
-/* ===== Qualidade e Segurança: FVS, EPO e inspeções de segurança ===== */
-const QS_TIPOS = { FVS:'FVS — Verificação de serviço', EPO:'EPO — Procedimento operacional', SEG:'Inspeção de segurança' };
-const QS_COR = { FVS:'#1565c0', EPO:'#6a1b9a', SEG:'#e08a00' };
+/* ===== Qualidade e Segurança: CQ, FVS, EPO (entrega) e inspeções de segurança ===== */
+const QS_TIPOS = { CQ:'CQ — Controle de qualidade da fábrica', REC:'Recebimento de materiais', FVS:'FVS — Verificação de serviço (instalação)', SEG:'Inspeção de segurança' };
+const QS_COR = { CQ:'#00838f', REC:'#6a1b9a', FVS:'#1565c0', SEG:'#e08a00' };
 const QS_PADRAO = [
- { tipo:'FVS', local:'Fábrica', nome:'FVS — Corte e usinagem', itens:['Medidas e ângulos de corte conforme plano de corte','Ausência de rebarbas e deformações','Furos e rasgos conforme desenho / gabarito','Identificação das peças (etiqueta / código)'] },
- { tipo:'FVS', local:'Fábrica', nome:'FVS — Montagem e colagem', itens:['Esquadro e planicidade do quadro','Cantos e cavilhas / parafusos conforme projeto','Vedações e escovas montadas','Tempo de cura da cola respeitado','Funcionamento de folhas e ferragens'] },
- { tipo:'FVS', local:'Fábrica', nome:'FVS — Vidro', itens:['Tipo e espessura conforme projeto','Dimensões (largura × altura) conforme pedido','Ausência de lascas, riscos e bolhas','Calços e fixação do vidro'] },
- { tipo:'FVS', local:'Fábrica', nome:'FVS — Embalagem e expedição', itens:['Identificação por QR Code / código de barras','Proteção contra riscos e umidade','Quantidade conferida com a remessa'] },
+ { tipo:'REC', local:'Fábrica', nome:'Recebimento — Alumínio (perfis)', itens:['NF conferida com o pedido de compra','Sem amassados nem riscos profundos','Anodização / pintura conforme especificado','Comprimento das barras correto','Identificação e armazenamento por obra e perfil'] },
+ { tipo:'REC', local:'Fábrica', nome:'Recebimento — Vidro', itens:['NF conferida com o pedido de compra','Tipo e espessura conforme pedido (tolerância ± 0,3 mm)','Sem cantos lascados, bolhas ou inclusões visíveis','Armazenamento por obra, tipo, esquadria e medida'] },
+ { tipo:'REC', local:'Fábrica', nome:'Recebimento — Componentes', itens:['NF conferida com o pedido de compra','Ferragens sem oxidação','Parafusos e fixadores dentro da norma','Selantes dentro da validade','Local definido e etiquetado'] },
+ { tipo:'CQ', local:'Fábrica', nome:'CQ — Corte', itens:['Medidas e ângulos conforme lista de corte','Esquadro e acabamento do corte','Peças etiquetadas (ID, medida, OP)'] },
+ { tipo:'CQ', local:'Fábrica', nome:'CQ — Usinagem', itens:['Furos, rasgos e recortes conforme PF-USI (gabarito)','Sem rebarbas','Geometria e encaixes conferidos','Desgaste das brocas verificado (a cada 500 furos)'] },
+ { tipo:'CQ', local:'Fábrica', nome:'CQ — Colagem', itens:['Superfícies limpas e primer aplicado','Cordão contínuo, sem bolhas (6 a 12 mm)','Cura respeitada (23–25 °C; mín. 24 h neutro / 7 dias estrutural)','Selante dentro da validade'] },
+ { tipo:'CQ', local:'Fábrica', nome:'CQ — Produto acabado (libera expedição)', itens:['Dimensões conforme projeto executivo e PF','Colagem, vedação e acabamento (riscos, amassados, pintura)','Abertura, fechamento, travamento e ajustes','Ferragens e fechaduras funcionando em 100% das posições','Pintura sem risco visível a 1 m (luz rasante)'] },
+ { tipo:'CQ', local:'Fábrica', nome:'CQ — Embalagem e identificação', itens:['Identificação por QR Code / código de barras','Proteção contra riscos e umidade','Quantidade conferida com o romaneio'] },
+ { tipo:'FVS', local:'Obra', nome:'Checklist pré-instalação', itens:['Projeto e condições do vão verificados','Ferramental e EPIs conferidos','Material recebido e protegido na frente'] },
  { tipo:'FVS', local:'Obra', nome:'FVS — Contramarco', itens:['Prumo, nível e esquadro','Vão conforme projeto (folgas)','Fixação e chumbamento','Alinhamento entre pavimentos'] },
  { tipo:'FVS', local:'Obra', nome:'FVS — Instalação de esquadria', itens:['Prumo e nível','Folgas perimetrais uniformes','Fixação conforme projeto','Funcionamento (abrir/fechar/travar)','Ausência de riscos e amassados','Estanqueidade (teste de água, quando aplicável)'] },
  { tipo:'FVS', local:'Obra', nome:'FVS — Vedação e acabamento', itens:['Selante em cordão contínuo e bem aplicado','Limpeza e remoção da película protetora','Ferragens e acabamentos completos'] },
- { tipo:'EPO', local:'Obra', nome:'EPO — Recebimento de materiais', itens:['Conferência da remessa com a nota / romaneio','Verificação visual de avarias','Identificação e armazenamento adequados','Divergências registradas'] },
- { tipo:'EPO', local:'Obra', nome:'EPO — Liberação da frente de instalação', itens:['Contramarcos liberados e conferidos','Pontos de apoio / andaime disponíveis','Equipe e EPIs conferidos','Material no pavimento / local correto'] },
- { tipo:'SEG', local:'Fábrica', nome:'Inspeção de segurança — Fábrica', itens:['EPIs em uso (óculos, luvas, protetor auricular, calçado)','Proteções de máquinas íntegras','Extintores no prazo e sinalizados / saídas livres','Organização e limpeza (5S)','Armazenamento seguro de perfis e vidros','Ferramentas elétricas e cabos em bom estado'] },
- { tipo:'SEG', local:'Obra', nome:'Inspeção de segurança — Obra', itens:['EPIs em uso (capacete, óculos, luvas, calçado)','Trabalho em altura: cinto, talabarte e linha de vida','Andaimes / plataformas / balancins conferidos','Movimentação de vidros e esquadrias (içamento, ventosas)','Ferramentas elétricas e ligações provisórias','Isolamento e sinalização da área','Organização e limpeza da frente de serviço'] }
+ { tipo:'SEG', local:'Fábrica', nome:'Inspeção de segurança — Fábrica', itens:['EPIs em uso (óculos, luvas, protetor auricular, calçado)','Proteções de máquinas íntegras (NR-12)','Extintores no prazo e sinalizados / saídas livres','Organização e limpeza (5S)','Armazenamento seguro de perfis e vidros','Ferramentas elétricas e cabos em bom estado','Movimentação de cargas'] },
+ { tipo:'SEG', local:'Obra', nome:'Inspeção de segurança — Obra', itens:['EPIs em uso (capacete, óculos, luvas, calçado)','Trabalho em altura (NR-35): cinto, talabarte e linha de vida / ancoragem','Andaimes, plataformas e balancins conferidos','Movimentação de vidros e esquadrias (içamento, ventosas)','Ferramentas elétricas e ligações provisórias','Isolamento e sinalização da área','Organização e limpeza da frente de serviço'] }
 ];
 let QS_UI = { aba:'painel', fTipo:'', fObra:'', fStatus:'', atual:null };
-function qsModelos(){ let l = load('qsModelos'); if(!l.length){ l = QS_PADRAO.map(m=>Object.assign({ id:uid() }, m)); save('qsModelos', l); } return l; }
+// Migração não destrutiva (v2): EPO antigo → Recebimento; FVS de fábrica → CQ. Nada é apagado.
+function qsTipoNovo(tipo, local){ if(tipo==='EPO') return 'REC'; if(tipo==='FVS' && local==='Fábrica') return 'CQ'; return tipo; }
+function qsModelos(){
+  let l = load('qsModelos');
+  if(!l.length){ l = QS_PADRAO.map(m=>Object.assign({ id:uid(), v:2 }, m)); save('qsModelos', l); return l; }
+  if(l.some(m=>m.v!==2)){
+    l.forEach(m=>{ if(m.v===2) return; const t = qsTipoNovo(m.tipo, m.local); if(t!==m.tipo){ m.nome = String(m.nome).replace(/^(EPO|FVS) — /, t==='CQ'?'CQ — ':''); m.tipo = t; } m.v = 2; });
+    QS_PADRAO.forEach(d=>{ if(!l.some(m=>m.nome===d.nome)) l.push(Object.assign({ id:uid(), v:2 }, d)); });
+    save('qsModelos', l);
+  }
+  return l;
+}
+function qsMigrar(){
+  ['qsInsp','qsNC'].forEach(k=>{ const l = load(k); let ch = false; l.forEach(x=>{ const t = qsTipoNovo(x.tipo, x.local); if(t!==x.tipo){ x.tipo = t; ch = true; } }); if(ch) save(k, l); });
+}
 function qsInsp(){ return load('qsInsp'); }
 function qsNCs(){ return load('qsNC'); }
 function qsHoje(){ return atcHoje(); }
@@ -17345,11 +17515,11 @@ function qsPill(t, cor){ return `<span class="atc-badge" style="background:${cor
 const QS_STCOR = { 'Aberta':'#c62828', 'Em tratamento':'#e08a00', 'Resolvida':'#2e7d32', 'Verificada':'#1b5e20' };
 
 function renderQualidade(){
-  qsModelos();
-  const abas = [['painel','Painel'],['insp','Inspeções'],['nc','Não conformidades'],['modelos','Modelos de checklist']];
+  qsModelos(); qsMigrar();
+  const abas = [['painel','Painel'],['insp','Inspeções'],['nc','Não conformidades'],['epo','Entregas (EPO)'],['modelos','Modelos de checklist']];
   document.getElementById('qsTabs').innerHTML = abas.map(([k,t])=>`<button class="btn small ${QS_UI.aba===k?'':'secondary'}" style="width:auto;" onclick="qsAba('${k}')">${t}${k==='nc'?(()=>{ const n = qsNCs().filter(x=>x.status==='Aberta'||x.status==='Em tratamento').length; return n?` (${n})`:''; })():''}</button>`).join('');
   const el = document.getElementById('qsConteudo');
-  el.innerHTML = QS_UI.aba==='painel' ? qsHtmlPainel() : QS_UI.aba==='insp' ? qsHtmlInsp() : QS_UI.aba==='nc' ? qsHtmlNC() : qsHtmlModelos();
+  el.innerHTML = QS_UI.aba==='painel' ? qsHtmlPainel() : QS_UI.aba==='insp' ? qsHtmlInsp() : QS_UI.aba==='nc' ? qsHtmlNC() : QS_UI.aba==='epo' ? qsHtmlEPO() : qsHtmlModelos();
 }
 function qsFiltroObras(sel){ return `<option value="">Todas as obras</option>`+load('obras').map(o=>`<option value="${o.id}" ${sel===o.id?'selected':''}>${esc(o.nome)}</option>`).join(''); }
 function qsHtmlPainel(){
@@ -17415,15 +17585,18 @@ function qsModal(titulo, body){ document.getElementById('qsModalTitulo').textCon
 let QS_TMP = null;
 function qsNovaInsp(){
   const M = qsModelos();
-  const body = `<div class="form-grid"><div class="field"><label>Checklist</label><select id="qsn_modelo">${['FVS','EPO','SEG'].map(t=>`<optgroup label="${esc(QS_TIPOS[t])}">${M.filter(m=>m.tipo===t).map(m=>`<option value="${m.id}">${esc(m.nome)} (${esc(m.local||'')})</option>`).join('')}</optgroup>`).join('')}</select></div>
-   <div class="field"><label>Obra</label><select id="qsn_obra"><option value="">— Fábrica / sem obra —</option>${load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('')}</select></div></div>
+  const body = `<div class="form-grid"><div class="field"><label>Checklist</label><select id="qsn_modelo">${Object.keys(QS_TIPOS).map(t=>`<optgroup label="${esc(QS_TIPOS[t])}">${M.filter(m=>m.tipo===t).map(m=>`<option value="${m.id}">${esc(m.nome)} (${esc(m.local||'')})</option>`).join('')}</optgroup>`).join('')}</select></div>
+   <div class="field"><label>Obra</label><select id="qsn_obra" onchange="qsAtualizarBlocos()"><option value="">— Fábrica / sem obra —</option>${load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('')}</select></div>
+   <div class="field"><label>Bloco (FVS e CQ)</label><select id="qsn_bloco"><option value="">—</option></select></div></div>
    <div class="form-actions"><button class="btn" onclick="qsIniciarInsp()">Iniciar</button><button class="btn secondary" onclick="closeModal('modalQS')">Cancelar</button></div>`;
   qsModal('Nova inspeção', body);
 }
+function qsAtualizarBlocos(){ const o = document.getElementById('qsn_obra').value; document.getElementById('qsn_bloco').innerHTML = '<option value="">—</option>'+load('blocos').filter(b=>b.obraId===o).map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join(''); }
 function qsIniciarInsp(){
   const m = qsModelos().find(x=>x.id===document.getElementById('qsn_modelo').value); if(!m) return;
   const obraId = document.getElementById('qsn_obra').value, obra = load('obras').find(o=>o.id===obraId);
-  QS_TMP = { id:'', tipo:m.tipo, modeloId:m.id, modeloNome:m.nome, local:m.local, obraId, empreendimento:obra?obra.nome:'', referencia:'', data:qsHoje(), inspetor:scUsuario(), itens:m.itens.map(t=>({ t, r:'', obs:'' })), obs:'' };
+  const blocoId = document.getElementById('qsn_bloco').value, bl = load('blocos').find(b=>b.id===blocoId);
+  QS_TMP = { id:'', tipo:m.tipo, modeloId:m.id, modeloNome:m.nome, local:m.local, obraId, empreendimento:obra?obra.nome:'', blocoId, blocoNome:bl?bl.nome:'', fotosLink:'', referencia:'', data:qsHoje(), inspetor:scUsuario(), itens:m.itens.map(t=>({ t, r:'', obs:'' })), obs:'' };
   qsRenderInsp();
 }
 function qsAbrirInsp(id){ const i = qsInsp().find(x=>x.id===id); if(!i){ toast('Inspeção não encontrada.'); return; } QS_TMP = JSON.parse(JSON.stringify(i)); qsRenderInsp(); }
@@ -17435,11 +17608,20 @@ function qsRenderInsp(){
     <div class="field"><label>Data</label><input type="date" value="${I.data||''}" onchange="QS_TMP.data=this.value"></div>
     <div class="field"><label>Obra</label><input value="${esc(I.empreendimento||I.local||'')}" disabled></div>
     <div class="field"><label>Referência (unidade / lote / fase / OP)</label><input value="${esc(I.referencia||'')}" onchange="QS_TMP.referencia=this.value"></div>
-    <div class="field"><label>Inspetor</label><input value="${esc(I.inspetor||'')}" onchange="QS_TMP.inspetor=this.value"></div></div>
+    <div class="field"><label>Inspetor</label><input value="${esc(I.inspetor||'')}" onchange="QS_TMP.inspetor=this.value"></div>
+    <div class="field"><label>Bloco</label><input value="${esc(I.blocoNome||'—')}" disabled></div>
+    <div class="field" style="grid-column:1/-1;"><label>Fotos das não conformidades — link da pasta no Drive (03-OBRAS / obra / 07-EXEC)</label><input type="url" placeholder="https://drive.google.com/..." value="${esc(I.fotosLink||'')}" onchange="QS_TMP.fotosLink=this.value.trim()"></div></div>
+   ${I.aprovada?`<div class="atc-hist" style="margin:6px 0;"><b>Aprovada</b> por ${esc(I.aprovada.por)} em ${esc(atcFmtDH(I.aprovada.em))}</div>`:''}
    <table class="data-table" style="font-size:13px;margin-top:8px;"><thead><tr><th>#</th><th>Item de verificação</th><th style="text-align:center;">Conforme</th><th style="text-align:center;">Não conf.</th><th style="text-align:center;">N/A</th></tr></thead><tbody>${itens}</tbody></table>
    <div class="field" style="margin-top:8px;"><label>Observações gerais</label><textarea rows="2" onchange="QS_TMP.obs=this.value">${esc(I.obs||'')}</textarea></div>
    <div class="step-note" style="margin-top:6px;">Cada item “Não conforme” gera uma ação corretiva em Não conformidades.</div>
-   <div class="form-actions" style="flex-wrap:wrap;margin-top:12px;"><button class="btn" onclick="qsSalvarInsp()">Salvar inspeção</button>${novo?'':`<button class="btn secondary" onclick="qsImprimirInsp('${I.id}')">Imprimir ficha</button>${qsPodeGerir()?`<button class="btn danger" onclick="qsExcluirInsp('${I.id}')">Excluir</button>`:''}`}<button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`);
+   <div class="form-actions" style="flex-wrap:wrap;margin-top:12px;"><button class="btn" onclick="qsSalvarInsp()">Salvar inspeção</button>${novo?'':`${(I.tipo==='FVS'||I.tipo==='CQ') && !I.aprovada && qsPodeGerir() ? `<button class="btn secondary" onclick="qsAprovarInsp('${I.id}')">${I.tipo==='CQ'?'Aprovar CQ e liberar':'Aprovar e assinar FVS'}</button>`:''}<button class="btn secondary" onclick="qsImprimirInsp('${I.id}')">Imprimir ficha</button>${qsPodeGerir()?`<button class="btn danger" onclick="qsExcluirInsp('${I.id}')">Excluir</button>`:''}`}<button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`);
+}
+function qsNCsAbertasDaInsp(id){ return qsNCs().filter(n=>n.inspId===id && n.status!=='Resolvida' && n.status!=='Verificada'); }
+function qsAprovarInsp(id){
+  const lista = qsInsp(), I = lista.find(x=>x.id===id); if(!I) return;
+  const ab = qsNCsAbertasDaInsp(id); if(ab.length){ toast(`Há ${ab.length} não conformidade(s) em aberto — trate antes de aprovar.`); return; }
+  I.aprovada = { por:scUsuario(), em:new Date().toISOString() }; save('qsInsp', lista); closeModal('modalQS'); renderQualidade(); toast(I.tipo==='CQ'?'CQ aprovado — bloco liberado para expedição.':'FVS aprovada e assinada.');
 }
 function qsMarcar(n, r){ QS_TMP.itens[n].r = r; }
 function qsSalvarInsp(){
@@ -17450,7 +17632,7 @@ function qsSalvarInsp(){
   // gera ações para os itens NC ainda sem ação
   let novas = 0;
   I.itens.forEach((x,n)=>{ if(x.r!=='NC') return; if(ncs.some(c=>c.inspId===I.id && c.idx===n)) return;
-    ncs.push({ id:uid(), numero:qsNum('NC', ncs), inspId:I.id, idx:n, inspNumero:I.numero, tipo:I.tipo, local:I.local, obraId:I.obraId, empreendimento:I.empreendimento, item:x.t, obs:x.obs||'', criticidade:I.tipo==='SEG'?'Alta':'Média', responsavel:'', responsavelNome:'', prazo:'', status:'Aberta', criadoEm:new Date().toISOString(), hist:[{ em:new Date().toISOString(), por:scUsuario(), ev:'Aberta na inspeção '+I.numero }] }); novas++; });
+    ncs.push({ id:uid(), numero:qsNum('NC', ncs), inspId:I.id, idx:n, inspNumero:I.numero, tipo:I.tipo, local:I.local, obraId:I.obraId, empreendimento:I.empreendimento, blocoId:I.blocoId||'', blocoNome:I.blocoNome||'', fotosLink:I.fotosLink||'', item:x.t, obs:x.obs||'', criticidade:I.tipo==='SEG'?'Alta':'Média', responsavel:'', responsavelNome:'', prazo:'', status:'Aberta', criadoEm:new Date().toISOString(), hist:[{ em:new Date().toISOString(), por:scUsuario(), ev:'Aberta na inspeção '+I.numero }] }); novas++; });
   save('qsInsp', lista); if(novas) save('qsNC', ncs);
   closeModal('modalQS'); renderQualidade(); toast(`Inspeção ${I.numero} salva${novas?` — ${novas} não conformidade(s) aberta(s)`:''}.`);
 }
@@ -17472,6 +17654,7 @@ function qsAbrirNC(id){
    <div class="field"><label>Responsável pela correção</label><select id="qsnc_resp"><option value="">—</option>${pessoas.map(p=>`<option value="${esc(p.ref)}" ${n.responsavel===p.ref?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
    <div class="field"><label>Prazo</label><input type="date" id="qsnc_prazo" value="${n.prazo||''}"></div>
    <div class="field"><label>Situação</label><select id="qsnc_st">${Object.keys(QS_STCOR).map(s=>`<option ${n.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+   <div class="field"><label>Fotos — link da pasta no Drive</label><input type="url" id="qsnc_fotos" value="${esc(n.fotosLink||'')}"></div>
    <div class="field"><label>Ação corretiva / solução aplicada</label><textarea id="qsnc_acao" rows="3">${esc(n.acao||'')}</textarea></div>
    <div class="atc-sec" style="margin-top:10px;">Histórico</div><div class="atc-hist">${(n.hist||[]).slice().reverse().map(h=>`<div><b>${esc(atcFmtDH(h.em))}</b> — ${esc(h.por)}<br>${esc(h.ev)}</div>`).join('')}</div>
    <div class="form-actions" style="margin-top:12px;"><button class="btn" onclick="qsSalvarNC()">Salvar</button><button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`);
@@ -17481,7 +17664,7 @@ function qsSalvarNC(){
   const st = document.getElementById('qsnc_st').value, ref = document.getElementById('qsnc_resp').value, prazo = document.getElementById('qsnc_prazo').value, acao = document.getElementById('qsnc_acao').value.trim();
   if((st==='Resolvida'||st==='Verificada') && !acao){ toast('Descreva a ação corretiva para resolver.'); return; }
   const ev = []; if(n.status!==st) ev.push('Situação: '+n.status+' → '+st); if((n.responsavel||'')!==ref) ev.push('Responsável: '+atcPessoaNome(ref)); if((n.prazo||'')!==prazo) ev.push('Prazo: '+(prazo?fmtDate(prazo):'—'));
-  Object.assign(n, { criticidade:document.getElementById('qsnc_crit').value, responsavel:ref, responsavelNome:ref?atcPessoaNome(ref):'', prazo, status:st, acao });
+  Object.assign(n, { criticidade:document.getElementById('qsnc_crit').value, responsavel:ref, responsavelNome:ref?atcPessoaNome(ref):'', prazo, status:st, acao, fotosLink:document.getElementById('qsnc_fotos').value.trim() });
   if(ev.length) n.hist.push({ em:new Date().toISOString(), por:scUsuario(), ev:ev.join(' · ') });
   save('qsNC', l); closeModal('modalQS'); renderQualidade(); toast('Não conformidade atualizada.');
 }
@@ -17491,10 +17674,91 @@ function qsExportarCSV(){
   const csv = '﻿'+rows.map(r=>r.map(c=>`"${String(c==null?'':c).replace(/"/g,'""')}"`).join(';')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download = 'inspecoes-qualidade-seguranca.csv'; a.click();
 }
+/* ---- EPO: Entrega para a Obra (etapa 28) ---- */
+const QS_EPO_ST = { 'Aguardando liberação':'#e08a00', 'Liberada':'#1565c0', 'Entregue':'#2e7d32', 'Encerrada':'#1b5e20' };
+function qsEntregas(){ return load('qsEntregas'); }
+function qsFvsAprovadaDoBloco(obraId, blocoId){
+  return qsInsp().filter(i=>i.tipo==='FVS' && i.obraId===obraId && (!blocoId || i.blocoId===blocoId) && i.aprovada && qsNCsAbertasDaInsp(i.id).length===0);
+}
+function qsHtmlEPO(){
+  const E = qsEntregas().slice().sort((a,b)=>String(b.numero).localeCompare(String(a.numero)));
+  const linhas = E.map(e=>`<tr><td><b>${esc(e.numero)}</b></td><td>${esc(e.empreendimento||'')}</td><td>${esc(e.blocoNome||'—')}</td><td>${esc(e.fvsNumero||'—')}</td><td>${qsPill(e.status, QS_EPO_ST[e.status]||'#777')}</td><td>${e.vistoriaData?fmtDate(e.vistoriaData):'—'}</td><td>${esc(e.recebedorNome||'—')}</td><td><button class="btn small secondary" style="width:auto;" onclick="qsAbrirEPO('${e.id}')">Abrir</button></td></tr>`).join('');
+  return `<div class="step-note" style="margin-bottom:8px;">Etapa 28 do manual: o Coordenador libera a entrega com a FVS aprovada e as não conformidades encerradas; o Analista faz a vistoria e colhe a assinatura do termo; o Gerente entrega o manual de uso e garantia; a Giselle encerra a OP e arquiva o dossiê.</div>
+   <div style="margin-bottom:10px;"><button class="btn small" style="width:auto;" onclick="qsNovaEPO()">+ Nova entrega</button></div>
+   ${linhas?`<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Nº</th><th>Obra</th><th>Bloco</th><th>FVS</th><th>Situação</th><th>Vistoria</th><th>Recebedor</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`:'<div class="empty-state"><div class="big">🔑</div>Nenhuma entrega registrada.</div>'}`;
+}
+function qsNovaEPO(){
+  qsModal('Nova entrega (EPO)', `<div class="form-grid"><div class="field"><label>Obra</label><select id="qse_obra" onchange="qsEpoBlocos()"><option value="">—</option>${load('obras').map(o=>`<option value="${o.id}">${esc(o.nome)}</option>`).join('')}</select></div>
+   <div class="field"><label>Bloco</label><select id="qse_bloco" onchange="qsEpoFvs()"><option value="">—</option></select></div>
+   <div class="field" style="grid-column:1/-1;"><label>FVS aprovada</label><select id="qse_fvs"><option value="">Selecione obra e bloco</option></select></div></div>
+   <div class="step-note">A entrega só pode ser criada com uma FVS aprovada e sem não conformidades abertas.</div>
+   <div class="form-actions"><button class="btn" onclick="qsCriarEPO()">Criar</button><button class="btn secondary" onclick="closeModal('modalQS')">Cancelar</button></div>`);
+}
+function qsEpoBlocos(){ const o = document.getElementById('qse_obra').value; document.getElementById('qse_bloco').innerHTML = '<option value="">—</option>'+load('blocos').filter(b=>b.obraId===o).map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join(''); qsEpoFvs(); }
+function qsEpoFvs(){ const o = document.getElementById('qse_obra').value, b = document.getElementById('qse_bloco').value; const l = (o&&b) ? qsFvsAprovadaDoBloco(o,b) : []; document.getElementById('qse_fvs').innerHTML = l.length ? l.map(i=>`<option value="${i.id}">${esc(i.numero)} — ${esc(i.modeloNome)} (${fmtDate(i.data)})</option>`).join('') : '<option value="">Nenhuma FVS aprovada para este bloco</option>'; }
+function qsCriarEPO(){
+  const obraId = document.getElementById('qse_obra').value, blocoId = document.getElementById('qse_bloco').value, fvsId = document.getElementById('qse_fvs').value;
+  if(!obraId || !blocoId || !fvsId){ toast('Selecione obra, bloco e uma FVS aprovada.'); return; }
+  const o = load('obras').find(x=>x.id===obraId), b = load('blocos').find(x=>x.id===blocoId), f = qsInsp().find(x=>x.id===fvsId), l = qsEntregas();
+  const e = { id:uid(), numero:qsNum('EPO', l), obraId, empreendimento:o?o.nome:'', blocoId, blocoNome:b?b.nome:'', fvsId, fvsNumero:f?f.numero:'', status:'Aguardando liberação', vistoriaData:'', recebedorNome:'', recebedorCargo:'', garantia:'5 anos para esquadrias e 1 ano para ferragens e vedações (ajuste ao contrato)', conformidade:false, manualEntregue:false, dossie:false, obs:'', criadoEm:new Date().toISOString(), hist:[{ em:new Date().toISOString(), por:scUsuario(), ev:'Entrega aberta' }] };
+  l.push(e); save('qsEntregas', l); closeModal('modalQS'); QS_UI.aba='epo'; renderQualidade(); qsAbrirEPO(e.id);
+}
+function qsEpoItens(e){
+  const it = load('itensObra').filter(i=>i.obraId===e.obraId && i.blocoId===e.blocoId && itemAtivo(i));
+  return it.map(i=>({ nome:i.nomenclatura||'', tipo:i.tipoEsquadria||'', qtd:(i.localizacoes&&i.localizacoes.length)?i.localizacoes.reduce((s,x)=>s+(parseFloat(x.quantidade)||0),0):(parseFloat(i.quantidade)||0) }));
+}
+function qsAbrirEPO(id){
+  const e = qsEntregas().find(x=>x.id===id); if(!e){ toast('Entrega não encontrada.'); return; }
+  QS_UI.atual = id; const ok = qsFvsAprovadaDoBloco(e.obraId, e.blocoId).some(i=>i.id===e.fvsId), itens = qsEpoItens(e);
+  const dis = e.status==='Encerrada' ? 'disabled' : '';
+  qsModal('Entrega '+e.numero+' — '+(e.empreendimento||'')+(e.blocoNome?' · '+e.blocoNome:''), `<div style="margin-bottom:8px;">${qsPill(e.status, QS_EPO_ST[e.status]||'#777')} <span class="step-note">FVS ${esc(e.fvsNumero||'—')}: ${ok?'<b style="color:#2e7d32;">aprovada e sem pendências</b>':'<b style="color:#c62828;">sem aprovação válida ou com pendências</b>'}</span></div>
+   <div class="form-grid"><div class="field"><label>Data da vistoria</label><input type="date" id="qse_vist" value="${e.vistoriaData||''}" ${dis}></div>
+   <div class="field"><label>Recebedor (nome)</label><input id="qse_rec" value="${esc(e.recebedorNome||'')}" ${dis}></div>
+   <div class="field"><label>Cargo / função do recebedor</label><input id="qse_cargo" value="${esc(e.recebedorCargo||'')}" ${dis}></div>
+   <div class="field" style="grid-column:1/-1;"><label>Prazo e condições de garantia</label><textarea id="qse_gar" rows="2" ${dis}>${esc(e.garantia||'')}</textarea></div></div>
+   <div style="margin:6px 0;"><label><input type="checkbox" id="qse_conf" ${e.conformidade?'checked':''} ${dis} style="width:auto;"> Declaração: itens entregues em conformidade com o projeto</label><br>
+   <label><input type="checkbox" id="qse_man" ${e.manualEntregue?'checked':''} ${dis} style="width:auto;"> Manual de uso, manutenção e garantia entregue (Gerente)</label><br>
+   <label><input type="checkbox" id="qse_dos" ${e.dossie?'checked':''} ${dis} style="width:auto;"> Dossiê arquivado e OP encerrada (Giselle)</label></div>
+   <div class="atc-sec">Itens do bloco (${itens.length})</div><div class="step-note">${itens.length?itens.map(x=>esc(x.nome)+(x.qtd?' ×'+x.qtd:'')).join(' · '):'Nenhum item cadastrado neste bloco.'}</div>
+   <div class="atc-sec" style="margin-top:10px;">Histórico</div><div class="atc-hist">${(e.hist||[]).slice().reverse().map(h=>`<div><b>${esc(atcFmtDH(h.em))}</b> — ${esc(h.por)}<br>${esc(h.ev)}</div>`).join('')}</div>
+   <div class="form-actions" style="flex-wrap:wrap;margin-top:12px;">
+    ${e.status!=='Encerrada'?`<button class="btn" onclick="qsEpoSalvar()">Salvar</button>`:''}
+    ${e.status==='Aguardando liberação'&&qsPodeGerir()?`<button class="btn secondary" onclick="qsEpoAvancar('Liberada')">Liberar entrega (Coordenador)</button>`:''}
+    ${e.status==='Liberada'?`<button class="btn secondary" onclick="qsEpoAvancar('Entregue')">Registrar entrega (termo assinado)</button>`:''}
+    ${e.status==='Entregue'?`<button class="btn secondary" onclick="qsEpoAvancar('Encerrada')">Encerrar (dossiê arquivado)</button>`:''}
+    <button class="btn secondary" onclick="qsEpoTermo('${e.id}')">Imprimir termo</button>
+    ${qsPodeGerir()?`<button class="btn danger" onclick="qsEpoExcluir('${e.id}')">Excluir</button>`:''}
+    <button class="btn secondary" onclick="closeModal('modalQS')">Fechar</button></div>`);
+}
+function qsEpoLer(e){ e.vistoriaData = document.getElementById('qse_vist').value; e.recebedorNome = document.getElementById('qse_rec').value.trim(); e.recebedorCargo = document.getElementById('qse_cargo').value.trim(); e.garantia = document.getElementById('qse_gar').value.trim(); e.conformidade = document.getElementById('qse_conf').checked; e.manualEntregue = document.getElementById('qse_man').checked; e.dossie = document.getElementById('qse_dos').checked; }
+function qsEpoSalvar(){ const l = qsEntregas(), e = l.find(x=>x.id===QS_UI.atual); if(!e) return; qsEpoLer(e); save('qsEntregas', l); closeModal('modalQS'); renderQualidade(); toast('Entrega salva.'); }
+function qsEpoAvancar(novo){
+  const l = qsEntregas(), e = l.find(x=>x.id===QS_UI.atual); if(!e) return; qsEpoLer(e);
+  if(novo==='Liberada' && !qsFvsAprovadaDoBloco(e.obraId, e.blocoId).some(i=>i.id===e.fvsId)){ toast('A FVS precisa estar aprovada e sem não conformidades abertas.'); return; }
+  if(novo==='Entregue' && (!e.vistoriaData || !e.recebedorNome || !e.conformidade)){ toast('Informe a data da vistoria, o recebedor e marque a declaração de conformidade.'); return; }
+  if(novo==='Encerrada' && (!e.manualEntregue || !e.dossie)){ toast('Para encerrar: manual entregue e dossiê arquivado.'); return; }
+  e.status = novo; e.hist.push({ em:new Date().toISOString(), por:scUsuario(), ev:'Situação: '+novo }); save('qsEntregas', l); closeModal('modalQS'); renderQualidade(); toast('Entrega: '+novo+'.');
+}
+function qsEpoExcluir(id){ if(!qsPodeGerir() || !confirm('Excluir esta entrega?')) return; save('qsEntregas', qsEntregas().filter(x=>x.id!==id)); closeModal('modalQS'); renderQualidade(); }
+function qsEpoTermo(id){
+  const e = qsEntregas().find(x=>x.id===id); if(!e) return; const itens = qsEpoItens(e), o = load('obras').find(x=>x.id===e.obraId)||{};
+  const L = (t,v)=>`<tr><td style="padding:4px;border-bottom:1px solid #ddd;width:34%;"><b>${t}</b></td><td style="padding:4px;border-bottom:1px solid #ddd;">${v||'&nbsp;'}</td></tr>`;
+  document.getElementById('rdoPrintArea').innerHTML = `<h1>Termo de Entrega para a Obra (EPO) — ${esc(e.numero)}</h1><div class="meta">Divisão de Alumínio — Construtora Calper</div>
+   <table style="width:100%;border-collapse:collapse;font-size:12px;">${L('Obra / empreendimento', esc(e.empreendimento))}${L('Bloco', esc(e.blocoNome))}${L('Endereço', esc(o.endereco||o.local||''))}${L('Contratante', esc(o.contratante||'Construtora Calper'))}${L('Responsável técnico', esc(o.responsavelTecnico||''))}${L('Ordem de produção (OP)', '')}${L('Data da vistoria', e.vistoriaData?fmtDate(e.vistoriaData):'')}${L('Recebedor', esc(e.recebedorNome)+(e.recebedorCargo?' — '+esc(e.recebedorCargo):''))}${L('FVS aprovada (referência)', esc(e.fvsNumero))}${L('Garantia (prazo e condições)', esc(e.garantia))}</table>
+   <h3 style="font-size:13px;margin:12px 0 4px;">Itens entregues</h3><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;border-bottom:1px solid #999;">Item</th><th style="text-align:left;border-bottom:1px solid #999;">Tipo</th><th style="text-align:right;border-bottom:1px solid #999;">Qtd.</th></tr></thead><tbody>${itens.map(x=>`<tr><td style="padding:3px;border-bottom:1px solid #eee;">${esc(x.nome)}</td><td style="padding:3px;border-bottom:1px solid #eee;">${esc(x.tipo)}</td><td style="padding:3px;border-bottom:1px solid #eee;text-align:right;">${x.qtd||''}</td></tr>`).join('')||'<tr><td colspan="3">—</td></tr>'}</tbody></table>
+   <p style="font-size:12px;margin-top:12px;">Declaramos que os itens acima foram entregues em conformidade com o projeto, conforme a FVS ${esc(e.fvsNumero||'')} aprovada.</p>
+   <table style="width:100%;margin-top:46px;font-size:12px;"><tr><td style="width:50%;">______________________________<br>${esc(e.recebedorNome||'Recebedor')}<br>Data: ____/____/______</td><td>______________________________<br>Representante da Divisão de Alumínio</td></tr></table>`;
+  window.print();
+}
 function renderPCP(){
   const sem = document.getElementById('pcpSemAcesso'), cont = document.getElementById('pcpConteudo');
   if(!pliTemAcesso()){ sem.style.display='block'; cont.style.display='none'; return; }
   sem.style.display='none'; cont.style.display='block';
+  const emSem = PCP_UI.aba==='sem';
+  document.getElementById('pcpMesBox').style.display = emSem?'none':'block'; document.getElementById('pcpSemBox').style.display = emSem?'block':'none';
+  document.getElementById('pcpAbaMes').className = 'btn small'+(emSem?' secondary':''); document.getElementById('pcpAbaSem').className = 'btn small'+(emSem?'':' secondary');
+  document.getElementById('pcpMesTit').parentNode.style.display = emSem?'none':'flex';
+  if(emSem){ renderPcpSem(); return; }
   const ym = PCP_UI.mes, fases = pcpFases(), esc2 = esc, RM = pcpRealMapa();
   document.getElementById('pcpMesTit').textContent = pcpMesLabel(ym).replace(/^./, c=>c.toUpperCase());
   document.getElementById('pcpMesInput').value = ym;
@@ -17708,7 +17972,9 @@ function fabPendenciasItem(it){
   return pend;
 }
 function fabProcessarLote(txt, modo){
-  const t = String(txt||'').trim().replace(/^SGPT[:|]/i,'').trim();
+  let t = String(txt||'').trim().replace(/^SGPT[:|]/i,'').trim();
+  // etiqueta de USINAGEM = código do perfil + "U" (ex.: P00012U): a própria etiqueta define a etapa
+  const mU = /^(P\d+)U$/i.exec(t); if(mU){ t = mU[1]; modo = 'usin'; }
   const lotes = load('fabLotes'), l = lotes.find(x=>String(x.codigo).toUpperCase()===t.toUpperCase());
   if(!l) return { nivel:'erro', msg:'Código "'+t+'" não encontrado entre os perfis/vidros importados.' };
   const esperado = modo==='vidro' ? 'vidro' : 'perfil';
@@ -17863,8 +18129,11 @@ function fabAtualizarLotes(){
       <input type="text" id="fabBusca" placeholder="Buscar" value="${esc(FAB_UI.busca)}" oninput="FAB_UI.busca=this.value;fabAtualizarLotes();document.getElementById('fabBusca').focus()" style="min-width:160px;">
       <select onchange="FAB_UI.bloco=this.value;fabAtualizarLotes()"><option value="">Todos os blocos</option>${blocos.map(b=>`<option value="${b.id}" ${FAB_UI.bloco===b.id?'selected':''}>${esc(b.nome)}</option>`).join('')}</select>
       <select onchange="FAB_UI.st=this.value;fabAtualizarLotes()"><option value="">Todos</option><option value="pend" ${FAB_UI.st==='pend'?'selected':''}>Não iniciados</option><option value="and" ${FAB_UI.st==='and'?'selected':''}>Em andamento</option><option value="ok" ${FAB_UI.st==='ok'?'selected':''}>Concluídos</option></select>
-      <button class="btn small" onclick="fabEtiquetas('${FAB_UI.aba}')">Etiquetas (QR + código de barras)</button>
-      <button class="btn small secondary" onclick="fabListaA4('${FAB_UI.aba}')">Lista A4 com código de barras</button>
+      ${FAB_UI.aba==='perfil' ? `<button class="btn small" onclick="fabEtiquetas('perfil','corte')">Etiquetas de CORTE</button>
+      <button class="btn small" onclick="fabEtiquetas('perfil','usin')">Etiquetas de USINAGEM</button>
+      <button class="btn small secondary" onclick="fabListaA4('perfil','corte')">Lista A4 corte</button>
+      <button class="btn small secondary" onclick="fabListaA4('perfil','usin')">Lista A4 usinagem</button>` : `<button class="btn small" onclick="fabEtiquetas('${FAB_UI.aba}')">Etiquetas (QR + código de barras)</button>
+      <button class="btn small secondary" onclick="fabListaA4('${FAB_UI.aba}')">Lista A4 com código de barras</button>`}
       ${pode?`<button class="btn small secondary" onclick="fabApagarSemBaixa()">Apagar importação sem baixas</button>`:''}
     </div>`;
   const cel = (l,c,lbl)=>{ const t = fabTotalLote(l), n = Math.min(fabEstagio(l,c),t), ok = n>=t; return `<td style="text-align:center;${ok?'color:#1f7a3a;font-weight:700;':(n>0?'color:#b26a00;':'')}">${n}/${t} ${ok?'✔':''}<div style="font-size:11px;"><a href="javascript:void(0)" onclick="fabParcial('${l.id}','${c}')">parcial</a>${pode&&n>0?` · <a href="javascript:void(0)" onclick="fabDesfazer('${l.id}','${c}')">desfazer</a>`:''}</div></td>`; };
@@ -17912,7 +18181,7 @@ function fabImprimir(html, msg){
   const depois = ()=>{ area.classList.remove('etq-mode'); window.removeEventListener('afterprint', depois); }; window.addEventListener('afterprint', depois);
   toast(msg); window.print();
 }
-function fabEtiquetas(aba){
+function fabEtiquetas(aba, etapa){
   const cfg = expCfg(), L = cfg.preset==='custom' ? cfg.custom : EXP_ETQ_PRESETS[cfg.preset];
   const lista = fabLotesFiltrados(); if(!lista.length){ toast('Nada para etiquetar com esse filtro.'); return; }
   const obra = load('obras').find(o=>o.id===currentObraId)||{}, blocos = load('blocos'), nb = id=>(blocos.find(b=>b.id===id)||{}).nome||'';
@@ -17921,17 +18190,17 @@ function fabEtiquetas(aba){
   const porFolha = L.cols*L.rows, off = Math.max(0,(cfg.inicio||1)-1)%porFolha, todos = new Array(off).fill(null).concat(slots);
   const qrMm = Math.min(L.h-4, L.w*0.4), fs = Math.max(6.5, Math.min(11, L.h/4.2)), lin = 'font-size:'+fs+'px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
   const etq = l=>{
-    let t1, t2, t3, t4;
+    let t1, t2, t3, t4; const cod = etapa==='usin' ? l.codigo+'U' : l.codigo;
     if(l.tipo==='perfil'){ const tipos = [...new Set((l.pecas||[]).map(p=>p.tipo.replace(/\s*-\s*(H|L|A|-)$/,'')))];
-      t1 = 'PERFIL '+esc(l.perfil); t2 = esc(l.desc||''); t3 = l.barras+' barras × '+l.comp+' mm'; t4 = 'Atende '+tipos.length+' tipo(s): '+esc(tipos.slice(0,2).join(', '))+(tipos.length>2?'…':''); }
+      t1 = (etapa==='usin'?'USINAGEM · ':(etapa==='corte'?'CORTE · ':''))+'PERFIL '+esc(l.perfil); t2 = esc(l.desc||''); t3 = l.barras+' barras × '+l.comp+' mm · '+(l.pecas||[]).length+' sub-itens · '+(l.pecas||[]).reduce((a,p)=>a+p.qtd,0)+' pç'; t4 = 'Atende '+tipos.length+' tipo(s): '+esc(tipos.slice(0,2).join(', '))+(tipos.length>2?'…':''); }
     else { t1 = 'VIDRO '+esc(l.tipoTxt||''); t2 = esc(l.pos||'')+' · '+esc(l.cor||''); t3 = l.L+' × '+l.H+' mm · '+l.qtd+' un'; t4 = esc(l.descVidro||l.cod||''); }
     { const e = fabSeqLote(l, OM); if(e && e.fase) t4 = 'ORDEM '+e.seq+' · Fase '+esc(e.fase)+' · '+esc(e.cat)+' — '+t4; }
     return `<div style="display:flex;gap:1.5mm;width:100%;height:100%;box-sizing:border-box;padding:1.6mm;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#000;">
-      <div style="flex:0 0 ${qrMm}mm;height:${qrMm}mm;">${expSvgQR('SGPT:'+l.codigo)}</div>
+      <div style="flex:0 0 ${qrMm}mm;height:${qrMm}mm;">${expSvgQR('SGPT:'+cod)}</div>
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;">
         <div style="min-height:0;overflow:hidden;"><div style="font-size:${fs+3}px;font-weight:800;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t1}</div>
           <div style="${lin}font-weight:700;">${t2}</div><div style="${lin}">${t3}</div><div style="${lin}">${esc(obra.nome||'')} · ${esc(nb(l.blocoId))}</div><div style="${lin}">${t4}</div></div>
-        <div><div style="height:${Math.max(5,L.h*0.2).toFixed(1)}mm;">${expSvgBarras(l.codigo)}</div><div style="font-size:${fs}px;text-align:center;letter-spacing:1px;">${esc(l.codigo)}</div></div></div></div>`; };
+        <div><div style="height:${Math.max(5,L.h*0.2).toFixed(1)}mm;">${expSvgBarras(cod)}</div><div style="font-size:${fs}px;text-align:center;letter-spacing:1px;">${esc(cod)}</div></div></div></div>`; };
   let html = '';
   for(let f=0; f*porFolha<todos.length; f++){
     html += `<div class="etq-folha" style="position:relative;width:210mm;height:297mm;overflow:hidden;page-break-after:always;break-after:page;">`;
@@ -17939,20 +18208,20 @@ function fabEtiquetas(aba){
       html += `<div style="position:absolute;left:${(L.ml+c*L.px).toFixed(2)}mm;top:${(L.mt+r*L.py).toFixed(2)}mm;width:${L.w}mm;height:${L.h}mm;">${etq(l)}</div>`; }
     html += '</div>';
   }
-  const lotes = load('fabLotes'), ids = new Set(lista.map(l=>l.id)), agora = new Date().toISOString(); lotes.forEach(l=>{ if(ids.has(l.id)) l.etq = { em:agora, por:expUsuario() }; }); save('fabLotes', lotes);
+  const lotes = load('fabLotes'), ids = new Set(lista.map(l=>l.id)), agora = new Date().toISOString(); lotes.forEach(l=>{ if(ids.has(l.id)) l[etapa?'etq_'+etapa:'etq'] = { em:agora, por:expUsuario() }; }); save('fabLotes', lotes);
   fabImprimir(html, slots.length+' etiqueta(s) em '+Math.ceil(todos.length/porFolha)+' folha(s). Imprima em 100% (tamanho real).');
 }
-function fabListaA4(aba){
+function fabListaA4(aba, etapa){
   const lista = fabLotesFiltrados(); if(!lista.length){ toast('Nada para listar com esse filtro.'); return; }
   const obra = load('obras').find(o=>o.id===currentObraId)||{}, blocos = load('blocos'), nb = id=>(blocos.find(b=>b.id===id)||{}).nome||'';
   const porPag = 14; let html = '';
   for(let i=0; i<lista.length; i+=porPag){
     const fatia = lista.slice(i,i+porPag);
     html += `<div style="width:210mm;height:297mm;box-sizing:border-box;padding:10mm;page-break-after:always;break-after:page;font-family:Arial,Helvetica,sans-serif;color:#000;">
-      <div style="font-size:15px;font-weight:800;">${aba==='perfil'?'Lista de perfis — corte e usinagem':'Lista de vidros — colagem'} · ${esc(obra.name||obra.nome||'')} · ${esc(nb(fatia[0].blocoId))}</div>
+      <div style="font-size:15px;font-weight:800;">${aba==='perfil'?(etapa==='usin'?'Lista de usinagem — leia a etiqueta ao concluir cada perfil':etapa==='corte'?'Lista de corte — leia a etiqueta ao concluir cada perfil':'Lista de perfis — corte e usinagem'):'Lista de vidros — colagem'} · ${esc(obra.name||obra.nome||'')} · ${esc(nb(fatia[0].blocoId))}</div>
       <div style="font-size:11px;margin-bottom:4px;">Leia o código na conclusão de cada etapa. Página ${i/porPag+1}/${Math.ceil(lista.length/porPag)}</div>
       <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#eee;"><th style="border:1px solid #888;padding:3px;width:62mm;">Código</th><th style="border:1px solid #888;padding:3px;">${aba==='perfil'?'Perfil / descrição':'Tipo / vidro'}</th><th style="border:1px solid #888;padding:3px;width:34mm;">${aba==='perfil'?'Barras':'Medida · qtd'}</th><th style="border:1px solid #888;padding:3px;width:16mm;">${aba==='perfil'?'Corte':'Pronto'}</th>${aba==='perfil'?'<th style="border:1px solid #888;padding:3px;width:16mm;">Usin.</th>':''}</tr></thead><tbody>`
-      + fatia.map(l=>`<tr><td style="border:1px solid #888;padding:3px;"><div style="height:11mm;">${expSvgBarras(l.codigo)}</div><div style="text-align:center;font-size:11px;letter-spacing:1px;">${esc(l.codigo)}</div></td>
+      + fatia.map(l=>`<tr><td style="border:1px solid #888;padding:3px;"><div style="height:11mm;">${expSvgBarras(etapa==='usin'?l.codigo+'U':l.codigo)}</div><div style="text-align:center;font-size:11px;letter-spacing:1px;">${esc(etapa==='usin'?l.codigo+'U':l.codigo)}</div></td>
         <td style="border:1px solid #888;padding:3px;"><b>${esc(l.tipo==='perfil'?l.perfil:l.tipoTxt)}</b> ${esc(l.tipo==='perfil'?l.desc:l.pos)}<br><span style="font-size:10px;">${esc(l.tipo==='perfil'?l.trat:(l.cor+' · '+(l.descVidro||'')))}</span></td>
         <td style="border:1px solid #888;padding:3px;">${l.tipo==='perfil'?l.barras+' × '+l.comp+' mm':l.L+' × '+l.H+' · '+l.qtd+' un'}</td><td style="border:1px solid #888;padding:3px;"></td>${aba==='perfil'?'<td style="border:1px solid #888;padding:3px;"></td>':''}</tr>`).join('') + '</tbody></table></div>';
   }
@@ -18704,19 +18973,16 @@ function deleteEntrada(pedidoId, itemId, entregaId){
 
 // Projetos: checklist com fases gerais + uma seção exclusiva "Contramarcos"
 const PROJETO_FASES = [
-  { key: 'listaMaterial', label: 'Lista de Material (Perfis e componentes)' },
-  { key: 'projetoFabricacao', label: 'Projeto de Fabricação' },
-  { key: 'projetoContramarcos', label: 'Projeto de Contramarcos' },
-  { key: 'projetoInstalacao', label: 'Projeto de Instalação' },
-  { key: 'listaVidros', label: 'Lista de Vidros' },
-  { key: 'listaCorte', label: 'Lista de Corte', secao: 'contramarco' },
-  { key: 'listaMontagem', label: 'Lista de Montagem', secao: 'contramarco' },
-  { key: 'listaBarras', label: 'Lista de Barras', secao: 'contramarco' },
-  { key: 'listaComponentes', label: 'Lista de Componentes', secao: 'contramarco' }
+  { key: 'pjAprov', label: 'Projeto de Aprovação' },
+  { key: 'pjBarras', label: 'Lista de Material — Relação de Barras' },
+  { key: 'pjComp', label: 'Lista de Material — Relação de Componentes' },
+  { key: 'pjVidros', label: 'Lista de Material — Relação de Vidros' },
+  { key: 'pjFabric', label: 'Projeto de Fabricação' },
+  { key: 'pjCorte', label: 'Lista Fábrica — Orientativo de Corte' },
+  { key: 'pjUsin', label: 'Lista Fábrica — Usinagem' },
+  { key: 'pjMont', label: 'Lista Fábrica — Montagem' }
 ];
-const PROJETO_SECOES = [
-  { key: 'contramarco', label: 'Contramarcos' }
-];
+const PROJETO_SECOES = [];
 
 // Produção e Instalação: checklist agrupado por etapa (Contramarco / Marco / Folha)
 const ETAPAS = [
@@ -19088,13 +19354,7 @@ function _confirmarReplicarBloco(){
   try{
     // Tarefas de Projeto em lote (uma leitura/gravação só) — antes era uma por item/fase, o que travava em blocos grandes.
     let tarefas = load('tarefas');
-    const ja = new Set(tarefas.filter(t=>t.origemModulo==='projeto').map(t=>t.origemItemId+'|'+t.origemFaseKey));
-    novos.forEach(n=>{
-      MODULOS_ITEM.projeto.fases.forEach(f=>{
-        if(ja.has(n.id+'|'+f.key)) return;
-        criarTarefaAutomatica(tarefas, { titulo:`Projeto — ${n.nomenclatura} — ${f.label}`, origemModulo:'projeto', origemItemId:n.id, origemUnitKey:null, origemFaseKey:f.key });
-      });
-    });
+    novos.forEach(n=>{ projTarefaGarantir(tarefas, n); });
     save('tarefas', tarefas);
   }catch(e){ console.error(e); toast('Itens replicados, mas houve erro ao gerar as tarefas: '+e.message); }
   closeModal('modalReplicarBloco');
@@ -19240,9 +19500,7 @@ function gerarTarefasParaItemNovo(item){
   // Só gera tarefas automáticas de Projeto. Produção e Instalação não geram
   // tarefa automaticamente — são acompanhadas pelos próprios apontamentos
   // de fase nos módulos, não pela lista de Tarefas por Setor.
-  MODULOS_ITEM.projeto.fases.forEach(f=>{
-    criarTarefaSeNecessario('projeto', item.id, null, f.key, `Projeto — ${item.nomenclatura} — ${f.label}`);
-  });
+  try{ const tarefas = load('tarefas'); projTarefaGarantir(tarefas, item); save('tarefas', tarefas); }catch(e){ console.error(e); }
 }
 
 /* ---------------- Renderização das abas (Projetos / Produção / Instalação) ----------------
@@ -19273,6 +19531,8 @@ function restaurarDetailsAbertos(containerId, abertos){
 function renderItensModulo(moduleKey){
   const cfg = MODULOS_ITEM[moduleKey];
   const p = cfg.prefix;
+  try{ projMigrarEtapas(); projMigrarTarefas(); }catch(e){ console.error(e); }
+  if(moduleKey==='projeto'){ try{ renderProjPorFase(); }catch(e){ console.error(e); } }
   const searchEl = document.getElementById(p+'Search');
   const filtroEl = document.getElementById(p+'FiltroStatus');
   if(!searchEl || !filtroEl) return;
@@ -19353,6 +19613,136 @@ function renderItensModulo(moduleKey){
     </details>`;
   }).join('') || '';
   restaurarDetailsAbertos(p+'BlocosGroups', abertosAntes);
+}
+
+/* ===== Tarefa única por tipo (Projeto): as 8 etapas viram checklist dentro da tarefa ===== */
+function projStatusTarefa(item, atual){
+  const { done, total } = calcProgressoModulo(item, 'projeto');
+  if(total>0 && done>=total) return 'concluida';
+  if(done>0) return 'andamento';
+  return atual==='atrasada' ? 'atrasada' : 'pendente';
+}
+function projTarefaDe(tarefas, itemId){ return tarefas.find(t=>t.origemModulo==='projeto' && t.origemItemId===itemId && t.origemFaseKey==='checklist'); }
+function projTarefaGarantir(tarefas, item){
+  let t = projTarefaDe(tarefas, item.id);
+  if(!t){ criarTarefaAutomatica(tarefas, { titulo:'Projeto — '+item.nomenclatura, origemModulo:'projeto', origemItemId:item.id, origemUnitKey:null, origemFaseKey:'checklist' }); t = tarefas[tarefas.length-1]; t.obraId = item.obraId; }
+  t.status = projStatusTarefa(item, t.status); return t;
+}
+function projMigrarTarefas(){
+  const flag = load('cfgProjTarefas'); if(flag && !Array.isArray(flag) && flag.v2) return;
+  const tarefas = load('tarefas'), itens = load('itensObra'); const antigas = tarefas.filter(t=>t.origemModulo==='projeto' && t.origemFaseKey!=='checklist');
+  if(antigas.length){
+    save('tarefasProjAntigas', antigas);
+    const manter = tarefas.filter(t=>!(t.origemModulo==='projeto' && t.origemFaseKey!=='checklist'));
+    const porItem = {}; antigas.forEach(t=>{ (porItem[t.origemItemId]=porItem[t.origemItemId]||[]).push(t); });
+    Object.keys(porItem).forEach(id=>{ const it = itens.find(i=>i.id===id); if(!it) return; const l = porItem[id];
+      const t = projTarefaGarantir(manter, it); const ref = l.find(x=>x.responsavel||x.prazo||x.dataInicio) || {};
+      t.obraId = l[0].obraId || it.obraId; t.responsavel = ref.responsavel||''; t.prazo = ref.prazo||''; t.dataInicio = ref.dataInicio||''; t.prioridade = ref.prioridade||'media';
+      t.horasUtilizadas = l.reduce((a,x)=>a+(+x.horasUtilizadas||0),0); t.status = projStatusTarefa(it, t.status); });
+    save('tarefas', manter);
+  }
+  save('cfgProjTarefas', { v2:1 });
+}
+function projTarefaChecklistHtml(t, item){
+  if(!item) return '';
+  const st = item.projeto||{}, { done, total } = calcProgressoModulo(item, 'projeto');
+  return `<details style="margin-top:4px;"><summary style="cursor:pointer;font-size:12px;">${done}/${total} etapas</summary><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px 12px;margin-top:6px;">${PROJETO_FASES.map(f=>`<label style="font-size:12px;display:flex;justify-content:space-between;gap:6px;align-items:center;">${esc(f.label)} ${tripleSelectHtml(st[f.key], `setFaseValor('${item.id}','projeto','${f.key}',this.value)`)}</label>`).join('')}</div></details>`;
+}
+
+/* ===== Projeto por fase: migração das etapas, painel e importação do relatório de itens ===== */
+function projMigrarEtapas(){
+  const flag = load('cfgProjEtapas'); if(flag && !Array.isArray(flag) && flag.v2) return;
+  const itens = load('itensObra'); let ch = false;
+  itens.forEach(it=>{
+    const p = it.projeto || (it.projeto = {}); if(p.__v2) return;
+    const m = (novo, v)=>{ if(v && p[novo]===undefined){ p[novo] = v; ch = true; } };
+    m('pjBarras', p.listaMaterial); m('pjComp', p.listaMaterial); m('pjVidros', p.listaVidros); m('pjFabric', p.projetoFabricacao);
+    p.__v2 = 1; ch = true;
+  });
+  if(ch) save('itensObra', itens);
+  save('cfgProjEtapas', { v2:1 });
+}
+function projFasesTipo(obraId){
+  const OM = fabOrdemMapa(obraId); return { OM, de: it=>{ const e = OM.map.get(it.blocoId+'|'+(it.chaveCem||fabKey(it.nomenclatura))); return e ? (e.fase||'') : ''; } };
+}
+function renderProjPorFase(){
+  const box = document.getElementById('projPorFase'); if(!box) return;
+  if(!currentObraId){ box.innerHTML=''; return; }
+  projMigrarEtapas();
+  const itens = load('itensObra').filter(i=>i.obraId===currentObraId && !i.cancelado && itemAtivo(i));
+  if(!itens.length){ box.innerHTML=''; return; }
+  const { OM, de } = projFasesTipo(currentObraId), F = PROJETO_FASES;
+  const grupos = {}; itens.forEach(it=>{ const f = de(it); (grupos[f]=grupos[f]||[]).push(it); });
+  const ordem = OM.fases.filter(f=>grupos[f]).concat(grupos[''] ? [''] : []);
+  const cel = (its, k, f)=>{ const t = its.filter(i=>((i.projeto||{})[k]||'pendente')!=='na'), d = t.filter(i=>(i.projeto||{})[k]==='ok').length;
+    const cor = !t.length ? 'opacity:.5;' : d===t.length ? 'color:#2e7d32;font-weight:700;' : d? 'color:#b26a00;font-weight:700;' : '';
+    return `<td style="text-align:center;white-space:nowrap;"><span style="${cor}">${t.length?d+'/'+t.length:'n/a'}</span><br><select onchange="projFaseTodos('${esc(f).replace(/'/g,"\\'")}','${k}',this.value);this.value=''" style="font-size:11px;max-width:84px;"><option value="">marcar…</option><option value="ok">tudo OK</option><option value="pendente">tudo pendente</option><option value="na">não aplicável</option></select></td>`; };
+  let h = `<div class="panel" style="margin-bottom:12px;"><div class="panel-head">Etapas de projeto por fase — baixa manual (marcar na fase vale para todos os tipos dela)</div><div class="panel-body" style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Fase</th><th>Tipos</th>${F.map(f=>`<th style="text-align:center;font-size:11px;">${esc(f.label)}</th>`).join('')}</tr></thead><tbody>`;
+  ordem.forEach(f=>{ const its = grupos[f]; h += `<tr><td><b>${f?esc(f):'<span style="color:#b26a00;">Sem fase</span>'}</b></td><td>${its.length}</td>${F.map(x=>cel(its,x.key,f)).join('')}</tr>`; });
+  h += '</tbody></table>';
+  if(grupos['']) h += `<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12.5px;">Definir fase dos ${grupos[''].length} tipo(s) sem fase</summary><div style="max-height:260px;overflow:auto;margin-top:6px;"><table class="data-table" style="font-size:12px;"><tbody>${grupos[''].map(it=>`<tr><td>${esc(it.nomenclatura)}</td><td>${esc(it.quantidade||'')} un</td><td><select onchange="projSetFase('${it.id}',this.value)"><option value="">(sem fase)</option>${OM.fases.map(f=>`<option>${esc(f)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></details>`;
+  h += '</div></div>';
+  box.innerHTML = h;
+}
+function projFaseTodos(fase, key, valor){
+  if(!valor) return; const { de } = projFasesTipo(currentObraId);
+  const itens = load('itensObra'); let n = 0;
+  itens.forEach(it=>{ if(it.obraId!==currentObraId || it.cancelado || !itemAtivo(it) || de(it)!==fase) return; (it.projeto||(it.projeto={}))[key] = valor; n++; });
+  save('itensObra', itens);
+  try{ const tf = load('tarefas'); itens.forEach(it=>{ if(it.obraId===currentObraId && !it.cancelado && itemAtivo(it)) projTarefaGarantir(tf, it); }); save('tarefas', tf); }catch(e){ console.error(e); }
+  try{ logAtividade(currentObraId, 'fase_projeto', 'Projeto: '+labelFaseFromPath('projeto', key)+' → '+labelValorFase(valor)+' em '+n+' tipo(s) da fase '+(fase||'sem fase')); }catch(e){}
+  renderItensModulo('projeto'); toast(n+' tipo(s) atualizados.');
+}
+function projSetFase(itemId, fase){
+  const it = load('itensObra').find(x=>x.id===itemId); if(!it) return;
+  const key = it.chaveCem||fabKey(it.nomenclatura), id = it.obraId+'|'+it.blocoId+'|'+key, lista = load('fabOrdem');
+  let e = lista.find(x=>x.id===id);
+  if(!e){ e = { id, obraId:it.obraId, blocoId:it.blocoId, key, tipo:it.nomenclatura, modelo:it.modeloCem||'', qtd:it.quantidade, fase:'', cat:fabClassCat(it.modeloCem, it.nomenclatura) }; lista.push(e); }
+  e.fase = fase; save('fabOrdem', lista); renderItensModulo('projeto');
+}
+let PROJ_IMP = null;
+async function projLerRelatorio(input){
+  const files = [...(input.files||[])]; if(!files.length) return;
+  toast('Lendo relatório…');
+  try{ const pdfjs = await fabCarregarPdfJs(); const r = await fabLerArquivos(files, pdfjs); PROJ_IMP = r; }
+  catch(e){ toast('Erro: '+(e.message||e)); input.value=''; return; }
+  input.value = '';
+  const I = PROJ_IMP; if(!I.itens.length){ toast((I.avisos[0])||'Nenhum item encontrado. Use o "Relatório de Itens da Obra" do CEM Pro.'); return; }
+  const blocos = ordenarPorCampo(load('blocos').filter(b=>b.obraId===currentObraId),'nome');
+  const itens = load('itensObra').filter(i=>i.obraId===currentObraId);
+  document.getElementById('qsModalTitulo').textContent = 'Importar relatório de itens';
+  document.getElementById('qsModalBody').innerHTML = `<p style="margin:0 0 8px;font-size:13px;"><b>${I.itens.length}</b> tipo(s) lidos de ${I.arquivos.length} arquivo(s). Tipos que já existem no bloco não são alterados; só os novos são criados.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;"><label style="font-size:12px;">Bloco<br><select id="projImpBloco" style="min-width:160px;"><option value="__novo__">+ Novo bloco…</option>${blocos.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')}</select></label>
+    <label style="font-size:12px;">Nome do bloco novo<br><input type="text" id="projImpNovo" placeholder="ex.: BL5" style="width:120px;"></label>
+    <label style="font-size:12px;">Fase (opcional)<br><select id="projImpFase"><option value="">(definir depois)</option>${fabOrdemMapa(currentObraId).fases.map(f=>`<option>${esc(f)}</option>`).join('')}</select></label></div>
+    <div style="max-height:240px;overflow:auto;margin:10px 0;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Tipo</th><th>Qtd</th><th>L × H</th><th>Peso un. (kg)</th></tr></thead><tbody>${I.itens.slice(0,200).map(x=>`<tr><td>${esc(x.tipo)}</td><td>${x.qtd}</td><td>${x.L} × ${x.H}</td><td>${fabFmt(x.pesoUn,3)}</td></tr>`).join('')}</tbody></table></div>
+    <div style="display:flex;gap:8px;"><button class="btn" onclick="projConfirmarRelatorio()">Importar</button><button class="btn secondary" onclick="closeModal('modalQS')">Cancelar</button></div>`;
+  openModal('modalQS');
+}
+function projConfirmarRelatorio(){
+  const I = PROJ_IMP; if(!I || !currentObraId) return;
+  let blocoId = document.getElementById('projImpBloco').value, novo = document.getElementById('projImpNovo').value.trim(), fase = document.getElementById('projImpFase').value;
+  if(!blocoId || blocoId==='__novo__'){
+    if(!novo){ toast('Escolha o bloco ou digite o nome de um bloco novo.'); return; }
+    const fs = garantirFaseNaoClassificado(currentObraId), blocos = load('blocos'), b = { id:uid(), obraId:currentObraId, nome:novo, faseId:fs.id }; blocos.push(b); save('blocos', blocos); blocoId = b.id;
+  }
+  let itens = load('itensObra'), criados = 0, ja = 0; const novos = [];
+  I.itens.forEach(x=>{
+    if(itens.some(i=>i.obraId===currentObraId && i.blocoId===blocoId && (i.chaveCem===x.key || fabKey(i.nomenclatura)===x.key))){ ja++; return; }
+    const tipoEsq = /GUARDA/i.test(x.desc||'') ? 'Guarda-corpo' : (/FACHADA/i.test(x.desc||'') ? 'Fachada' : 'Janela e Porta');
+    const it = { id:uid(), obraId:currentObraId, blocoId, tipologiaId:null, nomenclatura:x.tipo, tipoEsquadria:tipoEsq, largura:String(x.L), altura:String(x.H), pesoLiquido:x.pesoUn||0,
+      localizacoes:[{ id:uid(), local:'', quantidade:x.qtd }], quantidade:x.qtd, projeto:{ __v2:1 }, producao:{}, instalacao:{}, chaveCem:x.key, modeloCem:x.modelo||'' };
+    itens.push(it); novos.push(it); criados++;
+  });
+  if(criados) save('itensObra', itens);
+  try{ let tarefas = load('tarefas');
+    novos.forEach(n=>{ projTarefaGarantir(tarefas, n); });
+    save('tarefas', tarefas); }catch(e){ console.error(e); }
+  fabOrdemDoImport(I, blocoId);
+  if(fase){ const lista = load('fabOrdem'); lista.forEach(e=>{ if(e.obraId===currentObraId && e.blocoId===blocoId && !e.fase && I.itens.some(x=>x.key===e.key)) e.fase = fase; }); save('fabOrdem', lista); }
+  PROJ_IMP = null; closeModal('modalQS');
+  try{ renderAllItemModulos(); }catch(e){ renderItensModulo('projeto'); }
+  toast('Importado: '+criados+' tipo(s) novo(s), '+ja+' já cadastrado(s) (não alterados).');
 }
 
 /* ---------------- Fases (checklist por item, por módulo) ---------------- */
@@ -19457,12 +19847,10 @@ function setFaseValor(itemId, moduleKey, path, value){
   const cfgTitulo = MODULOS_ITEM[moduleKey].titulo;
   logAtividade(itens[idx].obraId, 'fase_'+moduleKey,
     `${cfgTitulo}: ${labelFaseFromPath(moduleKey, path)} → ${labelValorFase(value)} (Item: ${itens[idx].nomenclatura})`);
-  if(value === 'pendente' && moduleKey === 'projeto'){
-    criarTarefaSeNecessario(moduleKey, itemId, null, path,
-      `${cfgTitulo} — ${itens[idx].nomenclatura} — ${labelFaseFromPath(moduleKey, path)}`);
-  }
+  if(moduleKey === 'projeto'){ try{ const tf = load('tarefas'); projTarefaGarantir(tf, itens[idx]); save('tarefas', tf); }catch(e){ console.error(e); } }
   renderFasesModalContent(itemId, moduleKey);
   renderItensModulo(moduleKey);
+  if(moduleKey==='projeto'){ try{ if(document.getElementById('sec-tarefas') && document.getElementById('sec-tarefas').classList.contains('active')) renderTarefas(); }catch(e){} }
 }
 
 /* ============================================================
@@ -20139,22 +20527,10 @@ function gerarTarefasModulo(moduleKey){
         });
       });
     });
-  } else { // projeto
-    const cfg = MODULOS_ITEM.projeto;
+  } else { // projeto: uma tarefa por tipo, com as etapas como checklist
     itens.forEach(item=>{
-      const state = item.projeto || {};
-      cfg.fases.forEach(f=>{
-        const valor = state[f.key] || 'pendente';
-        if(valor !== 'pendente'){ concluidasOuNA++; return; }
-        if(jaExiste('projeto', item.id, null, f.key)){ jaTinhamTarefa++; return; }
-        criarTarefaAutomatica(tarefas, {
-          titulo: `Projeto — ${item.nomenclatura} — ${f.label}`,
-          origemModulo: 'projeto',
-          origemItemId: item.id,
-          origemFaseKey: f.key
-        });
-        criadas++;
-      });
+      if(projTarefaDe(tarefas, item.id)){ jaTinhamTarefa++; return; }
+      projTarefaGarantir(tarefas, item); criadas++;
     });
   }
 
