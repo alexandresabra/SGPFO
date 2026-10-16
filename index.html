@@ -668,6 +668,10 @@
   #almoxApp .ac-empty{ padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
   #almoxApp .info-chip{ background: var(--card2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-dim); margin-top: 4px; display: none; }
 
+  .inst-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px;margin:10px 0 0;align-items:start;}
+  @media(max-width:1100px){.inst-grid{grid-template-columns:minmax(0,1fr);}}
+  .inst-t th,.inst-t td{padding:4px 10px;white-space:nowrap;}
+  .inst-t.inst-f td:nth-child(2),.inst-t.inst-f th:nth-child(2){white-space:normal;width:100%;}
 </style>
 </head>
 <body>
@@ -2121,9 +2125,11 @@
             <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn small secondary" style="width:auto;" onclick="instExportarCSV()">Exportar CSV</button><button class="btn small secondary" style="width:auto;" onclick="instImprimir()">Imprimir</button></div>
           </div>
           <div class="kpi-row" id="instKpis"></div>
-          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S de instalação (kg acumulado)</h3><div id="instGrafico"></div></div>
-          <div class="card" style="padding:12px;margin:10px 0;"><h3 style="margin:0 0 6px;font-size:15px;">Fases</h3><div id="instFases"></div></div>
-          <div class="card" style="padding:12px;"><h3 style="margin:0 0 6px;font-size:15px;">Mensal</h3><div id="instMensal"></div></div>
+          <div class="inst-grid">
+            <div class="card" style="padding:12px;margin:0;min-width:0;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S de instalação (kg acumulado)</h3><div id="instGrafico"></div></div>
+            <div class="card" style="padding:12px;margin:0;min-width:0;"><h3 style="margin:0 0 6px;font-size:15px;">Mensal</h3><div id="instMensal" style="max-height:420px;overflow:auto;"></div></div>
+          </div>
+          <div class="card" style="padding:12px;margin:12px 0 0;"><h3 style="margin:0 0 6px;font-size:15px;">Fases</h3><div id="instFases"></div></div>
         </div>
       </section>
       <section class="section" id="sec-pcp">
@@ -7388,6 +7394,9 @@ function expMostrarResultado(r){
 function expLer(){
   const inp = document.getElementById('expInput'); if(!inp) return;
   const v = inp.value.trim(); inp.value = ''; inp.focus(); if(!v) return;
+  { const cfg0 = expCfg(); if(cfg0.parcialLeitura && (cfg0.modo==='corte' || cfg0.modo==='usin')){
+      const t0 = v.replace(/^SGPT[:|]/i,'').trim().replace(/U$/i,''), l0 = load('fabLotes').find(x=>String(x.codigo).toUpperCase()===t0.toUpperCase() && x.tipo==='perfil');
+      if(l0){ fabParcial(l0.id, /U$/i.test(v.trim()) ? 'usin' : cfg0.modo); return; } } }
   expMostrarResultado(expProcessar(v, expCfg().modo)); expAtualizar();
 }
 function expSetModo(m){ expCfgSet('modo', m); renderExpedicao(); }
@@ -7406,7 +7415,7 @@ function renderExpedicao(){
         <button class="btn" onclick="expLer()">Registrar</button>
         <button class="btn secondary" onclick="expAbrirCamera()">📷 Ler com a câmera</button>
       </div>
-      <div style="margin-top:8px;font-size:12.5px;"><label><input type="checkbox" ${cfg.marcarProducao?'checked':''} onchange="expCfgSet('marcarProducao',this.checked)"> Quando todas as peças de um item forem liberadas, marcar as fases de Produção do item como OK</label><br><label><input type="checkbox" ${cfg.bloquearLib?'checked':''} onchange="expCfgSet('bloquearLib',this.checked)"> <b>Bloquear</b> a liberação da esquadria se houver corte, usinagem ou vidro pendente do tipo (desmarcado = só avisa)</label></div>
+      <div style="margin-top:8px;font-size:12.5px;"><label><input type="checkbox" ${cfg.marcarProducao?'checked':''} onchange="expCfgSet('marcarProducao',this.checked)"> Quando todas as peças de um item forem liberadas, marcar as fases de Produção do item como OK</label><br><label><input type="checkbox" ${cfg.bloquearLib?'checked':''} onchange="expCfgSet('bloquearLib',this.checked)"> <b>Bloquear</b> a liberação da esquadria se houver corte, usinagem ou vidro pendente do tipo (desmarcado = só avisa)</label><br><label><input type="checkbox" ${cfg.parcialLeitura?'checked':''} onchange="expCfgSet('parcialLeitura',this.checked)"> <b>Baixa parcial:</b> ao ler um perfil nos modos Corte/Usinagem, abrir a lista de sub-itens para informar quantas peças foram concluídas e o motivo das pendentes</label></div>
       <div id="expResultado" style="display:none"></div>
       <div id="expLog" style="margin-top:6px;"></div>
       <div class="step-note">Modo atual: <b>${EXP_MODOS.find(m=>m[0]===cfg.modo)[1]}</b>. O leitor Bluetooth/USB digita o código e dá Enter — mantenha o cursor no campo acima. Regras: só expede peça liberada; só recebe peça expedida; só revisa peça instalada; item cancelado é bloqueado. "Instalada" e "Revisão" dão baixa nas fases Instalação e Revisão da peça (aba Instalação).</div>
@@ -17424,14 +17433,14 @@ function instKpisHtml(D){
    + k(D.fimProj==='Concluída'?'Concluída':(D.fimProj?pliFmtData(D.fimProj):'—'),'Término projetado (ritmo atual)', atraso?'color:#c62828;':'');
 }
 function instTabelaFases(D){
-  let h = `<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Fase</th><th>Descrição</th><th style="text-align:right;">Peso (kg)</th><th>Início</th><th>Fim</th><th style="text-align:right;">Plan. hoje</th><th style="text-align:right;">Realizado</th><th style="text-align:right;">Instalado (kg)</th><th>Situação</th></tr></thead><tbody>`;
+  let h = `<div style="overflow:auto;"><table class="data-table inst-t inst-f" style="font-size:12px;"><thead><tr><th>Fase</th><th>Descrição</th><th style="text-align:right;">Peso (kg)</th><th>Início</th><th>Fim</th><th style="text-align:right;">Plan. hoje</th><th style="text-align:right;">Realizado</th><th style="text-align:right;">Instalado (kg)</th><th>Situação</th></tr></thead><tbody>`;
   D.fases.forEach(f=>{ h += `<tr><td><b>${esc(String(f.cod))}</b></td><td>${esc(f.desc)}</td><td style="text-align:right;">${Math.round(f.kg).toLocaleString('pt-BR')}</td><td>${pliFmtData(f.ini)}</td><td>${pliFmtData(f.fim)}</td><td style="text-align:right;">${pliFmtT(f.planHoje,0)}%</td><td style="text-align:right;"><b>${pliFmtT(f.pctReal,0)}%</b></td><td style="text-align:right;">${Math.round(f.kgReal).toLocaleString('pt-BR')}</td><td><span style="color:#fff;background:${INST_COR[f.status]};border-radius:10px;padding:1px 8px;font-size:11px;white-space:nowrap;">${f.status}</span></td></tr>`; });
   if(D.real.semFase>0) h += `<tr><td colspan="7" style="opacity:.7;">Instalado sem fase definida na Ordem de produção</td><td style="text-align:right;">${Math.round(D.real.semFase).toLocaleString('pt-BR')}</td><td></td></tr>`;
   return h + '</tbody></table></div>';
 }
 function instTabelaMensal(D, compact){
   const fk = v=>v? Math.round(v).toLocaleString('pt-BR') : '';
-  let h = `<div style="overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Mês</th><th style="text-align:right;">Plan. (kg)</th><th style="text-align:right;">Real. (kg)</th><th style="text-align:right;">Plan. acum.</th><th style="text-align:right;">Real. acum.</th><th style="text-align:right;">Desvio</th></tr></thead><tbody>`;
+  let h = `<div style="overflow:auto;"><table class="data-table inst-t" style="font-size:12px;"><thead><tr><th>Mês</th><th style="text-align:right;">Plan. (kg)</th><th style="text-align:right;">Real. (kg)</th><th style="text-align:right;">Plan. acum.</th><th style="text-align:right;">Real. acum.</th><th style="text-align:right;">Desvio</th></tr></thead><tbody>`;
   D.meses.forEach((m,i)=>{ const r = D.realAc[i], d = r==null?null:r-D.planAc[i];
     h += `<tr${m===D.hojeM?' style="font-weight:700;"':''}><td>${mesLabelCurto(m)}</td><td style="text-align:right;">${fk(D.planMes[i])}</td><td style="text-align:right;">${fk(D.realMes[i])}</td><td style="text-align:right;">${pliFmtT(D.planAc[i],0)}%</td><td style="text-align:right;">${r==null?'':pliFmtT(r,0)+'%'}</td><td style="text-align:right;${d!=null&&d<-5?'color:#c62828;':''}">${d==null?'':(d>=0?'+':'−')+pliFmtT(Math.abs(d),0)+' p.p.'}</td></tr>`; });
   return h + '</tbody></table></div>';
@@ -17958,16 +17967,16 @@ async function fabCarregarPdfJs(){
 let FAB_UI = { imp:null, aba:'perfil', bloco:'', busca:'', st:'' };
 function fabDH(iso){ return expFmtDH(iso); }
 function fabFmt(n, d){ return (n||0).toLocaleString('pt-BR',{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
-function fabTotalLote(l){ return l.tipo==='perfil' ? (l.barras||0) : (l.qtd||0); }
+function fabTotalLote(l){ return l.tipo==='perfil' ? fabPecasTotal(l) : (l.qtd||0); }
 function fabEstagio(l, campo){ return (l[campo]||{}).n||0; }
 function fabPendenciasItem(it){
   const key = it.chaveCem || fabKey(it.nomenclatura); if(!key) return [];
   const pend = [];
   load('fabLotes').filter(l=>l.obraId===it.obraId).forEach(l=>{
     if(l.tipo==='perfil' && (l.pecas||[]).some(p=>p.key===key)){
-      const t = fabTotalLote(l);
-      if(fabEstagio(l,'corte')<t) pend.push('corte do perfil '+l.perfil+' ('+fabEstagio(l,'corte')+'/'+t+')');
-      else if(fabEstagio(l,'usin')<t) pend.push('usinagem do perfil '+l.perfil+' ('+fabEstagio(l,'usin')+'/'+t+')');
+      const ks = fabSubKeys(l); let pc = 0, cd = 0, ud = 0; (l.pecas||[]).forEach((p,i)=>{ if(p.key!==key) return; pc += p.qtd; cd += fabSubN(l,'corte',ks[i]); ud += fabSubN(l,'usin',ks[i]); });
+      if(cd<pc) pend.push('corte do perfil '+l.perfil+' ('+cd+'/'+pc+' peças)');
+      else if(ud<pc) pend.push('usinagem do perfil '+l.perfil+' ('+ud+'/'+pc+' peças)');
     }
     if(l.tipo==='vidro' && l.key===key && fabEstagio(l,'vid')<fabTotalLote(l)) pend.push('vidro '+(l.pos||l.cor||'')+' '+l.L+'×'+l.H+' ('+fabEstagio(l,'vid')+'/'+fabTotalLote(l)+')');
   });
@@ -17985,16 +17994,19 @@ function fabProcessarLote(txt, modo){
   const campo = modo==='corte' ? 'corte' : (modo==='usin' ? 'usin' : 'vid'), total = fabTotalLote(l);
   const est = l[campo] || (l[campo] = { n:0, hist:[] }), rot = { corte:'corte concluído', usin:'usinagem concluída', vid:'vidro pronto (colagem)' }[campo];
   const obra = (load('obras').find(o=>o.id===l.obraId)||{}).nome || '';
-  if(modo==='usin' && fabEstagio(l,'corte') < total) return { nivel:'erro', msg:nome+' — o corte ainda não foi concluído ('+fabEstagio(l,'corte')+'/'+total+' barras). Corte antes de usinar.' };
+  fabMigrarPecas();
+  if(modo==='usin' && fabEstagio(l,'corte') < total) return { nivel:'erro', msg:nome+' — o corte ainda não foi concluído ('+fabEstagio(l,'corte')+'/'+total+' peças). Conclua o corte (ou registre a baixa parcial) antes de usinar.' };
   if(est.n >= total){
     const u = (est.hist||[]).filter(h=>!h.desfeito).slice(-1)[0];
     return { nivel:'aviso', msg:nome+' — leitura DUPLICADA: '+rot+' já registrado'+(u?' em '+fabDH(u.em)+' por '+u.por:'')+'. Nada foi somado.' };
   }
   const agora = new Date().toISOString(), quem = expUsuario();
-  est.hist = est.hist || []; est.hist.push({ n:total-est.n, de:est.n, em:agora, por:quem }); est.n = total;
+  est.hist = est.hist || []; est.hist.push({ n:total-est.n, de:est.n, em:agora, por:quem });
+  if(l.tipo==='perfil'){ const ks = fabSubKeys(l); est.sub = est.sub || {}; (l.pecas||[]).forEach((p,i)=>{ est.sub[ks[i]] = { n:p.qtd, pend:null }; }); }
+  est.n = total;
   save('fabLotes', lotes);
   try{ logAtividade(l.obraId, 'fabrica', nome+' — '+rot); }catch(e){}
-  return { nivel:'ok', msg:nome+' — '+rot+(obra?' · '+obra:'')+' ('+total+'/'+total+')' };
+  return { nivel:'ok', msg:nome+' — '+rot+(obra?' · '+obra:'')+' ('+total+'/'+total+(l.tipo==='perfil'?' peças':'')+')' };
 }
 /* ---------- importação ---------- */
 async function fabLer(input, esperado){
@@ -18109,12 +18121,14 @@ function fabLotesFiltrados(){
   const sq = l=>{ const e = fabSeqLote(l, OM); return e ? e.seq : 99999; };
   return load('fabLotes').filter(l=>l.obraId===currentObraId && l.tipo===f.aba && (!f.bloco || l.blocoId===f.bloco)).filter(l=>{
     if(b){ const tx = (l.codigo+' '+(l.perfil||'')+' '+(l.desc||'')+' '+(l.tipoTxt||'')+' '+(l.pos||'')+' '+(l.cor||'')).toLowerCase(); if(!tx.includes(b)) return false; }
-    if(f.st){ const t = fabTotalLote(l); const feito = l.tipo==='perfil' ? (fabEstagio(l,'usin')>=t) : (fabEstagio(l,'vid')>=t); const ini = l.tipo==='perfil' ? (fabEstagio(l,'corte')>0) : (fabEstagio(l,'vid')>0);
+    if(f.st==='pen'){ const t = l.tipo==='perfil' ? [l.corte,l.usin] : [l.vid]; if(!t.some(e=>e && e.sub && Object.values(e.sub).some(x=>x && x.pend))) return false; }
+    else if(f.st){ const t = fabTotalLote(l); const feito = l.tipo==='perfil' ? (fabEstagio(l,'usin')>=t) : (fabEstagio(l,'vid')>=t); const ini = l.tipo==='perfil' ? (fabEstagio(l,'corte')>0) : (fabEstagio(l,'vid')>0);
       if(f.st==='pend' && ini) return false; if(f.st==='and' && (!ini || feito)) return false; if(f.st==='ok' && !feito) return false; }
     return true; }).sort((a,b)=> sq(a)-sq(b) || String(a.codigo).localeCompare(String(b.codigo)));
 }
 function fabAtualizarLotes(){
   const box = document.getElementById('fabLotes'); if(!box) return;
+  try{ fabMigrarPecas(); }catch(e){ console.error(e); }
   const todos = load('fabLotes').filter(l=>l.obraId===currentObraId);
   if(!todos.length){ box.innerHTML = '<div class="step-note">Nenhum perfil ou vidro importado nesta obra ainda. Escolha os PDFs acima — o sistema reconhece sozinho cada tipo de relatório.</div>'; return; }
   const per = todos.filter(l=>l.tipo==='perfil'), vid = todos.filter(l=>l.tipo==='vidro');
@@ -18125,13 +18139,13 @@ function fabAtualizarLotes(){
   const lista = fabLotesFiltrados(), OM = fabOrdemMapa(currentObraId);
   const ordCel = l=>{ const e = fabSeqLote(l, OM); return e&&e.fase ? `<td><b>${e.seq}</b><div style="font-size:10.5px;opacity:.75;">${esc(e.fase)} · ${esc(e.cat)}</div></td>` : '<td style="opacity:.45">—</td>'; };
   const pode = pliTemAcesso();
-  let h = `<div class="kpi-row">${kpi('Perfis cortados (barras)',soma(per,'corte'),tot(per))}${kpi('Perfis usinados (barras)',soma(per,'usin'),tot(per))}${kpi('Vidros prontos (colagem)',soma(vid,'vid'),tot(vid))}</div>
+  let h = `<div class="kpi-row">${kpi('Perfis cortados (peças)',soma(per,'corte'),tot(per))}${kpi('Perfis usinados (peças)',soma(per,'usin'),tot(per))}${kpi('Vidros prontos (colagem)',soma(vid,'vid'),tot(vid))}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center;">
       <button class="btn small ${FAB_UI.aba==='perfil'?'':'secondary'}" onclick="FAB_UI.aba='perfil';fabAtualizarLotes()">Perfis (${per.length})</button>
       <button class="btn small ${FAB_UI.aba==='vidro'?'':'secondary'}" onclick="FAB_UI.aba='vidro';fabAtualizarLotes()">Vidros (${vid.length})</button>
       <input type="text" id="fabBusca" placeholder="Buscar" value="${esc(FAB_UI.busca)}" oninput="FAB_UI.busca=this.value;fabAtualizarLotes();document.getElementById('fabBusca').focus()" style="min-width:160px;">
       <select onchange="FAB_UI.bloco=this.value;fabAtualizarLotes()"><option value="">Todos os blocos</option>${blocos.map(b=>`<option value="${b.id}" ${FAB_UI.bloco===b.id?'selected':''}>${esc(b.nome)}</option>`).join('')}</select>
-      <select onchange="FAB_UI.st=this.value;fabAtualizarLotes()"><option value="">Todos</option><option value="pend" ${FAB_UI.st==='pend'?'selected':''}>Não iniciados</option><option value="and" ${FAB_UI.st==='and'?'selected':''}>Em andamento</option><option value="ok" ${FAB_UI.st==='ok'?'selected':''}>Concluídos</option></select>
+      <select onchange="FAB_UI.st=this.value;fabAtualizarLotes()"><option value="">Todos</option><option value="pend" ${FAB_UI.st==='pend'?'selected':''}>Não iniciados</option><option value="and" ${FAB_UI.st==='and'?'selected':''}>Em andamento</option><option value="pen" ${FAB_UI.st==='pen'?'selected':''}>Com pendência</option><option value="ok" ${FAB_UI.st==='ok'?'selected':''}>Concluídos</option></select>
       ${FAB_UI.aba==='perfil' ? `<button class="btn small" onclick="fabEtiquetas('perfil','corte')">Etiquetas de CORTE</button>
       <button class="btn small" onclick="fabEtiquetas('perfil','usin')">Etiquetas de USINAGEM</button>
       <button class="btn small secondary" onclick="fabListaA4('perfil','corte')">Lista A4 corte</button>
@@ -18141,16 +18155,16 @@ function fabAtualizarLotes(){
     </div>`;
   const cel = (l,c,lbl)=>{ const t = fabTotalLote(l), n = Math.min(fabEstagio(l,c),t), ok = n>=t; return `<td style="text-align:center;${ok?'color:#1f7a3a;font-weight:700;':(n>0?'color:#b26a00;':'')}">${n}/${t} ${ok?'✔':''}<div style="font-size:11px;"><a href="javascript:void(0)" onclick="fabParcial('${l.id}','${c}')">parcial</a>${pode&&n>0?` · <a href="javascript:void(0)" onclick="fabDesfazer('${l.id}','${c}')">desfazer</a>`:''}</div></td>`; };
   if(FAB_UI.aba==='perfil'){
-    h += `<div style="overflow:auto;max-height:420px;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Ordem</th><th>Código</th><th>Perfil</th><th>Descrição</th><th>Bloco</th><th style="text-align:right;">Barras</th><th style="text-align:right;">Peças</th><th>Corte</th><th>Usinagem</th></tr></thead><tbody>`
-      + lista.map(l=>`<tr>${ordCel(l)}<td><b>${esc(l.codigo)}</b></td><td>${esc(l.perfil)}</td><td>${esc(l.desc)}</td><td>${esc(nb(l.blocoId))}</td><td style="text-align:right;">${l.barras}×${l.comp}</td><td style="text-align:right;">${(l.pecas||[]).reduce((s,p)=>s+p.qtd,0)}</td>${cel(l,'corte')}${cel(l,'usin')}</tr>`).join('') + '</tbody></table></div>';
+    h += `<div style="overflow:auto;max-height:420px;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Ordem</th><th>Código</th><th>Perfil</th><th>Descrição</th><th>Bloco</th><th style="text-align:right;">Barras</th><th style="text-align:right;">Peças</th><th>Corte (peças)</th><th>Usinagem (peças)</th></tr></thead><tbody>`
+      + lista.map(l=>`<tr>${ordCel(l)}<td><b>${esc(l.codigo)}</b></td><td>${esc(l.perfil)}</td><td>${esc(l.desc)}${fabSubDetalheHtml(l)}</td><td>${esc(nb(l.blocoId))}</td><td style="text-align:right;">${l.barras}×${l.comp}</td><td style="text-align:right;">${(l.pecas||[]).reduce((s,p)=>s+p.qtd,0)}</td>${cel(l,'corte')}${cel(l,'usin')}</tr>`).join('') + '</tbody></table></div>';
   } else {
     h += `<div style="overflow:auto;max-height:420px;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Ordem</th><th>Código</th><th>Tipo</th><th>Posição</th><th>Vidro</th><th>Bloco</th><th style="text-align:right;">L × H</th><th>Pronto (colagem)</th></tr></thead><tbody>`
       + lista.map(l=>`<tr>${ordCel(l)}<td><b>${esc(l.codigo)}</b></td><td>${esc(l.tipoTxt)}</td><td>${esc(l.pos)}</td><td>${esc(l.cor)}</td><td>${esc(nb(l.blocoId))}</td><td style="text-align:right;">${l.L} × ${l.H}</td>${cel(l,'vid')}</tr>`).join('') + '</tbody></table></div>';
   }
-  h += `<div class="step-note" style="margin-top:6px;">Mostrando ${lista.length} de ${FAB_UI.aba==='perfil'?per.length:vid.length}. Leitura: use os modos <b>A · Corte</b>, <b>B · Usinagem</b> (perfil) e <b>C · Vidro</b> na caixa de leitura acima. Cada código só pode ser baixado <b>uma vez</b> por etapa; o 2º bip é recusado. "Parcial" soma só parte das barras/vidros (nunca acima do total).</div>`;
+  h += `<div class="step-note" style="margin-top:6px;">Mostrando ${lista.length} de ${FAB_UI.aba==='perfil'?per.length:vid.length}. Leitura: use os modos <b>A · Corte</b>, <b>B · Usinagem</b> (perfil) e <b>C · Vidro</b> na caixa de leitura acima. Cada código só pode ser baixado <b>uma vez</b> por etapa; o 2º bip é recusado. "Parcial" abre a lista de sub-itens para informar quantas peças foram concluídas e, nas pendentes, o motivo (peça danificada, corte/usinagem errado, falta de material ou erro de projeto).</div>`;
   box.innerHTML = h;
 }
-function fabParcial(id, campo){
+function fabParcialSimples(id, campo){
   const lotes = load('fabLotes'), l = lotes.find(x=>x.id===id); if(!l) return;
   const t = fabTotalLote(l), est = l[campo] || (l[campo]={n:0,hist:[]}), un = l.tipo==='perfil'?'barras':'vidros';
   const lim = campo==='usin' ? Math.min(t, fabEstagio(l,'corte')) : t;
@@ -18163,12 +18177,64 @@ function fabParcial(id, campo){
   if(campo==='corte' && fabEstagio(l,'usin')>n){ l.usin.n = n; }
   save('fabLotes', lotes); fabAtualizarLotes();
 }
+const FAB_MOTIVOS = ['Peça veio danificada','Corte/usinagem errado','Falta de material','Erro de projeto'];
+function fabPecasTotal(l){ return (l.pecas||[]).reduce((s,p)=>s+(+p.qtd||0),0); }
+function fabSubKeys(l){ const c = {}; return (l.pecas||[]).map(p=>{ const k = [p.tipo,p.tam,p.ang].join('|'); c[k] = (c[k]||0)+1; return c[k]>1 ? k+'#'+c[k] : k; }); }
+function fabSubN(l, campo, k){ const e = l[campo]; return e && e.sub && e.sub[k] ? (+e.sub[k].n||0) : 0; }
+function fabMigrarPecas(){
+  const flag = load('cfgFabPecas'); if(flag && !Array.isArray(flag) && flag.v1) return;
+  const L = load('fabLotes'); let ch = false;
+  L.forEach(l=>{ if(l.tipo!=='perfil' || l.pcv) return; const t = l.barras||1, ks = fabSubKeys(l);
+    ['corte','usin'].forEach(c=>{ const e = l[c]; if(!e || !(e.n>0) || e.sub) return; const r = Math.min(1, e.n/t); e.sub = {}; (l.pecas||[]).forEach((p,i)=>{ e.sub[ks[i]] = { n:Math.round(p.qtd*r), pend:null }; }); e.n = Object.values(e.sub).reduce((s,x)=>s+x.n,0); });
+    l.pcv = 1; ch = true; });
+  if(ch) save('fabLotes', L); save('cfgFabPecas', { v1:1 });
+}
+function fabParcial(id, campo){
+  fabMigrarPecas();
+  const l = load('fabLotes').find(x=>x.id===id); if(!l) return;
+  if(l.tipo!=='perfil') return fabParcialSimples(id, campo);
+  const ks = fabSubKeys(l), nome = campo==='corte' ? 'Corte' : 'Usinagem';
+  const linhas = (l.pecas||[]).map((p,i)=>{
+    const cur = fabSubN(l,campo,ks[i]), lim = campo==='usin' ? Math.min(p.qtd, fabSubN(l,'corte',ks[i])) : p.qtd, pend = ((l[campo]||{}).sub||{})[ks[i]]; const pd = pend && pend.pend || {};
+    return `<tr data-k="${esc(ks[i])}" data-t="${p.qtd}" data-lim="${lim}" data-cur="${cur}"><td>${esc(String(p.tipo).replace(/\\s*-\\s*(H|L|A|-)$/,''))}</td><td style="text-align:right;">${p.tam}</td><td style="text-align:right;">${p.qtd}</td>
+      <td><input type="number" min="0" max="${lim}" value="${cur}" style="width:70px;" oninput="fabParcialLinha(this.closest('tr'))"></td>
+      <td><select style="min-width:170px;"><option value="">— motivo —</option>${FAB_MOTIVOS.map(m=>`<option ${pd.motivo===m?'selected':''}>${esc(m)}</option>`).join('')}</select> <input type="text" placeholder="observação" value="${esc(pd.nota||'')}" style="width:140px;"></td></tr>`; }).join('');
+  qsModal(nome+' — perfil '+l.perfil+' '+(l.desc||''), `<div class="step-note" style="margin-bottom:8px;">Informe quantas peças de cada sub-item estão concluídas${campo==='usin'?' (limitado ao que já foi cortado)':''}. Para o que ficar pendente, escolha o motivo.</div>
+    <div style="max-height:380px;overflow:auto;"><table class="data-table" style="font-size:12px;"><thead><tr><th>Sub-item (tipo)</th><th style="text-align:right;">Tamanho</th><th style="text-align:right;">Total</th><th>Concluídas</th><th>Pendência — motivo</th></tr></thead><tbody id="fabParcBody">${linhas}</tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"><button class="btn" onclick="fabParcialSalvar('${id}','${campo}')">Salvar baixa</button><button class="btn secondary" onclick="document.querySelectorAll('#fabParcBody tr').forEach(r=>{r.querySelector('input').value=r.dataset.lim;fabParcialLinha(r);})">Marcar tudo como concluído</button><button class="btn secondary" onclick="closeModal('modalQS')">Cancelar</button></div>`);
+  document.querySelectorAll('#fabParcBody tr').forEach(fabParcialLinha);
+}
+function fabParcialLinha(tr){ const n = +tr.querySelector('input').value||0, lim = +tr.dataset.lim; const sel = tr.querySelector('select'), obs = tr.querySelector('input[type=text]'); const pend = n < lim; sel.style.visibility = obs.style.visibility = pend ? 'visible' : 'hidden'; }
+function fabParcialSalvar(id, campo){
+  const lotes = load('fabLotes'), l = lotes.find(x=>x.id===id); if(!l) return;
+  const est = l[campo] || (l[campo] = { n:0, hist:[] }), ks = fabSubKeys(l); est.sub = est.sub || {};
+  const rows = [...document.querySelectorAll('#fabParcBody tr')], agora = new Date().toISOString(), quem = expUsuario(); let soma = 0, erro = '';
+  const novo = {};
+  rows.forEach(r=>{ const k = r.dataset.k, t = +r.dataset.t, lim = +r.dataset.lim, n = Math.round(+r.querySelector('input').value||0);
+    if(n<0 || n>lim){ erro = 'Valor inválido em '+k.split('|')[0]+': informe de 0 a '+lim+'.'; return; }
+    const antes = fabSubN(l,campo,k); if(n<antes && !pliTemAcesso()){ erro = 'Só Gerente ou Coordenador pode reduzir uma baixa.'; return; }
+    const motivo = r.querySelector('select').value, nota = r.querySelector('input[type=text]').value.trim();
+    if(n<lim && !motivo){ erro = 'Informe o motivo da pendência em '+k.split('|')[0]+' ('+(lim-n)+' peça(s)).'; return; }
+    novo[k] = { n, pend: n<t ? { qtd:t-n, motivo: n<lim ? motivo : 'Aguardando corte', nota, em:agora, por:quem } : null }; });
+  if(erro){ toast(erro); return; }
+  const antesTot = est.n||0; ks.forEach(k=>{ if(novo[k]) est.sub[k] = novo[k]; soma += fabSubN(l,campo,k); });
+  est.n = soma; est.hist = est.hist || []; if(soma!==antesTot) est.hist.push({ n:soma-antesTot, de:antesTot, em:agora, por:quem, manual:true, parcial:soma<fabPecasTotal(l) });
+  if(campo==='corte' && l.usin && l.usin.sub){ let su = 0; ks.forEach(k=>{ const c = fabSubN(l,'corte',k); const u = l.usin.sub[k]; if(u && u.n>c){ u.n = c; } su += u?u.n:0; }); l.usin.n = su; }
+  save('fabLotes', lotes); closeModal('modalQS'); fabAtualizarLotes(); toast('Baixa registrada: '+soma+' de '+fabPecasTotal(l)+' peças.');
+}
+function fabSubDetalheHtml(l){
+  const ks = fabSubKeys(l), un = [];
+  const linhas = (l.pecas||[]).map((p,i)=>{ const c = fabSubN(l,'corte',ks[i]), u = fabSubN(l,'usin',ks[i]); const pd = [((l.corte||{}).sub||{})[ks[i]], ((l.usin||{}).sub||{})[ks[i]]].map((x,j)=> x&&x.pend ? (j?'Usin.: ':'Corte: ')+x.pend.qtd+' pç — '+esc(x.pend.motivo)+(x.pend.nota?' ('+esc(x.pend.nota)+')':'') : '').filter(Boolean);
+    if(pd.length) un.push(pd.length); return `<tr><td>${esc(String(p.tipo).replace(/\\s*-\\s*(H|L|A|-)$/,''))}</td><td style="text-align:right;">${p.tam}</td><td style="text-align:right;">${p.qtd}</td><td style="text-align:center;">${c}/${p.qtd}</td><td style="text-align:center;">${u}/${p.qtd}</td><td style="color:#b26a00;">${pd.join('<br>')}</td></tr>`; }).join('');
+  return `<details style="margin-top:3px;"><summary style="cursor:pointer;font-size:11px;">${(l.pecas||[]).length} sub-itens${un.length?' · <b style="color:#b26a00;">'+un.length+' com pendência</b>':''}</summary><table class="data-table" style="font-size:11px;margin-top:4px;"><thead><tr><th>Tipo</th><th>Tamanho</th><th>Qtd</th><th>Corte</th><th>Usin.</th><th>Pendência</th></tr></thead><tbody>${linhas}</tbody></table></details>`;
+}
+
 function fabDesfazer(id, campo){
   if(!pliTemAcesso()){ toast('Só Gerente ou Coordenador pode desfazer uma baixa.'); return; }
   const lotes = load('fabLotes'), l = lotes.find(x=>x.id===id); if(!l) return;
   if(!confirm('Desfazer a baixa de '+(campo==='corte'?'corte':campo==='usin'?'usinagem':'vidro')+' deste item? Fica registrado quem desfez.')) return;
-  const est = l[campo]; est.hist = est.hist || []; est.hist.push({ n:-est.n, de:est.n, em:new Date().toISOString(), por:expUsuario(), desfeito:true }); est.n = 0;
-  if(campo==='corte' && l.usin){ l.usin.hist.push({ n:-l.usin.n, de:l.usin.n, em:new Date().toISOString(), por:expUsuario(), desfeito:true }); l.usin.n = 0; }
+  const est = l[campo]; est.hist = est.hist || []; est.hist.push({ n:-est.n, de:est.n, em:new Date().toISOString(), por:expUsuario(), desfeito:true }); est.n = 0; est.sub = {};
+  if(campo==='corte' && l.usin){ l.usin.hist.push({ n:-l.usin.n, de:l.usin.n, em:new Date().toISOString(), por:expUsuario(), desfeito:true }); l.usin.n = 0; l.usin.sub = {}; }
   save('fabLotes', lotes); fabAtualizarLotes();
 }
 function fabApagarSemBaixa(){
@@ -18295,12 +18361,12 @@ function fabCatReclassificar(){
   if(!confirm('Reclassificar a categoria de TODOS os tipos pelo nome do modelo do CEM Pro (sobrescreve o que você mudou à mão)?')) return;
   const lista = load('fabOrdem'); lista.forEach(e=>{ if(e.obraId===currentObraId) e.cat = fabClassCat(e.modelo, e.tipo); }); save('fabOrdem', lista); fabOrdemRender(); fabAtualizarLotes();
 }
-function fabCtx(obraId){ return { lotes:load('fabLotes').filter(l=>l.obraId===obraId), itens:load('itensObra').filter(i=>i.obraId===obraId && itemAtivo(i)) }; }
+function fabCtx(obraId){ try{ fabMigrarPecas(); }catch(e){} return { lotes:load('fabLotes').filter(l=>l.obraId===obraId), itens:load('itensObra').filter(i=>i.obraId===obraId && itemAtivo(i)) }; }
 function fabMetTipo(ctx, blocoId, key){
   let pc = 0, pcC = 0, pcU = 0, vq = 0, vn = 0;
   ctx.lotes.forEach(l=>{
     if(l.blocoId!==blocoId) return;
-    if(l.tipo==='perfil'){ const t = l.barras||1; (l.pecas||[]).forEach(p=>{ if(p.key!==key) return; pc += p.qtd; pcC += p.qtd*Math.min(1,fabEstagio(l,'corte')/t); pcU += p.qtd*Math.min(1,fabEstagio(l,'usin')/t); }); }
+    if(l.tipo==='perfil'){ const ks = fabSubKeys(l); (l.pecas||[]).forEach((p,i)=>{ if(p.key!==key) return; pc += p.qtd; pcC += Math.min(p.qtd, fabSubN(l,'corte',ks[i])); pcU += Math.min(p.qtd, fabSubN(l,'usin',ks[i])); }); }
     else if(l.key===key){ vq += l.qtd; vn += Math.min(fabEstagio(l,'vid'), l.qtd); }
   });
   const it = ctx.itens.find(i=>i.blocoId===blocoId && (i.chaveCem===key || fabKey(i.nomenclatura)===key));
