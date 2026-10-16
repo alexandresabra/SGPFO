@@ -17924,13 +17924,15 @@ function fabParseMontagem(rows){
   }
   return [...out.values()];
 }
-async function fabLerArquivos(files, pdfjs){
+async function fabLerArquivos(files, pdfjs, esperado){
   const res = { itens:[], cortes:[], vidros:[], montagem:[], arquivos:[], avisos:[] };
   for(const f of files){
     try{
       const buf = await f.arrayBuffer(); const doc = await pdfjs.getDocument({ data:new Uint8Array(buf) }).promise;
       const rows = await fabPdfRows(doc), tipo = fabClassificar(rows);
-      if(!tipo){ res.avisos.push(f.name+': relatório não reconhecido (esperado: Itens, Cortes/Conferência, Vidros ou Montagem do CEM Pro).'); continue; }
+      const NOME_T = { itens:'Itens da Obra', cortes:'Padrão de Cortes (Orientativo de Corte)', vidros:'Relação de Vidros', montagem:'Montagem' };
+      if(!tipo){ res.avisos.push(f.name+': relatório não reconhecido'+(esperado?' como '+NOME_T[esperado]:'')+'. Nada foi importado deste arquivo.'); continue; }
+      if(esperado && tipo!==esperado){ res.avisos.push(f.name+': este arquivo parece ser "'+NOME_T[tipo]+'", mas você escolheu importar "'+NOME_T[esperado]+'". Nada foi importado deste arquivo.'+(esperado==='cortes' && tipo==='montagem' ? ' Para corte e usinagem use o relatório "Padrão de Cortes" (o "Orientativo de Corte", com Barras e Tamanho por perfil).' : '')); continue; }
       if(tipo==='itens') res.itens = res.itens.concat(fabParseItens(rows));
       if(tipo==='cortes'){ const novos = fabParseCortes(rows); novos.forEach(n=>{ const j = res.cortes.find(x=>x.perfil===n.perfil); if(!j) res.cortes.push(n); }); }
       if(tipo==='vidros') res.vidros = res.vidros.concat(fabParseVidros(rows));
@@ -17995,12 +17997,12 @@ function fabProcessarLote(txt, modo){
   return { nivel:'ok', msg:nome+' — '+rot+(obra?' · '+obra:'')+' ('+total+'/'+total+')' };
 }
 /* ---------- importação ---------- */
-async function fabLer(input){
+async function fabLer(input, esperado){
   const files = [...(input.files||[])]; if(!files.length) return;
   const st = document.getElementById('fabImpStatus'); if(st) st.textContent = 'Lendo '+files.length+' arquivo(s)...';
   try{
     const pdfjs = await fabCarregarPdfJs();
-    FAB_UI.imp = await fabLerArquivos(files, pdfjs);
+    FAB_UI.imp = await fabLerArquivos(files, pdfjs, esperado); FAB_UI.imp.esperado = esperado||'';
   }catch(e){ if(st) st.innerHTML = '<span style="color:#a80e26">'+esc(e.message||String(e))+'</span>'; input.value=''; return; }
   input.value = '';
   if(st) st.textContent = '';
@@ -18011,17 +18013,18 @@ function fabAnaliseImport(){
   const blocoSel = (document.getElementById('fabBloco')||{}).value || '';
   const existentes = (blocoSel && blocoSel!=='__novo__') ? load('itensObra').filter(it=>it.obraId===currentObraId && it.blocoId===blocoSel) : [];
   const chaveEx = new Set(existentes.map(it=>fabKey(it.nomenclatura)));
-  const keys = new Set(I.itens.map(x=>x.key));
+  const keys = new Set(I.itens.map(x=>x.key)); load('itensObra').filter(it=>it.obraId===currentObraId).forEach(it=>{ keys.add(it.chaveCem||fabKey(it.nomenclatura)); });
   const semItemCorte = new Set(); I.cortes.forEach(c=>c.pecas.forEach(p=>{ if(!keys.has(p.key)) semItemCorte.add(p.tipo.replace(/\s*-\s*(H|L|A|-)$/,'')); }));
   const semItemVidro = new Set(I.vidros.filter(v=>!keys.has(v.key)).map(v=>v.tipo));
   const semItemMont = I.montagem.filter(m=>!keys.has(m.key));
-  const divMont = I.montagem.filter(m=>{ const it = I.itens.find(x=>x.key===m.key); return it && it.qtd!==m.qtd; });
+  const itRef = k=>{ const a = I.itens.find(x=>x.key===k); if(a) return { qtd:a.qtd }; const c = load('itensObra').find(it=>it.obraId===currentObraId && (it.chaveCem||fabKey(it.nomenclatura))===k && (!blocoSel||blocoSel==='__novo__'||it.blocoId===blocoSel)); return c ? { qtd:qtdTotalLocalizacoes(c) } : null; };
+  const divMont = I.montagem.filter(m=>{ const it = itRef(m.key); return it && it.qtd!==m.qtd; });
   return { novos:I.itens.filter(x=>!chaveEx.has(x.key)).length, jaExistem:I.itens.filter(x=>chaveEx.has(x.key)).length, semItemCorte:[...semItemCorte], semItemVidro:[...semItemVidro], semItemMont, divMont };
 }
 function fabRenderPreview(){
   const box = document.getElementById('fabPreview'); if(!box) return;
   const I = FAB_UI.imp; if(!I){ box.innerHTML = ''; return; }
-  const A = fabAnaliseImport();
+  const A = fabAnaliseImport(), E = I.esperado||'', vazio = !I.itens.length&&!I.cortes.length&&!I.vidros.length&&!I.montagem.length, sh = k=>!vazio&&(!E||E===k), temCad = load('itensObra').some(it=>it.obraId===currentObraId);
   const barras = I.cortes.reduce((s,c)=>s+c.barras,0), vid = I.vidros.reduce((s,v)=>s+v.qtd,0), esq = I.itens.reduce((s,x)=>s+x.qtd,0);
   const lista = (arr,max)=> arr.slice(0,max).map(x=>esc(x)).join(' · ') + (arr.length>max?' … +'+(arr.length-max):'');
   const li = (ok, txt)=>`<div style="padding:2px 0;color:${ok?'#1f7a3a':'#b26a00'};">${ok?'✔':'⚠'} ${txt}</div>`;
@@ -18030,15 +18033,15 @@ function fabRenderPreview(){
     ${I.arquivos.map(a=>`<div style="font-size:12.5px;">📄 ${esc(a.nome)} — <b>${{itens:'Itens da obra',cortes:'Cortes / Conferência de cortes',vidros:'Relação de vidros',montagem:'Montagem'}[a.tipo]}</b> (${a.paginas} pág.)</div>`).join('')}
     ${I.avisos.map(a=>`<div style="color:#a80e26;font-size:12.5px;">✖ ${esc(a)}</div>`).join('')}
     <div style="margin-top:8px;">
-      ${li(I.itens.length>0, 'Esquadrias: <b>'+I.itens.length+'</b> tipos · <b>'+esq+'</b> unidades'+(I.itens.length?' — <b>'+A.jaExistem+'</b> já cadastrados no bloco (não serão alterados), <b>'+A.novos+'</b> sem cadastro':' — importe também o relatório de Itens'))}
-      ${I.itens.length&&A.novos>0?`<label style="display:block;font-size:12.5px;margin:2px 0 6px 18px;"><input type="checkbox" id="fabCriarEsq" ${A.jaExistem===0?'checked':''}> Criar no cadastro as <b>${A.novos}</b> esquadria(s) que ainda não existem neste bloco (as já cadastradas nunca são alteradas)</label>`:''}
-      ${li(I.cortes.length>0, 'Perfis: <b>'+I.cortes.length+'</b> (um código por perfil) · <b>'+fabFmt(barras)+'</b> barras')}
-      ${li(I.vidros.length>0, 'Vidros: <b>'+I.vidros.length+'</b> linhas · <b>'+fabFmt(vid)+'</b> vidros')}
-      ${I.montagem.length?li(!A.semItemMont.length && !A.divMont.length, 'Montagem: <b>'+I.montagem.length+'</b> modelo(s) lido(s)'+(A.divMont.length?' · quantidade diferente do relatório de Itens em: '+lista(A.divMont.map(m=>m.tipo),5):'')+(A.semItemMont.length?' · sem item: '+lista(A.semItemMont.map(m=>m.tipo),5):'')):''}
-      ${I.itens.length?li(!A.semItemCorte.length, A.semItemCorte.length?'Peças de corte de tipos que não estão no relatório de Itens: '+lista(A.semItemCorte,10):'Todas as peças de corte ligam a um tipo de esquadria'):''}
-      ${I.itens.length?li(!A.semItemVidro.length, A.semItemVidro.length?'Vidros de tipos que não estão no relatório de Itens: '+lista(A.semItemVidro,10):'Todos os vidros ligam a um tipo de esquadria'):''}
+      ${sh('itens')?li(I.itens.length>0, 'Esquadrias: <b>'+I.itens.length+'</b> tipos · <b>'+esq+'</b> unidades'+(I.itens.length?' — <b>'+A.jaExistem+'</b> já cadastrados no bloco (não serão alterados), <b>'+A.novos+'</b> sem cadastro':'')):''}
+      ${sh('itens')&&I.itens.length&&A.novos>0?`<label style="display:block;font-size:12.5px;margin:2px 0 6px 18px;"><input type="checkbox" id="fabCriarEsq" ${A.jaExistem===0?'checked':''}> Criar no cadastro as <b>${A.novos}</b> esquadria(s) que ainda não existem neste bloco (as já cadastradas nunca são alteradas)</label>`:''}
+      ${sh('cortes')?li(I.cortes.length>0, 'Perfis: <b>'+I.cortes.length+'</b> (um código por perfil, usado nas etiquetas de corte e de usinagem) · <b>'+fabFmt(barras)+'</b> barras · <b>'+I.cortes.reduce((a,c)=>a+c.pecas.length,0)+'</b> sub-itens'):''}
+      ${sh('vidros')?li(I.vidros.length>0, 'Vidros: <b>'+I.vidros.length+'</b> linhas · <b>'+fabFmt(vid)+'</b> vidros'):''}
+      ${sh('montagem')&&I.montagem.length?li(!A.semItemMont.length && !A.divMont.length, 'Montagem: <b>'+I.montagem.length+'</b> modelo(s) lido(s)'+(A.divMont.length?' · quantidade diferente do relatório de Itens em: '+lista(A.divMont.map(m=>m.tipo),5):'')+(A.semItemMont.length?' · sem item: '+lista(A.semItemMont.map(m=>m.tipo),5):'')):''}
+      ${(sh('cortes')&&(I.itens.length||temCad))?li(!A.semItemCorte.length, A.semItemCorte.length?'Peças de corte de tipos que não estão no relatório de Itens: '+lista(A.semItemCorte,10):'Todas as peças de corte ligam a um tipo de esquadria'):''}
+      ${(sh('vidros')&&(I.itens.length||temCad))?li(!A.semItemVidro.length, A.semItemVidro.length?'Vidros de tipos que não estão no relatório de Itens: '+lista(A.semItemVidro,10):'Todos os vidros ligam a um tipo de esquadria'):''}
     </div>
-    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn" onclick="fabConfirmar()">Confirmar importação</button><button class="btn secondary" onclick="FAB_UI.imp=null;fabRenderPreview()">Descartar</button></div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${vazio?'':'<button class="btn" onclick="fabConfirmar()">Confirmar importação</button>'}<button class="btn secondary" onclick="FAB_UI.imp=null;fabRenderPreview()">${vazio?'Fechar':'Descartar'}</button></div>
     <div class="step-note">A importação <b>não altera</b> nenhuma esquadria já cadastrada (medidas, pesos, quantidades, progresso). Importar de novo o mesmo relatório não duplica: perfis e vidros já importados mantêm código e baixas; o que for novo é acrescentado.</div></div>`;
 }
 function fabConfirmar(){
@@ -18094,7 +18097,7 @@ function fabPainelHtml(){
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
       <label style="font-size:12px;">Bloco<br><select id="fabBloco" onchange="fabRenderPreview()" style="min-width:160px;"><option value="__novo__">+ Novo bloco…</option>${blocos.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')}</select></label>
       <label style="font-size:12px;">Nome do bloco novo<br><input type="text" id="fabBlocoNovo" placeholder="ex.: BL5" style="width:120px;"></label>
-      <label class="btn" style="cursor:pointer;">Escolher PDFs (Itens, Cortes, Vidros, Montagem)<input type="file" accept=".pdf,application/pdf" multiple style="display:none" onchange="fabLer(this)"></label>
+      ${[['itens','1 · Itens (esquadrias)'],['cortes','2 · Padrão de Cortes (corte e usinagem)'],['vidros','3 · Relação de Vidros'],['montagem','4 · Montagem']].map(([k,t])=>`<label class="btn secondary" style="cursor:pointer;">${t}<input type="file" accept=".pdf,application/pdf" multiple style="display:none" onchange="fabLer(this,'${k}')"></label>`).join('')}
       <span id="fabImpStatus" style="font-size:12px;"></span>
     </div>
     <div id="fabPreview"></div>
@@ -19716,7 +19719,7 @@ let PROJ_IMP = null;
 async function projLerRelatorio(input){
   const files = [...(input.files||[])]; if(!files.length) return;
   toast('Lendo relatório…');
-  try{ const pdfjs = await fabCarregarPdfJs(); const r = await fabLerArquivos(files, pdfjs); PROJ_IMP = r; }
+  try{ const pdfjs = await fabCarregarPdfJs(); const r = await fabLerArquivos(files, pdfjs, 'itens'); PROJ_IMP = r; }
   catch(e){ toast('Erro: '+(e.message||e)); input.value=''; return; }
   input.value = '';
   const I = PROJ_IMP; if(!I.itens.length){ toast((I.avisos[0])||'Nenhum item encontrado. Use o "Relatório de Itens da Obra" do CEM Pro.'); return; }
