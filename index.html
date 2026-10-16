@@ -17006,7 +17006,7 @@ function cfGraficoSVG(D){
   g+=`<polyline points="${pts(D.acRP)}" fill="none" stroke="${cor}" stroke-width="2" stroke-dasharray="5 4" opacity=".75"/>`;
   g+=`<polyline points="${pts(D.acR)}" fill="none" stroke="${cor}" stroke-width="2.6"/>`;
   const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:980px;height:auto;display:block;margin:0 auto;color:var(--text,#222);" role="img" aria-label="Curva S financeira acumulada">${g}</svg>`;
 }
 // Curva S de um único grupo de custo (materiais, mão de obra...), com o mesmo desenho da curva geral.
 function cfGraficoGrupo(D, k){
@@ -17076,7 +17076,7 @@ function cfExecucaoSVG(E){
   g+=`<polyline points="${pts(E.instR)}" fill="none" stroke="#1565c0" stroke-width="1.6" opacity=".85"/>`;
   g+=`<polyline points="${pts(E.real)}" fill="none" stroke="currentColor" stroke-width="2.8"/>`;
   const hi = E.meses.indexOf(E.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S de execução física">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:980px;height:auto;display:block;margin:0 auto;color:var(--text,#222);" role="img" aria-label="Curva S de execução física">${g}</svg>`;
 }
 function cfExecucaoHtml(obraId){
   const E = cfExecucaoDados(obraId);
@@ -17397,18 +17397,18 @@ function instDados(ob){
   return { ob, S, meses, planAc, planMes, realAc, realMes, proj, fases, totKg, planHoje, pctReal, real, ritmo, resta, fimProj, iniPlan, fimPlan, hoje, hojeM, efetivo:ob.prem&&ob.prem.efetivo };
 }
 function instSvg(D){
-  const W=760, H=300, pl=44, pr=14, pt=14, pb=34, n=D.meses.length;
+  const W=760, H=300, pl=44, pr=34, pt=14, pb=34, n=D.meses.length;
   const X = i => pl + (n>1 ? i*(W-pl-pr)/(n-1) : (W-pl-pr)/2), Y = v => pt + (H-pt-pb)*(1-v/100);
   let g='';
   [0,25,50,75,100].forEach(v=>{ g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".12"/><text x="${pl-6}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v}%</text>`; });
   D.meses.forEach((m,i)=>{ if(i%Math.ceil(n/12)===0) g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${mesLabelCurto(m)}</text>`; });
   const pts = a => a.map((v,i)=>v==null?null:`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(' ');
-  const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${pt+10}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
+  const hi = D.meses.indexOf(D.hojeM); if(hi>=0) g+=`<line x1="${X(hi)}" x2="${X(hi)}" y1="${pt}" y2="${H-pb}" stroke="currentColor" opacity=".3"/><text x="${X(hi)+4}" y="${H-pb-6}" font-size="10" fill="currentColor" opacity=".7">hoje</text>`;
   g+=`<polyline points="${pts(D.planAc)}" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4" opacity=".75"/>`;
   if(D.proj) g+=`<polyline points="${pts(D.proj)}" fill="none" stroke="#e08a00" stroke-width="2" stroke-dasharray="2 3"/>`;
   g+=`<polyline points="${pts(D.realAc)}" fill="none" stroke="#1565c0" stroke-width="2.8"/>`;
   g+=`<g font-size="10.5" fill="currentColor"><line x1="${pl+8}" x2="${pl+30}" y1="${pt+8}" y2="${pt+8}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4"/><text x="${pl+34}" y="${pt+12}">Planejado</text><line x1="${pl+110}" x2="${pl+132}" y1="${pt+8}" y2="${pt+8}" stroke="#1565c0" stroke-width="2.8"/><text x="${pl+136}" y="${pt+12}">Realizado</text>${D.proj?`<line x1="${pl+210}" x2="${pl+232}" y1="${pt+8}" y2="${pt+8}" stroke="#e08a00" stroke-width="2" stroke-dasharray="2 3"/><text x="${pl+236}" y="${pt+12}">Projeção no ritmo atual</text>`:''}</g>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--text,#222);" role="img" aria-label="Curva S de instalação">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:980px;height:auto;display:block;margin:0 auto;color:var(--text,#222);" role="img" aria-label="Curva S de instalação">${g}</svg>`;
 }
 const INST_COR = { 'Concluída':'#2e7d32', 'Em andamento':'#1565c0', 'Atrasada':'#c62828', 'Não iniciada':'#777' };
 function instKpisHtml(D){
@@ -18973,14 +18973,11 @@ function deleteEntrada(pedidoId, itemId, entregaId){
 
 // Projetos: checklist com fases gerais + uma seção exclusiva "Contramarcos"
 const PROJETO_FASES = [
-  { key: 'pjAprov', label: 'Projeto de Aprovação' },
-  { key: 'pjBarras', label: 'Lista de Material — Relação de Barras' },
-  { key: 'pjComp', label: 'Lista de Material — Relação de Componentes' },
-  { key: 'pjVidros', label: 'Lista de Material — Relação de Vidros' },
-  { key: 'pjFabric', label: 'Projeto de Fabricação' },
-  { key: 'pjCorte', label: 'Lista Fábrica — Orientativo de Corte' },
-  { key: 'pjUsin', label: 'Lista Fábrica — Usinagem' },
-  { key: 'pjMont', label: 'Lista Fábrica — Montagem' }
+  { key: 'pjOrc', label: '1. Orçamento / Levantamento Inicial' },
+  { key: 'pjAprov', label: '2. Projeto de Aprovação' },
+  { key: 'pjMat', label: '3. Lista de Material para Compra (Alumínio, Vidros e Componentes)' },
+  { key: 'pjFabric', label: '4. Projeto de Fabricação' },
+  { key: 'pjListas', label: '5. Listas de Corte / Montagem' }
 ];
 const PROJETO_SECOES = [];
 
@@ -19650,7 +19647,22 @@ function projTarefaChecklistHtml(t, item){
 }
 
 /* ===== Projeto por fase: migração das etapas, painel e importação do relatório de itens ===== */
-function projMigrarEtapas(){
+function projMigrarV3(){
+  const f3 = load('cfgProjEtapas');
+  if(!(f3 && !Array.isArray(f3) && f3.v3)){
+    const its = load('itensObra'); let ch3 = false;
+    const junta = (p, ks)=>{ const v = ks.map(k=>p[k]||'pendente').filter(x=>x!=='na'); if(!v.length) return ks.every(k=>p[k]==='na') ? 'na' : undefined; return v.every(x=>x==='ok') ? 'ok' : undefined; };
+    its.forEach(it=>{ const p = it.projeto || (it.projeto = {}); if(p.__v3) return;
+      const vm = junta(p, ['pjBarras','pjComp','pjVidros']); if(vm && p.pjMat===undefined) p.pjMat = vm;
+      const vl = junta(p, ['pjCorte','pjUsin','pjMont']); if(vl && p.pjListas===undefined) p.pjListas = vl;
+      if(p.listaMaterial==='ok' && p.pjMat===undefined && p.pjBarras===undefined) p.pjMat = 'ok';
+      p.__v3 = 1; ch3 = true; });
+    if(ch3) save('itensObra', its);
+    const cur = load('cfgProjEtapas'); save('cfgProjEtapas', Object.assign({}, (cur && !Array.isArray(cur)) ? cur : {}, { v3:1 }));
+  }
+}
+function projMigrarEtapas(){ projMigrarV2(); projMigrarV3(); }
+function projMigrarV2(){
   const flag = load('cfgProjEtapas'); if(flag && !Array.isArray(flag) && flag.v2) return;
   const itens = load('itensObra'); let ch = false;
   itens.forEach(it=>{
@@ -19660,7 +19672,7 @@ function projMigrarEtapas(){
     p.__v2 = 1; ch = true;
   });
   if(ch) save('itensObra', itens);
-  save('cfgProjEtapas', { v2:1 });
+  save('cfgProjEtapas', Object.assign({}, load('cfgProjEtapas') && !Array.isArray(load('cfgProjEtapas')) ? load('cfgProjEtapas') : {}, { v2:1 }));
 }
 function projFasesTipo(obraId){
   const OM = fabOrdemMapa(obraId); return { OM, de: it=>{ const e = OM.map.get(it.blocoId+'|'+(it.chaveCem||fabKey(it.nomenclatura))); return e ? (e.fase||'') : ''; } };
