@@ -668,10 +668,15 @@
   #almoxApp .ac-empty{ padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
   #almoxApp .info-chip{ background: var(--card2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-dim); margin-top: 4px; display: none; }
 
-  .inst-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px;margin:10px 0 0;align-items:start;}
+  .inst-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:12px;margin:10px 0 0;align-items:start;}
+  .inst-grid .inst-fases{grid-column:1/-1;}
+  @media(min-width:1350px){.inst-grid{grid-template-columns:minmax(0,.85fr) minmax(0,1.1fr) minmax(0,1.55fr);}.inst-grid .inst-fases{grid-column:auto;}}
   @media(max-width:1100px){.inst-grid{grid-template-columns:minmax(0,1fr);}}
-  .inst-t th,.inst-t td{padding:4px 10px;white-space:nowrap;}
-  .inst-t.inst-f td:nth-child(2),.inst-t.inst-f th:nth-child(2){white-space:normal;width:100%;}
+  .inst-t{width:100%;}
+  .inst-t.inst-f{font-size:11px !important;}
+  .inst-t.inst-f th,.inst-t.inst-f td{padding:3px 4px;}
+  .inst-t th,.inst-t td{padding:3px 4px;white-space:nowrap;}
+  .inst-t.inst-f td:nth-child(2),.inst-t.inst-f th:nth-child(2){white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis;}
 </style>
 </head>
 <body>
@@ -2128,8 +2133,8 @@
           <div class="inst-grid">
             <div class="card" style="padding:12px;margin:0;min-width:0;"><h3 style="margin:0 0 6px;font-size:15px;">Curva S de instalação (kg acumulado)</h3><div id="instGrafico"></div></div>
             <div class="card" style="padding:12px;margin:0;min-width:0;"><h3 style="margin:0 0 6px;font-size:15px;">Mensal</h3><div id="instMensal" style="max-height:420px;overflow:auto;"></div></div>
+            <div class="card inst-fases" style="padding:12px;margin:0;min-width:0;"><h3 style="margin:0 0 6px;font-size:15px;">Fases</h3><div id="instFases"></div></div>
           </div>
-          <div class="card" style="padding:12px;margin:12px 0 0;"><h3 style="margin:0 0 6px;font-size:15px;">Fases</h3><div id="instFases"></div></div>
         </div>
       </section>
       <section class="section" id="sec-pcp">
@@ -17434,7 +17439,7 @@ function instKpisHtml(D){
 }
 function instTabelaFases(D){
   let h = `<div style="overflow:auto;"><table class="data-table inst-t inst-f" style="font-size:12px;"><thead><tr><th>Fase</th><th>Descrição</th><th style="text-align:right;">Peso (kg)</th><th>Início</th><th>Fim</th><th style="text-align:right;">Plan. hoje</th><th style="text-align:right;">Realizado</th><th style="text-align:right;">Instalado (kg)</th><th>Situação</th></tr></thead><tbody>`;
-  D.fases.forEach(f=>{ h += `<tr><td><b>${esc(String(f.cod))}</b></td><td>${esc(f.desc)}</td><td style="text-align:right;">${Math.round(f.kg).toLocaleString('pt-BR')}</td><td>${pliFmtData(f.ini)}</td><td>${pliFmtData(f.fim)}</td><td style="text-align:right;">${pliFmtT(f.planHoje,0)}%</td><td style="text-align:right;"><b>${pliFmtT(f.pctReal,0)}%</b></td><td style="text-align:right;">${Math.round(f.kgReal).toLocaleString('pt-BR')}</td><td><span style="color:#fff;background:${INST_COR[f.status]};border-radius:10px;padding:1px 8px;font-size:11px;white-space:nowrap;">${f.status}</span></td></tr>`; });
+  D.fases.forEach(f=>{ h += `<tr><td><b>${esc(String(f.cod))}</b></td><td title="${esc(f.desc)}">${esc(f.desc)}</td><td style="text-align:right;">${Math.round(f.kg).toLocaleString('pt-BR')}</td><td>${pliFmtData(f.ini)}</td><td>${pliFmtData(f.fim)}</td><td style="text-align:right;">${pliFmtT(f.planHoje,0)}%</td><td style="text-align:right;"><b>${pliFmtT(f.pctReal,0)}%</b></td><td style="text-align:right;">${Math.round(f.kgReal).toLocaleString('pt-BR')}</td><td><span style="color:#fff;background:${INST_COR[f.status]};border-radius:10px;padding:1px 8px;font-size:11px;white-space:nowrap;">${f.status}</span></td></tr>`; });
   if(D.real.semFase>0) h += `<tr><td colspan="7" style="opacity:.7;">Instalado sem fase definida na Ordem de produção</td><td style="text-align:right;">${Math.round(D.real.semFase).toLocaleString('pt-BR')}</td><td></td></tr>`;
   return h + '</tbody></table></div>';
 }
