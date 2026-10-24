@@ -9910,7 +9910,7 @@ function pliAutoReajuste(){
   }catch(e){ console.error('Reajuste Wave', e); }
 }
 /* ---------- marcos (investidor · habite-se · obra), cenários e capacidade ---------- */
-const PLC_MARCOS = [['inv','Entrega ao investidor'],['hab','Habite-se'],['obra','Obra']];
+const PLC_MARCOS = [['obra','Deadline de obra']];
 /* fator da mão de obra de instalação por fase (1 = 100%). Way: brise (BRI) = 50% por padrão. */
 /* Custo da instalação: 'fixa' = equipe cheia (efetivo) em todos os meses entre o 1º e o último dia de instalação (modelo da planilha);
    'carga' = só as pessoas que a carga do mês exige (t instaladas ÷ produtividade), limitadas ao efetivo. Padrão de todas as obras: carga. */
@@ -10061,18 +10061,20 @@ function plcEdSalvar(){
   if(cods.some(x=>!x) || new Set(cods).size !== cods.length){ toast('Cada fase precisa de um código único.'); return; }
   if(e.manual && !e.fases.some(f=>f.kg>0)){ toast('Informe o peso (kg) de pelo menos uma fase.'); return; }
   const c = plcLoad(), folga = plcCfg().folgaMeses;
-  const marcos = { inv:e.marcos.inv||'', hab:e.marcos.hab||'', obra:e.marcos.obra||'' };
-  const temMarco = marcos.inv || marcos.hab || marcos.obra;
+  const marcos = { inv:'', hab:'', obra:e.marcos.obra||'' };
+  const temMarco = !!marcos.obra;
   const nec = f => { const n = Object.assign({}, f.nec); if(!n.inv && !n.hab && !n.obra) n.obra = true; return n; };
   if(e.idx < 0){
     if(c.obras.some(o=>o.nome.toLowerCase()===nome.toLowerCase())){ toast('Já existe uma obra com esse nome.'); return; }
-    const p = Object.assign({ entregaDias:15, iniFabDias:20, capFab:30, iniInstDias:20, diasMes:30.4, prodInst:0.433, custoPessoa:9333.33, preco:e.preco||43.5,
-      folhaFab:740000, prodRef:30, efetivo:e.efetivo||30, alvo: marcos.obra ? pliAddMeses(marcos.obra, -folga) : '', compPct:0.3, comp1:28, comp2:56 }, e.refPrem||{},
+    const PX = pliLoad() || {}, PGX = PX.pagtoPadrao || null;
+    const p = Object.assign({ entregaDias:(PGX?PGX.entregaDias:15), iniFabDias:20, capFab:30, iniInstDias:20, diasMes:30.4, prodInst:(PX.prodB||0.433), custoPessoa:(PX.custoPessoa||9333.33), preco:e.preco||43.5,
+      folhaFab:(PX.custoFabDet?pliFabTotal(PX):740000), prodRef:(PX.custoFabDet&&PX.cap?PX.cap.nova:30), efetivo:e.efetivo||(PX.pessoasFolha||30), alvo: marcos.obra ? pliAddMeses(marcos.obra, -folga) : '', compPct:0.3, comp1:28, comp2:56 }, e.refPrem||{},
       { preco:e.preco||43.5, efetivo:e.efetivo||30, alvo: marcos.obra ? pliAddMeses(marcos.obra, -folga) : '' });
     const fases = e.fases.map(f=>({ cod:String(f.cod).trim(), desc:f.desc||'', kg:f.kg, grupo:'A', iniLB:null, fimLB:null, ref:'', nec:nec(f) }));
     const total = fases.reduce((t,f)=>t+f.kg*p.preco,0);
     c.obras.push({ id:uid(), nome, arquivo:'Criada manualmente', importadoEm:new Date().toISOString(), prem:p, fases,
-      fluxo:[{ grupo:'A', parcela:'1/1', venc:e.inicio||todayISO(), valor:total }], lotesPlan:[], modoPlanilha:false, manual:true, reparcelar:true, marcos:temMarco?marcos:undefined });
+      fluxo:[{ grupo:'A', parcela:'1/1', venc:e.inicio||todayISO(), valor:total }], lotesPlan:[], modoPlanilha:false, manual:true, reparcelar:true, marcos:temMarco?marcos:undefined, pagto:PGX?{ modo:PGX.modo, prazos:(PGX.prazos||[28,56,84]).slice() }:undefined });
+    if(!PGX) delete c.obras[c.obras.length-1].pagto;
     if(!temMarco) delete c.obras[c.obras.length-1].marcos;
     PLI_UI.cronObra = c.obras.length-1;
   } else {
@@ -10131,10 +10133,9 @@ function pliHtmlEditor(){
     <td class="n"><input type="number" min="0" step="100" value="${f.kg}" style="width:90px;" onchange="plcEdFase(${r},'kg',this.value);renderPlanejInt()"></td>
     ${bloqueado?(()=>{ const cad = f.kgCad!=null ? f.kgCad : f.kg, d = (f.kg||0)-cad; return `<td class="n" style="color:#666;">${pliFmtT(cad,0)}${Math.abs(d)>0.5?` <span style="color:${d>0?'#b00020':'#1c7c3e'}">(${d>0?'+':''}${pliFmtT(d,0)})</span>`:''}</td>`; })():''}
     <td class="n"><input type="number" min="0" max="200" step="5" value="${f.fatorInst!=null?f.fatorInst:100}" style="width:64px;" onchange="plcEdFase(${r},'fatorInst',this.value)"></td>
-    ${PLC_MARCOS.map(([k])=>`<td style="text-align:center"><input type="checkbox" ${f.nec[k]?'checked':''} onchange="plcEdNec(${r},'${k}',this.checked)"></td>`).join('')}
     <td><button class="btn small secondary" title="Excluir esta fase" onclick="plcEdDel(${r})">✕</button></td></tr>`).join('');
   return `<div class="pli-card" style="border:2px solid #bd0c1d;"><h3>${e.idx<0?(e.refDe?'Faseamento de '+esc(e.nome)+' — copiado da obra de referência '+esc(e.refDe):'Nova obra (criação manual)'):'Faseamento, marcos e valor do kg — '+esc(e.nome)}</h3>
-    <div class="pli-note" style="margin-top:0;">A ordem das fases é a <b>ordem das compras</b> (▲▼ para mudar). Marque, em cada fase, para quais marcos ela é necessária. A instalação dessas fases precisa terminar <b>${folga} mês(es) antes</b> de cada marco.${bloqueado?' <br>Obra importada: você pode editar o <b>peso</b> e a descrição — o sistema passa a usar o peso informado e guarda o peso da planilha (coluna "Cadastrado"). Reimportar a planilha mantém os pesos editados.':''}</div>
+    <div class="pli-note" style="margin-top:0;">A ordem das fases é a <b>ordem das compras</b> (▲▼ para mudar). O deadline de instalação é o deadline de obra menos <b>${folga} mês(es)</b>.${bloqueado?' <br>Obra importada: você pode editar o <b>peso</b> e a descrição — o sistema passa a usar o peso informado e guarda o peso da planilha (coluna "Cadastrado"). Reimportar a planilha mantém os pesos editados.':''}</div>
     <div class="pli-filtros">
       <label>Nome <input type="text" value="${esc(e.nome)}" ${bloqueado?'disabled':''} style="width:180px;" onchange="plcEdCampo('nome',this.value)"></label>
 ${e.idx<0?`      <label>Alumínio (R$/kg) <input type="number" step="0.5" value="${e.preco}" ${bloqueado?'disabled':''} style="width:80px;" onchange="plcEdCampo('preco',this.value)"></label>`:''}
@@ -10143,13 +10144,10 @@ ${e.idx<0?`      <label>Efetivo de instalação (pessoas) <input type="number" v
       ${(()=>{ try{ const ob = plcLoad().obras[e.idx]; if(!ob || !ob.ajuste) return ''; const ef = plcPrimeiraCompra(ob); return ef ? `<span class="step-note" style="align-self:center">Com o ajuste de compras aplicado, a 1ª compra efetiva é <b>${pliFmtData(ef)}</b>.</span>` : ''; }catch(x){ return ''; } })()}
     </div>
     <div class="pli-filtros">
-      <label>Entrega ao investidor <input type="date" value="${e.marcos.inv||''}" onchange="plcEdMarco('inv',this.value)"></label>
-      <label>Habite-se <input type="date" value="${e.marcos.hab||''}" onchange="plcEdMarco('hab',this.value)"></label>
-      <label>Deadline da obra <input type="date" value="${e.marcos.obra||''}" onchange="plcEdMarco('obra',this.value)"></label>
-      <span class="pli-note" style="margin:0;">Instalação até: ${lim(e.marcos.inv)} · ${lim(e.marcos.hab)} · ${lim(e.marcos.obra)}</span>
+      ${e.idx<0?`      <label>Deadline de obra <input type="date" value="${e.marcos.obra||''}" onchange="plcEdMarco('obra',this.value)"></label>
+      <span class="pli-note" style="margin:0;">Deadline de instalação: ${lim(e.marcos.obra)}</span>`:''}
     </div>
-    ${e.idx>=0?pliHtmlPers(e):''}
-    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Ordem</th><th>Fase</th><th>Descrição</th><th class="n">Peso (kg)</th>${bloqueado?'<th class="n">Cadastrado (planilha)</th>':''}<th class="n" title="% do custo de mão de obra de instalação desta fase (100% = normal)">MO inst. (%)</th><th style="text-align:center">Investidor</th><th style="text-align:center">Habite-se</th><th style="text-align:center">Obra</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
+    <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Ordem</th><th>Fase</th><th>Descrição</th><th class="n">Peso (kg)</th>${bloqueado?'<th class="n">Cadastrado (planilha)</th>':''}<th class="n" title="% do custo de mão de obra de instalação desta fase (100% = normal)">MO inst. (%)</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
     <div class="pli-filtros" style="margin-top:8px;"><button class="btn small secondary" onclick="plcEdAdd()">+ Acrescentar fase</button><button class="btn small secondary" onclick="plcEdZerar()">Zerar tudo (kg)</button><button class="btn small secondary" onclick="plcEdNovo()">Fazer um novo</button><label class="btn small secondary" style="cursor:pointer;">Importar planilha<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="plcEdImportar(event)"></label>${e.idx>=0?'<button class="btn small secondary" style="color:#b00020;" onclick="plcEdExcluirObra()">Excluir esta obra</button>':''}<span style="flex:1"></span><button class="btn small" onclick="plcEdSalvar()">Salvar</button><button class="btn small secondary" onclick="plcEdFechar()">Cancelar</button></div></div>`;
 }
 function pliHtmlMarcos(){
@@ -10936,16 +10934,30 @@ function plcSetReparcela(i, modo){
   plcSave(c); renderPlanejInt();
 }
 
+function plcPagto(ob){
+  const g = ob.pagto || {}; const prazos = (Array.isArray(g.prazos) && g.prazos.length ? g.prazos : [28,56,84]).map(x=>Math.max(0,parseInt(x,10)||0));
+  return { definido:!!ob.pagto, modo:g.modo==='faturado'?'faturado':'antecipado', prazos };
+}
+function plcSetPagto(i, campo, v){
+  const c = plcLoad(), ob = c.obras[i]; if(!ob) return;
+  ob.pagto = Object.assign({ modo:'antecipado', prazos:[28,56,84] }, ob.pagto||{});
+  if(campo==='modo') ob.pagto.modo = v==='faturado' ? 'faturado' : 'antecipado';
+  else if(campo==='prazos'){ const l = String(v).split(/[\/;,\s]+/).map(x=>parseInt(x,10)).filter(x=>isFinite(x)&&x>=0); if(l.length) ob.pagto.prazos = l; }
+  plcSave(c); renderPlanejInt();
+}
 function plcCalcBase(ob, ovr){
   const p = ob.prem, fases = plcJuntas(ob).fases;
-  const FL = plcFluxoEfetivo(ob), flux = FL.fluxo;
+  const FL = plcFluxoEfetivo(ob), fluxPedido = FL.fluxo;
+  const PG = plcPagto(ob);
   const precoFase = f => f.kg * p.preco;
+  let dry = false; const ultimaPg = {};
   const totalGrupo = g => fases.filter(f=>f.grupo===g).reduce((s,f)=>s+precoFase(f),0);
   const capInst = Math.max(0.0001, p.efetivo * p.prodInst);
   const lotes = [];
   let fimFabAnt = null, fimInstAnt = null;
   const mk = (par, f, kg, valor)=>{
-    let chegada = pliAddDias(par.venc, p.entregaDias);
+    if(dry){ if(!ultimaPg[f.cod] || par.venc > ultimaPg[f.cod]) ultimaPg[f.cod] = par.venc; return; }
+    let chegada = pliAddDias((PG.definido && PG.modo==='antecipado' && ultimaPg[f.cod]) ? ultimaPg[f.cod] : par.venc, p.entregaDias);
     { const cr = ob.compraReal && (ob.compraReal[f.cod+'@'+par.grupo] || ob.compraReal[f.cod]); if(cr && cr.entrega) chegada = cr.entrega; }
     const liberado = pliAddDias(chegada, p.iniFabDias);
     const iniFab = (fimFabAnt && fimFabAnt > liberado) ? fimFabAnt : liberado;
@@ -10959,13 +10971,14 @@ function plcCalcBase(ob, ovr){
     lotes.push({ n:lotes.length+1, grupo:par.grupo, parcela:par.parcela, fase:f.cod, desc:f.desc, venc:par.venc, valor, kg,
                  chegada, liberado, iniFab, diasFab, fimFab, iniInst, diasInst, fimInst });
   };
+  const construir = ()=>{
   if(FL.pers){
-    flux.forEach(par=>{ (par.itens||[]).forEach(it=>{ const f = fases.find(x=>x.cod===it.fase); if(f){ mk(par, f, f.kg*it.pct, f.kg*it.pct*p.preco); const lt = lotes[lotes.length-1]; lt.etapa = par.grupo; lt.pct = it.pct; lt.expr = par.expr||''; } }); });
+    fluxPedido.forEach(par=>{ (par.itens||[]).forEach(it=>{ const f = fases.find(x=>x.cod===it.fase); if(f){ mk(par, f, f.kg*it.pct, f.kg*it.pct*p.preco); const lt = lotes[lotes.length-1]; lt.etapa = par.grupo; lt.pct = it.pct; lt.expr = par.expr||''; } }); });
   }
   else if(FL.seq){
     // parcelas ~R$ 500 mil preenchendo as fases na ordem (kg = valor ÷ preço)
     const rem = fases.map(f=>f.kg); let fi = 0;
-    flux.forEach(par=>{
+    fluxPedido.forEach(par=>{
       let k = par.valor / p.preco;
       while(k > 0.01 && fi < fases.length){
         const f = fases[fi], take = Math.min(k, rem[fi]);
@@ -10975,7 +10988,7 @@ function plcCalcBase(ob, ovr){
     });
   }
   else if(ob.modoPlanilha && ob.lotesPlan && ob.lotesPlan.length) ob.lotesPlan.forEach(l=>lotes.push(Object.assign({}, l)));
-  else flux.forEach(par=>{
+  else fluxPedido.forEach(par=>{
     const fs = fases.filter(f=>f.grupo===par.grupo);
     const tg = totalGrupo(par.grupo);
     fs.forEach(f=>{
@@ -10983,6 +10996,18 @@ function plcCalcBase(ob, ovr){
       mk(par, f, f.kg*frac, precoFase(f)*frac);
     });
   });
+  };
+  if(PG.definido && PG.modo==='antecipado'){ dry = true; construir(); dry = false; }
+  construir();
+  // forma de pagamento: no faturado o pagamento ocorre N dias depois de receber o material
+  let flux = fluxPedido;
+  if(PG.definido && PG.modo==='faturado'){
+    flux = [];
+    fluxPedido.forEach(par=>{ const ls = lotes.filter(l=>l.grupo===par.grupo && l.parcela===par.parcela); const cheg = ls.length ? ls.map(l=>l.chegada).sort().slice(-1)[0] : pliAddDias(par.venc, p.entregaDias);
+      const nP = PG.prazos.length; let acc = 0;
+      PG.prazos.forEach((d,k)=>{ const v = k===nP-1 ? Math.round((par.valor-acc)*100)/100 : Math.round(par.valor/nP*100)/100; acc += v;
+        flux.push(Object.assign({}, par, { venc:pliAddDias(cheg, d), valor:v, parcela:par.parcela+(nP>1?' · '+(k+1)+'/'+nP:''), pedido:par.venc })); }); });
+  }
   // sequenciamento da fábrica: cada fase roda direto (janela única) e o lote herda a fatia dela
   if(ovr){
     const alvos = [];
@@ -11198,6 +11223,7 @@ function pliEditarPrem(campo, valor, sub){
   if(!isFinite(v)){ renderPlanejInt(); return; }
   if(sub) P[campo][sub] = v; else P[campo] = v;
   if(campo==='cap') P.capDefinida = true;
+  if(campo==='cap' && sub==='nova' && P.custoFabDet) pliFabAplicar(P);
   if(campo==='folhaInst' || campo==='pessoasFolha') P.custoPessoa = P.folhaInst/(P.pessoasFolha||1);
   pliSave(P); renderPlanejInt();
 }
@@ -11327,34 +11353,92 @@ function pliHtmlIndireto(P, R){
       </tbody></table></div><div class="pli-note">Exemplo dos 3 primeiros meses com atividade. ${crons.length?'':'Importe um cronograma financeiro para lançar o rateio na previsão de gastos.'}</div>`:'<div class="pli-note">Informe a folha indireta (marque funcionários ou digite um valor) para gerar o rateio.</div>'}
   </div>`;
 }
+const PLI_EQUIPE_PADRAO = [
+  { cargo:'Encarregado', qtd:2, sal:6000, custo:13622 },
+  { cargo:'Oficial', qtd:8, sal:5000, custo:11707.5 },
+  { cargo:'Meio-oficial', qtd:6, sal:4000, custo:9793 },
+  { cargo:'Ajudante', qtd:14, sal:2500, custo:6921.2143 },
+  { cargo:'Supervisor (PJ)', qtd:1, sal:10500, custo:12300, pj:true }
+];
+function pliEquipeTotais(P){
+  const L = P.equipeInst || [];
+  const tot = L.reduce((t,x)=>t+(+x.qtd||0)*(+x.custo||0),0);
+  const clt = L.filter(x=>!x.pj).reduce((t,x)=>t+(+x.qtd||0),0);
+  return { tot, clt, pessoas:L.reduce((t,x)=>t+(+x.qtd||0),0) };
+}
+function pliEquipeAplicar(P){ const T = pliEquipeTotais(P); P.folhaInst = Math.round(T.tot*100)/100; P.pessoasFolha = Math.max(1,T.clt); P.custoPessoa = P.folhaInst/P.pessoasFolha; }
+const PLI_FAB_PADRAO = { cltPessoas:45, encargos:70.4, clt:423769, pjPessoas:6, pj:76800, oper:150000 };
+function pliFabTotal(P){ const d = P.custoFabDet||{}; return (+d.clt||0)+(+d.pj||0)+(+d.oper||0); }
+function pliFabAplicar(P){ const t = pliFabTotal(P), cap = (P.cap && P.cap.nova) || 1; P.custoTFab = t/cap;
+  try{ const c = plcLoad(); c.obras.forEach(o=>{ if(!o.fabCustom){ o.prem.folhaFab = Math.round(t*100)/100; o.prem.prodRef = cap; } }); plcSave(c); }catch(e){ console.error('folha da fábrica nas obras', e); } }
+function pliFabGarantir(P){ if(!P || P.custoFabDet) return; P.custoFabDet = Object.assign({}, PLI_FAB_PADRAO); P.cap.nova = 40; P.capDefinida = true; pliFabAplicar(P); pliSave(P); }
+function pliFabEd(campo, v){ const P = pliLoad(); if(!P||!P.custoFabDet) return; const n = parseFloat(String(v).replace(',','.')); if(!isFinite(n)){ renderPlanejInt(); return; } P.custoFabDet[campo] = n; pliFabAplicar(P); pliSave(P); renderPlanejInt(); }
+function pliEquipeGarantir(P){
+  if(!P) return; pliFabGarantir(P); if(P.equipeInst) return;
+  P.equipeInst = PLI_EQUIPE_PADRAO.map(x=>Object.assign({}, x)); pliEquipeAplicar(P); pliSave(P);
+}
+function pliEquipeEd(i, campo, v){
+  const P = pliLoad(); if(!P || !P.equipeInst || !P.equipeInst[i]) return;
+  if(campo==='cargo') P.equipeInst[i].cargo = v; else if(campo==='pj') P.equipeInst[i].pj = !!v;
+  else { const n = parseFloat(String(v).replace(',','.')); if(!isFinite(n)){ renderPlanejInt(); return; } P.equipeInst[i][campo] = n; }
+  pliEquipeAplicar(P); pliSave(P); renderPlanejInt();
+}
+function pliEquipeAdd(){ const P = pliLoad(); if(!P) return; P.equipeInst = P.equipeInst||[]; P.equipeInst.push({ cargo:'Novo cargo', qtd:1, sal:0, custo:0 }); pliEquipeAplicar(P); pliSave(P); renderPlanejInt(); }
+function pliEquipeDel(i){ const P = pliLoad(); if(!P||!P.equipeInst) return; P.equipeInst.splice(i,1); pliEquipeAplicar(P); pliSave(P); renderPlanejInt(); }
+function pliEquipeRestaurar(){ const P = pliLoad(); if(!P) return; if(!confirm('Voltar a equipe padrão (2 encarregados, 8 oficiais, 6 meio-oficiais, 14 ajudantes e 1 supervisor)?')) return; P.equipeInst = PLI_EQUIPE_PADRAO.map(x=>Object.assign({}, x)); pliEquipeAplicar(P); pliSave(P); renderPlanejInt(); }
+function pliEditarPagtoPadrao(campo, v){
+  const P = pliLoad(); if(!P) return; P.pagtoPadrao = Object.assign({ modo:'antecipado', entregaDias:15, prazos:[28,56,84] }, P.pagtoPadrao||{});
+  if(campo==='modo') P.pagtoPadrao.modo = v==='faturado'?'faturado':'antecipado';
+  else if(campo==='entregaDias') P.pagtoPadrao.entregaDias = Math.max(0, parseInt(v,10)||0);
+  else if(campo==='prazos'){ const l = String(v).split(/[\/;,\s]+/).map(x=>parseInt(x,10)).filter(x=>isFinite(x)&&x>=0); if(l.length) P.pagtoPadrao.prazos = l; }
+  pliSave(P); renderPlanejInt();
+}
 function pliHtmlPremissas(P, R){
+  const pg = Object.assign({ modo:'antecipado', entregaDias:15, prazos:[28,56,84] }, P.pagtoPadrao||{});
+  const eq = P.equipeInst||[], T = pliEquipeTotais(P);
+  const limInst = P.limiteInst!=null ? P.limiteInst : 5, limFab = P.limiteFab!=null ? P.limiteFab : Math.round(P.custoTFab)/1000;
   return `
   <div class="pli-grid2">
-   <div class="pli-card"><h3>Geral</h3>
+   <div>
+   <div class="pli-card"><h3>Premissas de compra</h3>
     <table class="pli-t"><tbody>
      <tr><td>Data base</td><td><input type="date" value="${P.dataBase}" onchange="pliEditarData('dataBase',this.value)"></td><td>Atividades antes dela = executado</td></tr>
+     <tr><td>Emissão da lista p/ Suprimentos (dias)</td><td>${pliInput('prazos',P.prazos.lista,'lista')}</td><td></td></tr>
+     <tr><td>Suprimentos – cotação/pedido (dias)</td><td>${pliInput('prazos',P.prazos.cotacao,'cotacao')}</td><td></td></tr>
+     <tr><td>Entrega fornecedor – otimista (dias)</td><td>${pliInput('prazos',P.prazos.otim,'otim')}</td><td></td></tr>
+     <tr><td>Entrega fornecedor – conservador (dias)</td><td>${pliInput('prazos',P.prazos.cons,'cons')}</td><td></td></tr>
+     <tr><td>Forma de pagamento padrão</td><td><select onchange="pliEditarPagtoPadrao('modo',this.value)"><option value="antecipado" ${pg.modo==='antecipado'?'selected':''}>Antecipado</option><option value="faturado" ${pg.modo==='faturado'?'selected':''}>Faturado</option></select></td><td>Vale para obras novas; cada obra pode mudar</td></tr>
+     <tr><td>${pg.modo==='faturado'?'Prazo de entrega após fechamento (dias)':'Material chega após o último pagamento (dias)'}</td><td><input type="number" value="${pg.entregaDias}" style="width:100px;" onchange="pliEditarPagtoPadrao('entregaDias',this.value)"></td><td></td></tr>
+     ${pg.modo==='faturado'?`<tr><td>Parcelas, dias após receber</td><td><input type="text" value="${pg.prazos.join('/')}" style="width:100px;" onchange="pliEditarPagtoPadrao('prazos',this.value)"></td><td>ex.: 28/56/84, parcelas iguais</td></tr>`:''}
+    </tbody></table></div>
+   <div class="pli-card"><h3>Premissas de fabricação</h3>
+    <table class="pli-t"><tbody>
      <tr><td>Capacidade atual da fábrica (t/mês)</td><td>${pliInput('cap',P.cap.atual,'atual')}</td><td>Produção média atual</td></tr>
      <tr><td>Nova capacidade (t/mês)</td><td>${pliInput('cap',P.cap.nova,'nova')}</td><td>A partir de <input type="month" value="${P.cap.de}" onchange="pliEditarData('capDe',this.value)"></td></tr>
      <tr><td>Efetivo atual na fábrica</td><td>${pliInput('efetivoFab',P.efetivoFab)}</td><td>${pliFmtT(R.prodFab,3)} t/pessoa/mês</td></tr>
-     <tr><td>Efetivo atual em instalação (plano)</td><td>${pliInput('efetivoAtualInst',P.efetivoAtualInst)}</td><td>Produtividade A (observada) ${pliFmtT(R.prodA,3)} t/pessoa/mês</td></tr>
-     <tr><td>Produtividade B – referência (t/pessoa/mês)</td><td>${pliInput('prodB',P.prodB)}</td><td>Meta</td></tr>
-     <tr><td>Folha de instalação (R$/mês)</td><td>${pliInput('folhaInst',P.folhaInst)}</td><td>para <input type="number" value="${P.pessoasFolha}" style="width:60px;" onchange="pliEditarPrem('pessoasFolha',this.value)"> pessoas = ${pliFmtR(P.custoPessoa)}/pessoa</td></tr>
-     <tr><td>Custo da fábrica (R$/t)</td><td>${pliInput('custoTFab',Math.round(P.custoTFab*100)/100)}</td><td>Padrão R$ 745 mil ÷ 30 t</td></tr>
-     <tr><td>Limiar de obra "ativa" (t/mês)</td><td>${pliInput('limiar',P.limiar)}</td><td>Conta obras simultâneas na fábrica</td></tr>
+     <tr><td>Pessoal CLT (R$/mês)</td><td><input type="number" step="any" value="${(P.custoFabDet||{}).clt}" style="width:100px;" onchange="pliFabEd('clt',this.value)"></td><td><input type="number" value="${(P.custoFabDet||{}).cltPessoas}" style="width:56px;" onchange="pliFabEd('cltPessoas',this.value)"> pessoas · encargos e provisões <input type="number" step="0.1" value="${(P.custoFabDet||{}).encargos}" style="width:56px;" onchange="pliFabEd('encargos',this.value)">%</td></tr>
+     <tr><td>Indiretos PJ (R$/mês)</td><td><input type="number" step="any" value="${(P.custoFabDet||{}).pj}" style="width:100px;" onchange="pliFabEd('pj',this.value)"></td><td><input type="number" value="${(P.custoFabDet||{}).pjPessoas}" style="width:56px;" onchange="pliFabEd('pjPessoas',this.value)"> pessoas</td></tr>
+     <tr><td>Custo operacional (R$/mês)</td><td><input type="number" step="any" value="${(P.custoFabDet||{}).oper}" style="width:100px;" onchange="pliFabEd('oper',this.value)"></td><td></td></tr>
+     <tr><td><b>Custo total da fábrica (R$/mês)</b></td><td><b>${pliFmtR(pliFabTotal(P))}</b></td><td>a ${pliFmtT(P.cap.nova,0)} t/mês = <b>R$ ${(P.custoTFab/1000).toFixed(2).replace('.',',')}/kg</b> · ano ${pliFmtR(pliFabTotal(P)*12)} · a ${pliFmtT(P.cap.atual,0)} t/mês: R$ ${(pliFabTotal(P)/(P.cap.atual*1000)).toFixed(2).replace('.',',')}/kg</td></tr>
+     <tr><td>Limite de custo de fabricação (R$/kg)</td><td><input type="number" step="0.01" value="${limFab}" style="width:100px;" onchange="pliEditarPrem('limiteFab',this.value)"></td><td>Alerta quando a obra passa deste valor</td></tr>
     </tbody></table></div>
-   <div class="pli-card"><h3>Prazos de compra</h3>
-    <table class="pli-t"><tbody>
-     <tr><td>Emissão da lista p/ Suprimentos (dias)</td><td>${pliInput('prazos',P.prazos.lista,'lista')}</td></tr>
-     <tr><td>Suprimentos – cotação/pedido (dias)</td><td>${pliInput('prazos',P.prazos.cotacao,'cotacao')}</td></tr>
-     <tr><td>Entrega fornecedor – otimista (dias)</td><td>${pliInput('prazos',P.prazos.otim,'otim')}</td></tr>
-     <tr><td>Entrega fornecedor – conservador (dias)</td><td>${pliInput('prazos',P.prazos.cons,'cons')}</td></tr>
-     <tr><td>Fabricação: até 2 obras simultâneas (meses)</td><td>${pliInput('prazos',P.prazos.fab2,'fab2')}</td></tr>
-     <tr><td>Fabricação: 3 obras simultâneas (meses)</td><td>${pliInput('prazos',P.prazos.fab3,'fab3')}</td></tr>
-     <tr><td>Fabricação: 4+ obras simultâneas (meses)</td><td>${pliInput('prazos',P.prazos.fab4,'fab4')}</td></tr>
-    </tbody></table>
-    <h3 style="margin-top:14px;">Tonelagem por obra</h3>
-    <table class="pli-t"><thead><tr><th>Obra</th><th>Tonelagem (t)</th></tr></thead><tbody>
-     ${P.obras.map((o,i)=>`<tr><td>${esc(o.nome)}</td><td>${o.extra?`<b>${pliFmtT(o.ton,1)}</b> <span class="pli-note">obra só com cronograma</span>`:`<input type="number" value="${o.ton}" style="width:90px;" onchange="pliEditarTonObra(${i},this.value)">`}${R.fontes[o.nome].fonte==='cronograma'?` <span class="pli-note">usando o cronograma (${pliFmtT(R.fontes[o.nome].ton,1)} t)</span>`:''}</td></tr>`).join('')}
+   </div>
+   <div class="pli-card"><h3>Premissas de instalação</h3>
+    <div class="pli-note" style="margin:0 0 8px;">Equipe padrão: <b>1 equipe por obra</b>, editável. O efetivo, a folha e o custo por pessoa saem desta tabela.</div>
+    <table class="pli-t"><thead><tr><th>Cargo</th><th class="n">Qtde</th><th class="n">Salário (premissa)</th><th class="n">Custo unitário</th><th class="n">Total/mês</th><th title="PJ não conta no efetivo">PJ</th><th></th></tr></thead><tbody>
+     ${eq.map((x,i)=>`<tr><td><input type="text" value="${esc(x.cargo)}" style="width:130px;" onchange="pliEquipeEd(${i},'cargo',this.value)"></td>
+       <td class="n"><input type="number" min="0" value="${x.qtd}" style="width:56px;" onchange="pliEquipeEd(${i},'qtd',this.value)"></td>
+       <td class="n"><input type="number" step="any" value="${x.sal}" style="width:84px;" onchange="pliEquipeEd(${i},'sal',this.value)"></td>
+       <td class="n"><input type="number" step="any" value="${Math.round(x.custo*100)/100}" style="width:84px;" onchange="pliEquipeEd(${i},'custo',this.value)"></td>
+       <td class="n">${pliFmtR((+x.qtd||0)*(+x.custo||0))}</td>
+       <td style="text-align:center"><input type="checkbox" ${x.pj?'checked':''} onchange="pliEquipeEd(${i},'pj',this.checked)"></td>
+       <td><button class="btn small secondary" onclick="pliEquipeDel(${i})">✕</button></td></tr>`).join('')}
+    </tbody><tfoot><tr><td><b>Total da instalação</b></td><td class="n"><b>${T.pessoas}</b></td><td></td><td></td><td class="n"><b>${pliFmtR(T.tot)}</b></td><td></td><td></td></tr></tfoot></table>
+    <div class="pli-filtros"><button class="btn small secondary" onclick="pliEquipeAdd()">+ Cargo</button><button class="btn small secondary" onclick="pliEquipeRestaurar()">Equipe padrão</button><span class="pli-note" style="margin:0;align-self:center;">Efetivo (sem PJ): ${T.clt} · custo por pessoa: ${pliFmtR(P.custoPessoa)}/mês</span></div>
+    <table class="pli-t" style="margin-top:10px;"><tbody>
+     <tr><td>Produtividade – referência (t/pessoa/mês)</td><td>${pliInput('prodB',P.prodB)}</td><td>Observada: ${pliFmtT(R.prodA,3)}</td></tr>
+     <tr><td>Limite de custo de instalação (R$/kg de mão de obra)</td><td><input type="number" step="0.01" value="${limInst}" style="width:100px;" onchange="pliEditarPrem('limiteInst',this.value)"></td><td>Alerta quando a obra passa deste valor</td></tr>
+     <tr><td>Folga do deadline de instalação (meses)</td><td><input type="number" min="0" max="12" value="${plcCfg().folgaMeses}" style="width:100px;" onchange="plcSetCfg('folgaMeses',this.value)"></td><td>Deadline de instalação = deadline de obra − folga</td></tr>
     </tbody></table></div>
   </div>
   <div class="pli-note">Qualquer alteração recalcula tudo na hora. Cenário <b>META × OFICIAL</b> e produtividade <b>A × B</b> ficam nos controles do topo.</div>`;
@@ -11496,19 +11580,19 @@ function pliExportarComprasCSV(){
 /* ---------- aba Premissas: tudo num lugar (globais + por obra + sem faseamento) ---------- */
 function pliHtmlPremissasTudo(P){
   let glob = '';
-  if(P){ const R = pliCalc(P); glob = pliHtmlPremissas(P, R); }
+  if(P){ pliEquipeGarantir(P); const R = pliCalc(P); glob = pliHtmlPremissas(P, R); }
   else glob = '<div class="pli-card"><div class="pli-note" style="margin:0;">Premissas gerais (capacidade da fábrica, prazos de compra, tonelagem, folha indireta) aparecem depois de importar a planilha <b>Planejamento Integrado de Alumínio</b> (botão no topo). As premissas por obra abaixo funcionam sem ela.</div></div>';
   return pliHtmlPremObras(P) + glob;
 }
 function pliPremObra(i){ PLI_UI.cronObra = i; if(PLI_UI.editor && PLI_UI.editor.idx>=0) PLI_UI.editor = null; renderPlanejInt(); }
 function pliHtmlPremObras(P){
-  const c = plcLoad(), sem = pliHtmlSemFase(P, c);
+  const c = plcLoad(), sem = '';
   if(!c.obras.length) return (PLI_UI.editor && PLI_UI.editor.idx<0 ? pliHtmlEditor() : '') + `<div class="pli-card"><h3>Premissas por obra</h3><div class="pli-note" style="margin:0;">Nenhuma obra com faseamento ainda. Importe um cronograma financeiro (aba Cronograma financeiro) ou crie o faseamento abaixo.</div></div>` + sem;
   if(PLI_UI.cronObra >= c.obras.length || PLI_UI.cronObra < 0) PLI_UI.cronObra = 0;
   const k = PLI_UI.cronObra;
   if(!PLI_UI.editor || (PLI_UI.editor.idx>=0 && PLI_UI.editor.idx!==k)){ plcEdPreparar(k); if(PLI_UI.editor) PLI_UI.editor.auto = true; }
   const ed = PLI_UI.editor && PLI_UI.editor.idx<0;
-  const sel = `<div class="pli-card"><h3>Premissas por obra</h3><div class="pli-note" style="margin:0 0 8px;">Faseamento (ordem das compras, peso e marcos de cada fase), valor do kg, mão de obra, entrega ao investidor, habite-se, deadline, orçamento e tendência. Escolha a obra:</div>
+  const sel = `<div class="pli-card"><h3>Premissas por obra</h3><div class="pli-note" style="margin:0 0 8px;">Faseamento (ordem das compras, peso e marcos de cada fase), valor do kg, mão de obra, prazos (deadlines), orçamento e tendência. Escolha a obra:</div>
     <div class="pli-filtros">${c.obras.map((o,i)=>`<button class="btn small ${(!ed&&i===k)?'':'secondary'}" onclick="pliPremObra(${i})">${esc(o.nome)}</button>`).join('')}</div></div>`;
   return sel + (ed ? pliHtmlEditor() : pliHtmlEditor() + pliHtmlPremObraCard(k)) + sem;
 }
@@ -11558,11 +11642,13 @@ function pliHtmlPremObraCard(k){
   const obSemVinc = Object.assign({}, ob); delete obSemVinc.vinculo;
   const auto = Pl ? (Pl.obras.find(o=>pliCronDaObra(o.nome,[obSemVinc]))||{}).nome : '';
   const ed = (campo, v, w)=>`<input type="number" step="any" value="${v}" style="width:${w||80}px;" onchange="plcEditar(${k},'${campo}',this.value)">`;
-  let prem = `<div class="pli-card"><h3>Premissas — ${esc(ob.nome)} <span class="pli-note" style="font-weight:400">(importado de ${esc(ob.arquivo||'')})</span></h3>
+  let prem = pliHtmlPrazosObra(k, ob) + `<div class="pli-card"><h3>Premissas — ${esc(ob.nome)} <span class="pli-note" style="font-weight:400">(importado de ${esc(ob.arquivo||'')})</span></h3>
     <div class="pli-prem">
      <label>Nome da obra <input type="text" value="${esc(ob.nome)}" style="width:150px;" onchange="plcRenomear(${k},this.value)"></label>
      ${Pl?`<label>Alimenta a obra do plano <select onchange="plcVincular(${k},this.value)"><option value="" ${ob.vinculo===undefined?'selected':''}>Automático${auto?' ('+esc(auto)+')':' (nenhuma encontrada)'}</option>${Pl.obras.map(o=>`<option value="${esc(o.nome)}" ${ob.vinculo===o.nome?'selected':''}>${esc(o.nome)}</option>`).join('')}<option value="-" ${ob.vinculo==='-'?'selected':''}>Nenhuma (só consulta)</option></select></label>`:''}
-     <label>Entrega após pagamento (dias) ${ed('entregaDias',p.entregaDias,60)}</label>
+     ${(()=>{ const g = plcPagto(ob); return `<label>Forma de pagamento <select onchange="plcSetPagto(${k},'modo',this.value)"><option value="antecipado" ${g.modo==='antecipado'?'selected':''}>Antecipado (pago e depois recebo o material)</option><option value="faturado" ${g.modo==='faturado'?'selected':''}>Faturado (recebo o material e depois pago)</option></select></label>`
+       + (g.modo==='faturado' ? `<label>Prazo de entrega após fechamento (dias) ${ed('entregaDias',p.entregaDias,60)}</label><label>Pagamento em parcelas, dias após receber <input type="text" value="${g.prazos.join('/')}" style="width:110px;" title="ex.: 28/56/84 — parcelas iguais" onchange="plcSetPagto(${k},'prazos',this.value)"></label>`
+         : `<label>Material chega após o último pagamento (dias) ${ed('entregaDias',p.entregaDias,60)}</label>`); })()}
      <label>Início fab. após chegada (dias) ${ed('iniFabDias',p.iniFabDias,60)}</label>
      <label>Capacidade fábrica p/ a obra (t/mês) ${ed('capFab',p.capFab,60)}</label>
      <label>Início inst. após fim fab. (dias) ${ed('iniInstDias',p.iniInstDias,60)}</label>
@@ -11573,7 +11659,6 @@ function pliHtmlPremObraCard(k){
      <label>Custo por pessoa (R$/mês) ${ed('custoPessoa',p.custoPessoa,90)}</label>
      <label>Preço do alumínio (R$/kg) ${ed('preco',p.preco,70)}</label>
      <label>Folha da fábrica (R$/mês) ${ed('folhaFab',p.folhaFab,90)}</label>
-     <label>Alvo término instalação <input type="date" value="${p.alvo||''}" onchange="plcEditarData(${k},this.value)"></label>
     </div>
     ${pliHtmlOrcBloco(k, ob, 'orc')}
     ${pliHtmlOrcBloco(k, ob, 'tend')}
@@ -12146,6 +12231,41 @@ function pliHtmlOrcBloco(k, ob, qual){
      <label>Vidro (R$) ${inp('vidro',110)}</label>
      <span class="pli-note" style="margin:0;"><b>Alumínio + componentes</b> ${pliFmtR(O.alum+O.comp)} (${pliFmtT(O.kg,0)} kg × R$ ${pliFmtT(O.preco,2)} + ${pliFmtT(O.compPct*100,0)}%) · <b>Mão de obra</b> ${pliFmtR(O.mo)} (MOF ${pliFmtR(O.mof)} + MOI ${pliFmtR(O.moi)}) · Fábrica ${pliFmtR(O.fab)} · <b>Vidro</b> ${pliFmtR(O.vidro)} = <b>${pliFmtR(O.total)}</b>${T ? (O.definido ? '' : ' (não informada: usa o orçamento como referência)') : '. É o orçamento oficial da Divisão de Alumínio para esta obra e alimenta o Cronograma Financeiro; o saldo de alumínio + componentes + MO é rateado proporcionalmente nas parcelas futuras.'}</span>
     </div>${T ? '' : (()=>{ const A = plcAGastar(ob); if(!A.origem) return ''; const pct = plcCfg().pctInsumoMes||0; return `<div class="pli-prev" style="margin-bottom:8px;"><b>À gastar</b> <span class="pli-note" style="margin:0;">Meta (${A.origem}: alumínio + componentes + MOF + MOI) <b>${pliFmtR(A.meta)}</b> − realizado lançado <b>${pliFmtR(A.real)}</b> = <b>${pliFmtR(A.valor)}</b>${pct>0?` · teto mensal de insumos: ${pliFmtR(A.valor*pct/100)} (${String(pct).replace('.',',')}%)`:''}.</span> <label>% máx. de compra de insumos por mês (0 = sem limite) <input type="text" value="${String(pct).replace('.',',')}" style="width:60px" onchange="plcSetCfg('pctInsumoMes',this.value)"></label></div>`; })()}`;
+}
+function plcEditarPrazo(i, campo, valor){
+  const c = plcLoad(), ob = c.obras[i]; if(!ob) return;
+  if(campo==='obra'){ ob.marcos = Object.assign({ inv:'', hab:'', obra:'' }, ob.marcos||{}, { obra:valor||'' }); if(!valor && !ob.marcos.inv && !ob.marcos.hab) delete ob.marcos; if(valor && !ob.alvoDefinido) ob.prem.alvo = pliAddMeses(valor, -plcCfg().folgaMeses); }
+  else if(campo==='inst'){ ob.prem.alvo = valor; ob.alvoDefinido = !!valor; if(!valor && ob.marcos && ob.marcos.obra) ob.prem.alvo = pliAddMeses(ob.marcos.obra, -plcCfg().folgaMeses); }
+  else if(campo==='ant'){ if(valor) ob.prem.alvoAnt = valor; else delete ob.prem.alvoAnt; }
+  plcSave(c); renderPlanejInt();
+}
+function pliHtmlPrazosObra(k, ob){
+  let fim = null; try{ fim = plcCalc(ob).maxInst; }catch(e){}
+  const p = ob.prem, dObra = (ob.marcos||{}).obra||'', dInst = p.alvo||'', dAnt = p.alvoAnt||'';
+  const folga = d => (d && fim) ? pliDiffDias(d, fim) : null;
+  const sit = d => { const f = folga(d); if(f==null) return '<span class="pli-note" style="margin:0">—</span>'; return f>=0 ? `<b style="color:#2e7d32">✔ sobram ${f} dias</b>` : `<b style="color:#b00020">✘ faltam ${-f} dias</b>`; };
+  const col = (rot, nota, campo, val, d)=>`<div style="flex:1;min-width:210px;border:1px solid #ddd;border-radius:6px;padding:10px;background:#fff;"><div style="font-size:11px;text-transform:uppercase;color:#666;">${rot}</div>
+    <input type="date" value="${val}" style="margin:6px 0;" onchange="plcEditarPrazo(${k},'${campo}',this.value)"><div>${sit(d)}</div><div class="pli-note" style="margin:4px 0 0;">${nota}</div></div>`;
+  let ind = '';
+  try{
+    const R = plcCalc(ob), PX = pliLoad() || {}, kg = R.totKg || 0;
+    const limI = p.limInst!=null ? p.limInst : (PX.limiteInst!=null ? PX.limiteInst : 5), limF = p.limFab!=null ? p.limFab : (PX.limiteFab!=null ? PX.limiteFab : (PX.custoTFab||24833)/1000);
+    const cI = kg ? R.custoInst.reduce((a,b)=>a+b,0)/kg : 0, cF = kg ? R.custoFab.reduce((a,b)=>a+b,0)/kg : 0;
+    const rk = x=>'R$ '+x.toFixed(2).replace('.',',');
+    const bx = (rot, c, lim)=>{ const ok = c<=lim; return `<div style="flex:1;min-width:230px;border:1px solid #ddd;border-radius:6px;padding:10px;background:#fff;"><div style="font-size:11px;text-transform:uppercase;color:#666;">${rot}</div>
+      <div style="font-size:22px;font-weight:700;color:${ok?'#2e7d32':'#b00020'}">${rk(c)}/kg</div><div class="pli-note" style="margin:2px 0 0;">Limite ${rk(lim)}/kg · ${ok?'dentro do limite':'acima em '+rk(c-lim)+'/kg ('+pliFmtR((c-lim)*kg)+' na obra)'}</div></div>`; };
+    let nec = '';
+    if(p.alvo && R.minInst && kg){ const meses = Math.max(0.5, pliDiffDias(p.alvo, R.minInst)/p.diasMes), tNec = kg/1000/meses/Math.max(1,p.efetivo);
+      nec = `<div class="pli-note" style="margin:8px 0 0;">Produtividade da equipe (${p.efetivo} pessoas): cronograma atual usa <b>${pliFmtT(p.prodInst,3)}</b> t/pessoa/mês · necessária para terminar no deadline de instalação: <b>${pliFmtT(tNec,3)}</b> · necessária para ficar no limite de R$ ${String(limI).replace('.',',')}/kg: <b>${pliFmtT(p.custoPessoa/(limI*1000),3)}</b></div>`; }
+    ind = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">${bx('Custo de instalação (mão de obra)', cI, limI)}${bx('Custo de fabricação (mão de obra)', cF, limF)}</div>${nec}`;
+  }catch(err){ console.error('indicadores R$/kg', err); }
+  return `<div class="pli-card" style="margin:10px 0;"><h3 style="margin:0 0 4px;">Prazos — ${esc(ob.nome)}</h3>
+    <div class="pli-note" style="margin:0 0 8px;">Término previsto da instalação: <b>${fim?pliFmtData(fim):'—'}</b>. Cada prazo abaixo mostra quanto sobra ou falta em relação a esse término.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      ${col('Deadline de obra','Data de entrega da obra.','obra',dObra,dObra)}
+      ${col('Deadline de instalação','Quando precisamos efetivamente terminar. Automático: deadline de obra − '+plcCfg().folgaMeses+' mês(es); pode ser alterado.','inst',dInst,dInst)}
+      ${col('Deadline antecipado','Meta interna, mais cedo que o de instalação (opcional). Deixe vazio para não usar.','ant',dAnt,dAnt)}
+    </div>${ind}</div>`;
 }
 function plcEditarData(i, valor){ const c = plcLoad(); if(!c.obras[i]) return; c.obras[i].prem.alvo = valor; c.obras[i].alvoDefinido = true; plcSave(c); renderPlanejInt(); }
 function plcVincular(i, v){ const c = plcLoad(); if(!c.obras[i]) return; if(v==='') delete c.obras[i].vinculo; else c.obras[i].vinculo = v; plcSave(c); renderPlanejInt(); }
