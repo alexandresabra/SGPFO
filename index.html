@@ -10046,7 +10046,12 @@ function plcEdMarco(k, v){ const e = PLI_UI.editor; if(e) e.marcos[k] = v; }
 function plcEdFase(r, campo, v){ const e = PLI_UI.editor; if(!e||!e.fases[r]) return; e.fases[r][campo] = (campo==='kg'||campo==='fatorInst') ? (parseFloat(String(v).replace(',','.'))||0) : v; }
 function plcEdNec(r, k, chk){ const e = PLI_UI.editor; if(!e||!e.fases[r]) return; e.fases[r].nec[k] = !!chk; }
 function plcEdMover(r, d){ const e = PLI_UI.editor; if(!e) return; const n = r+d; if(n<0||n>=e.fases.length) return; [e.fases[r], e.fases[n]] = [e.fases[n], e.fases[r]]; renderPlanejInt(); }
-function plcEdAdd(){ const e = PLI_UI.editor; if(!e) return; e.fases.push({ cod:'F'+(e.fases.length+1), desc:'', kg:0, nec:{ obra:true } }); renderPlanejInt(); }
+function plcEdAdd(){ const e = PLI_UI.editor; if(!e) return; let n = e.fases.length+1; while(e.fases.some(f=>String(f.cod).trim().toUpperCase()==='F'+n)) n++;
+  e.fases.push({ cod:'F'+n, desc:'', kg:0, nec:{ obra:true }, fatorInst:100, novo:true }); renderPlanejInt(); }
+function plcEdZerar(){ const e = PLI_UI.editor; if(!e) return; if(!confirm('Zerar o peso (kg) de todas as fases? Só vale depois de clicar em Salvar.')) return; e.fases.forEach(f=>{ f.kg = 0; }); renderPlanejInt(); }
+function plcEdNovo(){ if(PLI_UI.editor && !confirm('Descartar o que está sendo editado e começar uma obra nova, do zero?')) return; plcEdAbrir(-1); }
+function plcEdExcluirObra(){ const e = PLI_UI.editor; if(!e || e.idx<0) return; const i = e.idx; PLI_UI.editor = null; const antes = plcLoad().obras.length; plcExcluir(i); if(plcLoad().obras.length===antes){ plcEdAbrir(i); } }
+function plcEdImportar(ev){ PLI_UI.editor = null; pliImportarArquivo(ev); }
 function plcEdDel(r){ const e = PLI_UI.editor; if(!e || e.fases.length<2) return; e.fases.splice(r,1); renderPlanejInt(); }
 function plcEdSalvar(){
   const e = PLI_UI.editor; if(!e) return;
@@ -10073,9 +10078,9 @@ function plcEdSalvar(){
   } else {
     const ob = c.obras[e.idx]; if(!ob) return;
     const antigas = ob.fases;
-    ob.fases = e.fases.map(f=>{ const o = antigas.find(x=>x.cod===(f.orig||f.cod)) || { grupo:'A', iniLB:null, fimLB:null, ref:'' };
+    ob.fases = e.fases.map(f=>{ const o = (f.novo ? null : antigas.find(x=>x.cod===(f.orig||f.cod))) || { grupo:'A', iniLB:null, fimLB:null, ref:'' };
       const novo = Object.assign({}, o, { cod:String(f.cod).trim(), desc:f.desc, kg:f.kg, nec:nec(f), fatorInst:Math.max(0,(parseFloat(f.fatorInst)||0))/100 });
-      if(!ob.manual){ const cad = (o.kgCad!=null) ? o.kgCad : o.kg; if(Math.abs((f.kg||0)-cad) > 0.0001) novo.kgCad = cad; else delete novo.kgCad; }
+      if(!ob.manual && !f.novo){ const cad = (o.kgCad!=null) ? o.kgCad : o.kg; if(Math.abs((f.kg||0)-cad) > 0.0001) novo.kgCad = cad; else delete novo.kgCad; }
       return novo; });
     if(temMarco) ob.marcos = marcos; else delete ob.marcos;
     { const pers = (e.pers||[]).filter(x=>String(x.expr||'').trim());
@@ -10121,13 +10126,13 @@ function pliHtmlEditor(){
   const bloqueado = !e.manual;
   const linhas = e.fases.map((f,r)=>`<tr>
     <td><button class="btn small secondary" onclick="plcEdMover(${r},-1)">▲</button><button class="btn small secondary" onclick="plcEdMover(${r},1)">▼</button></td>
-    <td><input type="text" value="${esc(f.cod)}" style="width:64px;" ${bloqueado?'disabled':''} onchange="plcEdFase(${r},'cod',this.value)"></td>
+    <td><input type="text" value="${esc(f.cod)}" style="width:64px;" ${(bloqueado&&!f.novo)?'disabled':''} onchange="plcEdFase(${r},'cod',this.value)"></td>
     <td><input type="text" value="${esc(f.desc)}" style="width:230px;" onchange="plcEdFase(${r},'desc',this.value)"></td>
     <td class="n"><input type="number" min="0" step="100" value="${f.kg}" style="width:90px;" onchange="plcEdFase(${r},'kg',this.value);renderPlanejInt()"></td>
     ${bloqueado?(()=>{ const cad = f.kgCad!=null ? f.kgCad : f.kg, d = (f.kg||0)-cad; return `<td class="n" style="color:#666;">${pliFmtT(cad,0)}${Math.abs(d)>0.5?` <span style="color:${d>0?'#b00020':'#1c7c3e'}">(${d>0?'+':''}${pliFmtT(d,0)})</span>`:''}</td>`; })():''}
     <td class="n"><input type="number" min="0" max="200" step="5" value="${f.fatorInst!=null?f.fatorInst:100}" style="width:64px;" onchange="plcEdFase(${r},'fatorInst',this.value)"></td>
     ${PLC_MARCOS.map(([k])=>`<td style="text-align:center"><input type="checkbox" ${f.nec[k]?'checked':''} onchange="plcEdNec(${r},'${k}',this.checked)"></td>`).join('')}
-    <td>${bloqueado?'':`<button class="btn small secondary" onclick="plcEdDel(${r})">✕</button>`}</td></tr>`).join('');
+    <td><button class="btn small secondary" title="Excluir esta fase" onclick="plcEdDel(${r})">✕</button></td></tr>`).join('');
   return `<div class="pli-card" style="border:2px solid #bd0c1d;"><h3>${e.idx<0?(e.refDe?'Faseamento de '+esc(e.nome)+' — copiado da obra de referência '+esc(e.refDe):'Nova obra (criação manual)'):'Faseamento, marcos e valor do kg — '+esc(e.nome)}</h3>
     <div class="pli-note" style="margin-top:0;">A ordem das fases é a <b>ordem das compras</b> (▲▼ para mudar). Marque, em cada fase, para quais marcos ela é necessária. A instalação dessas fases precisa terminar <b>${folga} mês(es) antes</b> de cada marco.${bloqueado?' <br>Obra importada: você pode editar o <b>peso</b> e a descrição — o sistema passa a usar o peso informado e guarda o peso da planilha (coluna "Cadastrado"). Reimportar a planilha mantém os pesos editados.':''}</div>
     <div class="pli-filtros">
@@ -10145,7 +10150,7 @@ ${e.idx<0?`      <label>Efetivo de instalação (pessoas) <input type="number" v
     </div>
     ${e.idx>=0?pliHtmlPers(e):''}
     <div class="pli-scroll"><table class="pli-t"><thead><tr><th>Ordem</th><th>Fase</th><th>Descrição</th><th class="n">Peso (kg)</th>${bloqueado?'<th class="n">Cadastrado (planilha)</th>':''}<th class="n" title="% do custo de mão de obra de instalação desta fase (100% = normal)">MO inst. (%)</th><th style="text-align:center">Investidor</th><th style="text-align:center">Habite-se</th><th style="text-align:center">Obra</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
-    <div class="pli-filtros" style="margin-top:8px;">${e.manual?'<button class="btn small secondary" onclick="plcEdAdd()">+ Fase</button>':''}<button class="btn small" onclick="plcEdSalvar()">Salvar</button><button class="btn small secondary" onclick="plcEdFechar()">Cancelar</button></div></div>`;
+    <div class="pli-filtros" style="margin-top:8px;"><button class="btn small secondary" onclick="plcEdAdd()">+ Acrescentar fase</button><button class="btn small secondary" onclick="plcEdZerar()">Zerar tudo (kg)</button><button class="btn small secondary" onclick="plcEdNovo()">Fazer um novo</button><label class="btn small secondary" style="cursor:pointer;">Importar planilha<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="plcEdImportar(event)"></label>${e.idx>=0?'<button class="btn small secondary" style="color:#b00020;" onclick="plcEdExcluirObra()">Excluir esta obra</button>':''}<span style="flex:1"></span><button class="btn small" onclick="plcEdSalvar()">Salvar</button><button class="btn small secondary" onclick="plcEdFechar()">Cancelar</button></div></div>`;
 }
 function pliHtmlMarcos(){
   const c = plcLoad(), com = c.obras.map((o,i)=>({ o, i })).filter(x=>x.o.marcos);
@@ -11069,7 +11074,7 @@ function pliAtualizarMenu(){
 // Abas enxutas: Ocupação da fábrica, Instalação e efetivo, Custo × Orçado e Compras viraram atalhos para os módulos
 // PCP, Cronograma de Instalação, Cronograma Financeiro e Compras (as funções antigas continuam no código, sem uso).
 const PLI_TABS = [
-  ['premissas','Premissas'], ['resumo','Resumo'], ['gantt','Gantt por obra'], ['cruz','Cruzamento'], ['cronfin','Cronograma por obra']
+  ['premissas','Premissas'], ['resumo','Resumo'], ['compras','Cronograma de compras'], ['gantt','Gantt por obra'], ['cruz','Cruzamento'], ['cronfin','Cronograma por obra']
 ];
 const PLI_ATALHOS = [['pcp','PCP de Fabricação'], ['instalacao','Cronograma de Instalação'], ['cronfin','Cronograma Financeiro'], ['solicitacoes','Compras']];
 
@@ -21200,7 +21205,7 @@ function atcHtmlPainel(){
   const kpi = (n, l, cor)=>`<div class="kpi" ${cor?`style="border-top-color:${cor}"`:''}><div class="num">${n}</div><div class="lbl">${l}</div></div>`;
   return `${legado ? `<div class="panel"><div class="panel-body" style="background:#fff8e1;"><b>${legado} chamado(s) do módulo antigo (Revisão de Esquadrias) encontrado(s) neste navegador.</b> <button class="btn small" onclick="atcImportarLegado()">Importar para o novo módulo</button></div></div>` : ''}
   <div class="atc-bar"><select onchange="atcSetFiltro('obra',this.value)">${atcOptsObras(ATC_UI.obra)}</select>
-    <select onchange="atcSetFiltro('mes',this.value)"><option value="">Todos os meses</option>${meses.map(m=>`<option value="${m}" ${m===ATC_UI.mes?'selected':''}>${m.slice(5)}/${m.slice(0,4)}</option>`).join('')}</select></div>
+    <select onchange="atcSetFiltro('mes',this.value)"><option value="">Todos os meses</option>${meses.map(m=>`<option value="${m}" ${m===ATC_UI.mes?'selected':''}>${m.slice(5)}/${m.slice(0,4)}</option>`).join('')}</select><button class="btn small" style="margin-left:auto;" onclick="atcImprimirApresentacao()">Imprimir apresentação</button></div>
   <div class="kpi-row">${kpi(abertos.length,'Em aberto')}${kpi(atras.length,'Atrasados','#c62828')}${kpi(prox7,'Agendados nos próximos 7 dias','#e69500')}${kpi(semAgenda,'Abertos sem agendamento','#e69500')}${kpi(conc.length,'Concluídos','#2e7d32')}${kpi(medio+(tempos.length?' d':''),'Tempo médio de atendimento')}${kpi(pctPrazo,'Concluídos no prazo','#2e7d32')}${kpi(retornos,'Com retorno necessário')}</div>
   ${atras.length ? `<div class="panel"><div class="panel-head">Atrasados — agir primeiro</div><div class="panel-body">${atcTabela(atras.sort((a,b)=>(a.prazo||'').localeCompare(b.prazo||'')).slice(0,10))}</div></div>` : ''}
   <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;">
@@ -21213,7 +21218,7 @@ function atcHtmlPainel(){
     ${atcBarras('Por técnico', atcConta(lista, c=>atcPessoaNome(c.tecnicoRef)))}
     ${atcBarras('Garantia', atcConta(lista, c=>c.garantia))}
   </div>
-  <div class="toolbar" style="margin-top:10px;"><button class="btn small secondary" onclick="atcImprimirRelatorio()">Imprimir relatório (${ATC_UI.mes?ATC_UI.mes.slice(5)+'/'+ATC_UI.mes.slice(0,4):'todos os meses'})</button></div>`;
+  <div class="toolbar" style="margin-top:10px;"><button class="btn small" onclick="atcImprimirApresentacao()">Imprimir apresentação (dashboards e KPIs)</button> <button class="btn small secondary" onclick="atcImprimirRelatorio()">Imprimir relatório (${ATC_UI.mes?ATC_UI.mes.slice(5)+'/'+ATC_UI.mes.slice(0,4):'todos os meses'})</button></div>`;
 }
 
 /* ---------------- lista / kanban ---------------- */
@@ -21530,6 +21535,54 @@ function atcImprimirRelatorio(){
     <p><b>${lista.length}</b> chamado(s) · em aberto: <b>${lista.filter(c=>!atcFim(c)).length}</b> · atrasados: <b>${lista.filter(atcAtrasado).length}</b> · concluídos: <b>${lista.filter(c=>c.status==='Concluído').length}</b></p>
     <h3>Por empreendimento</h3><table>${cont(atcObraNome)}</table><h3>Por problema</h3><table>${cont(c=>c.problema)}</table><h3>Por causa raiz</h3><table>${cont(c=>c.causa)}</table>
     <h3>Chamados</h3><table><tr><th style="width:8%">Nº</th><th>Obra / unidade</th><th>Problema</th><th>Abertura</th><th>Prazo</th><th>Status</th></tr>${lista.map(c=>`<tr><td>${atcNum(c.numero)}</td><td>${esc(atcObraNome(c))} ${esc(c.unidade||'')}</td><td>${esc(c.problema||'')}</td><td>${fmtDate((c.dataAbertura||'').slice(0,10))}</td><td>${c.prazo?fmtDate(c.prazo):'—'}</td><td>${esc(c.status)}</td></tr>`).join('')}</table></body></html>`);
+}
+function atcImprimirApresentacao(){
+  const todos = atcLista().filter(c=>!ATC_UI.obra || c.obraId===ATC_UI.obra);
+  const lista = todos.filter(c=>!ATC_UI.mes || (c.dataAbertura||'').slice(0,7)===ATC_UI.mes);
+  if(!lista.length){ toast('Não há chamados nesta visão para a apresentação.'); return; }
+  const hoje = atcHoje();
+  const per = ATC_UI.mes ? ATC_UI.mes.slice(5)+'/'+ATC_UI.mes.slice(0,4) : 'Todos os períodos';
+  const obraTxt = ATC_UI.obra ? atcObraNome({obraId:ATC_UI.obra}) : 'Todos os empreendimentos';
+  const abertos = lista.filter(c=>!atcFim(c)), atras = abertos.filter(atcAtrasado), conc = lista.filter(c=>c.status==='Concluído');
+  const tempos = conc.filter(c=>c.dataConclusao).map(c=>Math.max(0, atcDiff((c.dataAbertura||'').slice(0,10), c.dataConclusao.slice(0,10))));
+  const medio = tempos.length ? (tempos.reduce((a,b)=>a+b,0)/tempos.length).toFixed(1).replace('.',',')+' d' : '—';
+  const noPrazo = conc.filter(c=>c.prazo && c.dataConclusao && c.dataConclusao.slice(0,10) <= c.prazo).length;
+  const pctPrazo = conc.length ? Math.round(noPrazo/conc.length*100)+'%' : '—';
+  const prox7 = abertos.filter(c=>c.dataAgendada && c.dataAgendada>=hoje && c.dataAgendada<=atcAddDias(hoje,7)).length;
+  const semAg = abertos.filter(c=>!c.dataAgendada).length;
+  const retornos = lista.filter(c=>c.retorno==='Sim').length;
+  const pctConc = Math.round(conc.length/lista.length*100);
+  const kpi = (n,l,cor)=>`<div class="k" style="border-top-color:${cor||'#bd0c1d'}"><b>${n}</b><span>${l}</span></div>`;
+  const barras = (titulo, mapa, cor)=>{
+    const ent = Object.entries(mapa).sort((a,b)=>b[1]-a[1]).slice(0,8), mx = Math.max(1,...ent.map(e=>e[1]));
+    return `<div class="bx"><h3>${esc(titulo)}</h3>${ent.map(([k,v])=>`<div class="r"><span>${esc(k)}</span><i><u style="width:${(v/mx*100).toFixed(0)}%;background:${cor||'#bd0c1d'}"></u></i><b>${v}</b></div>`).join('')||'<div class="s">Sem dados.</div>'}</div>`;
+  };
+  const ev = []; const d0 = new Date(); d0.setDate(1);
+  for(let i=5;i>=0;i--){ const d = new Date(d0.getFullYear(), d0.getMonth()-i, 1); ev.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+  const evAb = ev.map(m=>todos.filter(c=>(c.dataAbertura||'').slice(0,7)===m).length), evCo = ev.map(m=>todos.filter(c=>(c.dataConclusao||'').slice(0,7)===m).length);
+  const mx = Math.max(1,...evAb,...evCo);
+  const evSvg = `<svg viewBox="0 0 ${ev.length*90} 190" style="width:100%;height:auto;">${ev.map((m,i)=>{
+    const h1=evAb[i]/mx*140, h2=evCo[i]/mx*140, x=i*90+12;
+    return `<rect x="${x}" y="${160-h1}" width="30" height="${h1}" fill="#bd0c1d"/><rect x="${x+33}" y="${160-h2}" width="30" height="${h2}" fill="#2e7d32"/><text x="${x+15}" y="${155-h1}" font-size="12" text-anchor="middle">${evAb[i]||''}</text><text x="${x+48}" y="${155-h2}" font-size="12" text-anchor="middle">${evCo[i]||''}</text><text x="${x+31}" y="178" font-size="12" text-anchor="middle" fill="#555">${m.slice(5)}/${m.slice(2,4)}</text>`;
+  }).join('')}</svg><div class="s"><span style="color:#bd0c1d">■</span> Abertos &nbsp; <span style="color:#2e7d32">■</span> Concluídos</div>`;
+  const topAtr = atras.sort((a,b)=>(a.prazo||'').localeCompare(b.prazo||'')).slice(0,12);
+  const slide = (tit, corpo)=>`<section class="sl"><div class="hd"><div><b>Construtora Calper</b> · Divisão de Alumínio</div><div>${esc(obraTxt)} · ${per}</div></div><h2>${tit}</h2>${corpo}<div class="ft">Chamados / Assistência técnica · emitido em ${new Date().toLocaleDateString('pt-BR')}</div></section>`;
+  const css = `<style>@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Calibri,Arial,sans-serif;color:#222}
+.sl{width:297mm;height:209mm;padding:12mm 16mm;position:relative;page-break-after:always;overflow:hidden}.sl:last-child{page-break-after:auto}
+.hd{display:flex;justify-content:space-between;font-size:11px;color:#666;border-bottom:3px solid #bd0c1d;padding-bottom:6px}.hd b{color:#bd0c1d}
+h2{font-family:Georgia,serif;font-size:26px;margin:14px 0 14px;color:#222}h3{font-size:12px;text-transform:uppercase;color:#555;margin:0 0 8px}
+.ft{position:absolute;left:16mm;right:16mm;bottom:8mm;font-size:10px;color:#888;border-top:1px solid #ddd;padding-top:4px}
+.kr{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}.k{border:1px solid #ddd;border-top:5px solid #bd0c1d;border-radius:4px;padding:26px 16px}.k b{display:block;font-size:48px;line-height:1.1}.k span{font-size:15px;color:#555}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.bx{border:1px solid #ddd;border-radius:4px;padding:18px}.r{display:grid;grid-template-columns:42% 1fr 28px;gap:8px;align-items:center;margin:10px 0;font-size:16px}.r span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.r i{display:block;background:#eee;height:18px;border-radius:2px}.r u{display:block;height:18px;border-radius:2px}.r b{text-align:right}.s{font-size:11px;color:#666;margin-top:4px}
+table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid #ddd;padding:9px 8px;text-align:left}th{background:#f2f2f2;font-size:11px;text-transform:uppercase}
+.cv{display:flex;flex-direction:column;justify-content:center;height:100%}.cv h1{font-family:Georgia,serif;font-size:46px;color:#bd0c1d;margin:0 0 8px}.cv p{font-size:20px;margin:4px 0;color:#444}</style>`;
+  const capa = `<section class="sl" style="border-left:14mm solid #bd0c1d"><div class="cv"><h1>Chamados / Assistência técnica</h1><p>Construtora Calper · Divisão de Alumínio</p><p>${esc(obraTxt)}</p><p>${per}</p><p style="font-size:14px;color:#888;margin-top:30px">Emitido em ${new Date().toLocaleDateString('pt-BR')}</p></div></section>`;
+  const s1 = slide('Indicadores gerais', `<div class="kr">${kpi(lista.length,'Chamados no período')}${kpi(abertos.length,'Em aberto')}${kpi(atras.length,'Atrasados','#c62828')}${kpi(conc.length+' ('+pctConc+'%)','Concluídos','#2e7d32')}${kpi(prox7,'Agendados nos próximos 7 dias','#e69500')}${kpi(semAg,'Abertos sem agendamento','#e69500')}${kpi(medio,'Tempo médio de atendimento')}${kpi(pctPrazo,'Concluídos no prazo','#2e7d32')}</div><div class="s">Retornos necessários: <b>${retornos}</b></div>`);
+  const s2 = slide('Evolução e situação', `<div class="g2"><div class="bx"><h3>Abertos × concluídos (6 meses)</h3>${evSvg}</div>${barras('Por status', atcConta(lista,c=>c.status))}</div>`);
+  const s3 = slide('Onde e o que', `<div class="g2">${barras('Por empreendimento', atcConta(lista,atcObraNome))}${barras('Por problema relatado', atcConta(lista,c=>c.problema))}</div>`);
+  const s4 = slide('Causas e responsáveis', `<div class="g2">${barras('Por causa raiz', atcConta(lista,c=>c.causa),'#e69500')}${barras('Por tipo de esquadria', atcConta(lista,c=>c.tipo))}${barras('Por técnico', atcConta(lista,c=>atcPessoaNome(c.tecnicoRef)),'#1565c0')}${barras('Garantia', atcConta(lista,c=>c.garantia),'#2e7d32')}</div>`);
+  const s5 = slide('Atrasados — ação prioritária', topAtr.length ? `<table><tr><th>Nº</th><th>Obra / unidade</th><th>Problema</th><th>Técnico</th><th>Prazo</th><th>Status</th></tr>${topAtr.map(c=>`<tr><td><b>${atcNum(c.numero)}</b></td><td>${esc(atcObraNome(c))} ${esc(c.unidade||'')}</td><td>${esc(c.problema||'')}</td><td>${esc(atcPessoaNome(c.tecnicoRef))}</td><td>${c.prazo?fmtDate(c.prazo):'—'}</td><td>${esc(c.status)}</td></tr>`).join('')}</table>${atras.length>12?`<div class="s">Mostrando 12 de ${atras.length} atrasados.</div>`:''}` : '<div class="bx"><h3>Nenhum chamado atrasado</h3><div class="s">Todos os chamados em aberto estão dentro do prazo.</div></div>');
+  atcImprimirHtml(`<html><head><meta charset="utf-8"><title>Apresentação de chamados</title>${css}</head><body>${capa}${s1}${s2}${s3}${s4}${s5}</body></html>`);
 }
 function atcExportarCSV(todos){
   const l = todos ? atcLista().sort((a,b)=>(a.numero||0)-(b.numero||0)) : atcFiltrados().reverse();
