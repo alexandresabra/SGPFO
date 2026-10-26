@@ -9850,7 +9850,11 @@ function plcCapCalcular(C, cfg, opts){
       pend.forEach(f=>{ jan[f.cod] = { ini:pliAddDias(tmp[f.cod].ini, sh), fim:pliAddDias(tmp[f.cod].fim, sh) }; });
     }
     fases.forEach((f,fi)=>{
-      const j = jan[f.cod] || null; let earliest = dbISO;
+      const j = jan[f.cod] || null;
+      /* a fábrica só pode começar depois: 1ª compra (ou data base) + entrega do material + início da fabricação (premissas) */
+      let pc1 = ''; try{ pc1 = plcPrimeiraCompra(ob, true) || ob.inicio1 || ''; }catch(e){ pc1 = ob.inicio1 || ''; }
+      if(!pc1 || pc1 < dbISO) pc1 = dbISO;
+      let earliest = pliAddDias(pc1, (p.entregaDias||0) + (p.iniFabDias||0));
       const cr = ob.compraReal && (ob.compraReal[f.cod] || ob.compraReal[f.cod+'@'+f.grupo]);
       if(cr && cr.entrega){ const e = pliAddDias(cr.entrega, p.iniFabDias); if(e > earliest) earliest = e; }
       U.push({ oi, ob, f, fi, kg:f.kg, t:f.kg/1000, j, lag:p.iniInstDias, earliest, capInst, exec:!!ex[f.cod], dur:dur(f), D, rate:capInst, rNec, rMax,
@@ -11414,7 +11418,7 @@ function pliExcluirPlanilhas(){
   const old = pliLoad();
   pliSave(pliBlank(old));
   const c = plcLoad();
-  c.obras.forEach(o=>{ o.fluxo = []; delete o.lotesPlan; o.modoPlanilha = false; delete o.fluxoPers; delete o.reparcelar; delete o.ajuste; });
+  c.obras.forEach(o=>{ const pc = (o.fluxo||[]).map(x=>x.venc).filter(Boolean).sort()[0]; if(pc) o.inicio1 = pc; o.fluxo = []; delete o.lotesPlan; o.modoPlanilha = false; delete o.fluxoPers; delete o.reparcelar; delete o.ajuste; });
   plcSave(c);
   renderPlanejInt(); toast('Planilhas excluídas. Ficou só o faseamento das obras.');
 }
