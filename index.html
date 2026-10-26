@@ -9885,11 +9885,17 @@ function plcCapCalcular(C, cfg, opts){
       S.push({ u, b, t:u.t*frac, due:pliAddDias(b, -u.lag) });
     }
   });
-  S.sort((x,y)=> x.due<y.due?-1:(x.due>y.due?1:(x.u.oi-y.u.oi)));
+  /* prioridade por deadline: a obra com prazo menor escolhe a vaga na fábrica primeiro, ; a de prazo maior só ocupa a sobra
+     (se a janela dela exigir começar antes, aparece o aviso na Ordem de prioridade) */
+  const rankObra = {}; { const ords = Array.from(new Set(U.map(u=>u.oi))).sort((a,b)=>{ const da = (U.find(u=>u.oi===a)||{}).D||'9999', db = (U.find(u=>u.oi===b)||{}).D||'9999'; return da<db?-1:(da>db?1:a-b); }); ords.forEach((oi,k)=>rankObra[oi]=k); }
+  S.forEach(sl=>{ sl.rk = rankObra[sl.u.oi]; });
+  S.sort((x,y)=> x.rk-y.rk || (x.due<y.due?-1:(x.due>y.due?1:0)));
+  const iniRank = {};
   S.forEach(sl=>{
-    const u = sl.u; let res = fillBack(sl.t, sl.due, u.earliest);
-    if(res.rest > 1e-6) res = fillFwd(sl.t, u.earliest);
-    res.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.pc.push([d,x]); });
+    const u = sl.u; let piso = u.earliest;
+    let res = fillBack(sl.t, sl.due, piso);
+    if(res.rest > 1e-6) res = fillFwd(sl.t, piso);
+    res.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.pc.push([d,x]); if(!iniRank[sl.rk] || d < iniRank[sl.rk]) iniRank[sl.rk] = d; });
     const fim = res.aloc.map(x=>x[0]).sort().slice(-1)[0];
     if(fim){ const dl = pliDiffDias(fim, sl.due); if(dl > u.delay) u.delay = dl; }
   });
@@ -9992,7 +9998,7 @@ function plcCapCalcular(C, cfg, opts){
   if(eq.length){ const ef = OBS[0] ? OBS[0].ob.prem.efetivo : 30; alertas.push({ nivel:'info', t:`Instalação: <b>${eq.length} equipe(s)</b> de ${ef} pessoas (${eq.length*ef} pessoas no total)`, d:eq.map(e=>'Equipe '+e.n+': '+e.obras.map(x=>x.nome).join(' → ')).join(' · ')+(Number.isFinite(NEq)?` · limite de ${NEq} equipe(s)`:' · sem limite de equipes (o sistema dimensiona)')+'. Cada equipe é realocada para a obra seguinte ao terminar (remobilização '+remob+' dias).' }); }
   OBS.filter(o=>o.desl>0).forEach(o=>alertas.push({ nivel:'atenc', t:`<b>${esc(o.ob.nome)}</b>: instalação adiada ${o.desl} dias por falta de equipe livre`, d:`todas as ${NEq} equipes estão ocupadas; a obra só começa em ${fm(o.ini)}.` }));
   U.forEach(x=>{ x.com = Array.from(new Set(U.filter(y=>y!==x && y.oi!==x.oi && y.iniFab < x.fimFab && y.fimFab > x.iniFab).map(y=>y.ob.nome))); });
-  return { cfg, modo:'cap', byObra, alertas, equipes:eq, fases:U.map(x=>({ obra:x.ob.nome, cod:x.f.cod, desc:x.f.desc, kg:x.kg, pronto:pliAddDias(x.chegada, x.ob.prem.iniFabDias), iniFab:x.iniFab, fimFab:x.fimFab, iniInst:x.iniInst, fimInst:x.fimInst, com:x.com, prazo:plcPrazoFase(x.ob, x.f) })) };
+  return { cfg, modo:'cap', byObra, alertas, equipes:eq, fases:U.map(x=>({ obra:x.ob.nome, cod:x.f.cod, desc:x.f.desc, kg:x.kg, pronto:pliAddDias(x.chegada, x.ob.prem.iniFabDias), iniFab:x.iniFab, fimFab:x.fimFab, iniInst:x.iniInst, fimInst:x.fimInst, com:x.com, prazo:plcPrazoFase(x.ob, x.f), mes:x.mes })) };
 }
 /* Fábrica: cada fase (linha de produção) roda direto, sem interrupção, dividindo a capacidade do mês
    com no máximo (maxObras-1) outras obras. Uma fase só começa com o material (minMat %) na fábrica. */
@@ -17636,7 +17642,7 @@ function pcpFases(){
   const idDaObra = nome => { const o = (C&&C.obras||[]).find(x=>x.nome===nome); return o ? o.id : nome; };
   const sgDe = pid => { try{ const o = (C&&C.obras||[]).find(x=>x.id===pid); const sg = o && plcObraSgptDoCron(o); return sg ? sg.id : ''; }catch(e){ return ''; } };
   if(seq && seq.fases && seq.fases.length){
-    seq.fases.forEach(f=> out.push({ obraId:idDaObra(f.obra), obra:f.obra, cod:f.cod, desc:f.desc||'', kg:f.kg, pronto:f.pronto, ini:f.iniFab, fim:f.fimFab, com:f.com||[] }));
+    seq.fases.forEach(f=> out.push({ obraId:idDaObra(f.obra), obra:f.obra, cod:f.cod, desc:f.desc||'', kg:f.kg, pronto:f.pronto, ini:f.iniFab, fim:f.fimFab, com:f.com||[], mes:f.mes }));
   } else if(C && C.obras){
     C.obras.forEach(ob=>{ let R; try{ R = plcCalc(ob); }catch(e){ return; }
       const por = {};
@@ -17648,6 +17654,7 @@ function pcpFases(){
 }
 // kg da fase que cai no mês (distribuição uniforme entre início e fim)
 function pcpKgNoMes(f, ym){
+  if(f.mes && Object.keys(f.mes).length) return (f.mes[ym]||0)*1000; /* o plano já distribui a produção mês a mês, respeitando a capacidade */
   const ini = f.ini, fim = f.fim > f.ini ? f.fim : pliAddDias(f.ini,1);
   const m0 = ym+'-01', m1 = pcpMesSoma(ym,1)+'-01';
   const a = ini > m0 ? ini : m0, b = fim < m1 ? fim : m1;
@@ -17655,6 +17662,7 @@ function pcpKgNoMes(f, ym){
   return f.kg * d / Math.max(1, pliDiffDias(fim, ini));
 }
 function pcpKgAteMes(f, ym){ // acumulado até o fim do mês
+  if(f.mes && Object.keys(f.mes).length){ let t = 0; Object.keys(f.mes).forEach(k=>{ if(k <= ym) t += f.mes[k]*1000; }); return Math.min(f.kg, t); }
   const fimMes = pcpMesSoma(ym,1)+'-01';
   const ini = f.ini, fim = f.fim > f.ini ? f.fim : pliAddDias(f.ini,1);
   const b = fim < fimMes ? fim : fimMes, d = pliDiffDias(b, ini); if(d<=0) return 0;
