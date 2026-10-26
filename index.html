@@ -9901,26 +9901,48 @@ function plcCapCalcular(C, cfg, opts){
     const fim = res.aloc.map(x=>x[0]).sort().slice(-1)[0];
     if(fim){ const dl = pliDiffDias(fim, sl.due); if(dl > u.delay) u.delay = dl; }
   });
-  /* nivelamento: onde sobra capacidade, a produção é puxada para antes (antecipa a compra) até o limite de antecipação */
-  { const antD = Math.round(((P && P.antecipaMeses!=null) ? P.antecipaMeses : 0) * 30.4);
-    if(antD > 0){
+  /* nivelamento (curva S suave): a produção é puxada para antes, dos meses cheios para os mais vazios, sem mudar o faseamento
+     nem as datas de instalação. Limite: estoque de material (fabricado e ainda não instalado) <= estoqueMax (t), somando todas as obras */
+  { const estMax = (P && P.estoqueMax!=null) ? P.estoqueMax : 90, antD = Math.round(((P && P.antecipaMeses!=null) ? P.antecipaMeses : 0) * 30.4);
+    if(estMax > 0 || antD > 0){
+      const cap90 = estMax > 0 ? estMax : 1e9, ix = d => pliDiffDias(d, dbISO);
       const PCS = []; U.forEach(u=>{ if(!u.exec && u.j) u.pc.forEach(pc=>PCS.push({ u, d:pc[0], x:pc[1] })); });
-      PCS.sort((a,b)=> a.d>b.d?-1:(a.d<b.d?1:(a.u.oi-b.u.oi)));
-      const moved = [];
-      /* só antecipa para ACHATAR a carga (tirar pico, preencher vale); nunca puxa tudo para o começo */
+      let H = 0; PCS.forEach(p=>{ H = Math.max(H, ix(p.d)+2); }); S.forEach(sl=>{ H = Math.max(H, ix(sl.b)+2); });
+      const stock = new Array(H+1).fill(0), delta = new Array(H+1).fill(0);
+      PCS.forEach(p=>{ const k = ix(p.d); if(k>=0 && k<=H) delta[k] += p.x; });
+      S.forEach(sl=>{ const k = ix(sl.b); if(k>=0 && k<=H) delta[k] -= sl.t; });
+      { let a = 0; for(let k=0;k<=H;k++){ a += delta[k]; stock[k] = a; } }
       const Lm = {}; Object.keys(used).forEach(d=>{ const ym = d.slice(0,7); Lm[ym] = (Lm[ym]||0) + (used[d]||0); });
-      PCS.forEach(pc=>{
-        let rem = pc.x; const lb = (()=>{ const l = pliAddDias(pc.d, -antD); return l > pc.u.earliest ? l : pc.u.earliest; })();
-        for(let e = lb; e < pc.d && rem > 1e-9; e = pliAddDias(e,1)){
-          const free = capDia(e) - (used[e]||0); if(free <= 1e-9) continue;
-          const ye = e.slice(0,7), yd = pc.d.slice(0,7); if(ye === yd) continue;
-          const dif = (Lm[yd]||0) - (Lm[ye]||0); if(dif <= 1e-6) continue;
-          const m = Math.min(free, rem, dif/2); if(m <= 1e-9) continue;
-          used[e] = (used[e]||0) + m; used[pc.d] -= m; Lm[ye] = (Lm[ye]||0) + m; Lm[yd] -= m; rem -= m; moved.push({ u:pc.u, d:e, x:m });
+      for(let pass=0; pass<6; pass++){
+        let mexe = 0;
+        PCS.sort((a,b)=> a.d>b.d?-1:(a.d<b.d?1:(a.u.oi-b.u.oi)));
+        const n0 = PCS.length;
+        for(let q=0; q<n0; q++){
+          const pc = PCS[q]; if(pc.x <= 1e-9) continue;
+          const kd = ix(pc.d), yd = pc.d.slice(0,7);
+          let lb = pc.u.earliest; if(antD > 0){ const l = pliAddDias(pc.d, -antD); if(l > lb) lb = l; }
+          for(let tent=0; tent<4 && pc.x > 1e-9; tent++){
+            let run = -1e9, best = null;
+            for(let e = pliAddDias(pc.d,-1); e >= lb; e = pliAddDias(e,-1)){
+              const ke = ix(e); if(ke < 0) break;
+              if(stock[ke] > run) run = stock[ke];
+              if(run + 1e-6 >= cap90) break;
+              const free = capDia(e) - (used[e]||0); if(free <= 1e-9) continue;
+              const ye = e.slice(0,7); if(ye === yd) continue;
+              const L = Lm[ye]||0;
+              if(!best || L < best.L - 1e-9) best = { e, ke, L, free, room:cap90 - run, ye };
+            }
+            if(!best) break;
+            const dif = (Lm[yd]||0) - best.L; if(dif <= 1e-6) break;
+            const m = Math.min(best.free, pc.x, dif/2, best.room); if(m <= 1e-9) break;
+            used[best.e] = (used[best.e]||0) + m; used[pc.d] -= m; Lm[best.ye] = (Lm[best.ye]||0) + m; Lm[yd] -= m;
+            for(let k=best.ke; k<kd; k++) stock[k] += m;
+            pc.x -= m; PCS.push({ u:pc.u, d:best.e, x:m }); mexe += m;
+          }
         }
-        if(rem > 1e-9) moved.push({ u:pc.u, d:pc.d, x:rem });
-      });
-      U.forEach(u=>{ if(!u.exec && u.j) u.pc = []; }); moved.forEach(m=>m.u.pc.push([m.d, m.x]));
+        if(mexe < 0.05) break;
+      }
+      U.forEach(u=>{ if(!u.exec && u.j) u.pc = []; }); PCS.forEach(m=>{ if(m.x > 1e-9) m.u.pc.push([m.d, m.x]); });
     }
     U.forEach(u=>{ if(u.exec || !u.j) return; u.dias = []; u.mes = {}; u.pc.forEach(([d,x])=>{ u.dias.push(d); const ym = d.slice(0,7); u.mes[ym] = (u.mes[ym]||0) + x; }); });
   }
@@ -11433,7 +11455,7 @@ function pliBlank(old){
     meses:pliMesesEntre(ym0, pliYM(fim)), obras:[], base:{ META:{INST:{},PROD:{},FRENTES:{}}, OFICIAL:{INST:{},PROD:{},FRENTES:{}} }, frentes:[], orcado:[], compras:[], estoqueInicial:0,
     cap:{ atual:17, nova:40, de:'2027-02' }, capDefinida:true, capAtual17:true, efetivoAtualInst:30, efetivoFab:24, folhaInst:288859, pessoasFolha:30, custoPessoa:288859/30, prodB:0.5,
     custoTFab:650569/40, limiar:1, prazos:{ lista:15, cotacao:30, otim:60, cons:75, fab2:2, fab3:3, fab4:4 }, duo:{}, comprados:{} };
-  if(old){ ['cenario','prodModo','cap','capDefinida','capAtual17','efetivoAtualInst','efetivoFab','folhaInst','pessoasFolha','custoPessoa','prodB','custoTFab','limiar','prazos','equipeInst','custoFabDet','pagtoPadrao','iniFabDias','iniInstDias','instCapMin','instCapMax','equipesMax','remobDias','antecipaMeses','baseInst','reducaoInst','baseFab','reducaoFab','usaCurvas','ajusteProd'].forEach(k=>{ if(old[k]!==undefined) P[k] = old[k]; }); P.ajusteProd = old.ajusteProd||undefined; }
+  if(old){ ['cenario','prodModo','cap','capDefinida','capAtual17','efetivoAtualInst','efetivoFab','folhaInst','pessoasFolha','custoPessoa','prodB','custoTFab','limiar','prazos','equipeInst','custoFabDet','pagtoPadrao','iniFabDias','iniInstDias','instCapMin','instCapMax','equipesMax','remobDias','antecipaMeses','estoqueMax','baseInst','reducaoInst','baseFab','reducaoFab','usaCurvas','ajusteProd'].forEach(k=>{ if(old[k]!==undefined) P[k] = old[k]; }); P.ajusteProd = old.ajusteProd||undefined; }
   return P;
 }
 /* Exclui as planilhas enviadas (planejamento integrado e fluxos/lotes dos cronogramas); mantém só o faseamento e as premissas */
@@ -11769,6 +11791,7 @@ function pliHtmlPremissas(P, R){
      <tr><td>Capacidade de instalação da equipe padrão — mínima (t/mês)</td><td>${pliInput('instCapMin',P.instCapMin!=null?P.instCapMin:15)}</td><td>${pliFmtT((P.instCapMin!=null?P.instCapMin:15)/Math.max(1,P.pessoasFolha||30),3)} t/pessoa/mês · o cronograma parte desta capacidade</td></tr>
      <tr><td>Capacidade de instalação da equipe padrão — máxima (t/mês)</td><td>${pliInput('instCapMax',P.instCapMax!=null?P.instCapMax:20)}</td><td>${pliFmtT((P.instCapMax!=null?P.instCapMax:20)/Math.max(1,P.pessoasFolha||30),3)} t/pessoa/mês · usada só para cumprir o prazo; equipes de outro tamanho escalam proporcionalmente</td></tr>
      <tr><td>Número de equipes de instalação (0 = quantas precisar)</td><td>${pliInput('equipesMax',P.equipesMax||0)}</td><td>1 equipe por obra; ao terminar uma obra a equipe vai para a seguinte</td></tr>
+     <tr><td>Estoque máximo de material (t)</td><td>${pliInput('estoqueMax',P.estoqueMax!=null?P.estoqueMax:90)}</td><td>Material fabricado e ainda não instalado, somando todas as obras. Com valor acima de 0 o sistema nivela a produção e a compra (curva S suave), antecipando-as até este limite, sem mexer no faseamento; 0 = compra por fase só no último momento</td></tr>
      <tr><td>Antecipação máxima da produção/compra (meses)</td><td>${pliInput('antecipaMeses',P.antecipaMeses!=null?P.antecipaMeses:0)}</td><td>0 = compra por fase, só no último momento; a compra só é antecipada/acumulada quando a capacidade da fábrica exige para caber no prazo. Acima de 0, a produção também é nivelada (achatada) até este limite</td></tr>
      <tr><td>Remobilização entre obras (dias)</td><td>${pliInput('remobDias',P.remobDias!=null?P.remobDias:15)}</td><td>Intervalo entre sair de uma obra e começar a outra</td></tr>
      <tr><td>Produtividade – referência (t/pessoa/mês)</td><td>${pliInput('prodB',P.prodB)}</td><td>Observada: ${pliFmtT(R.prodA,3)}</td></tr>
