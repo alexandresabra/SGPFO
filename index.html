@@ -9626,8 +9626,9 @@ function pliCalc(P){
     const cr = pliCronDaObra(o.nome, crons);
     if(cr){ try {
       const CR = plcCalc(cr), mi = {}; CR.meses.forEach((m,k)=>mi[m]=k);
-      iArr = M.map((ym,i)=> ym<dbYM0 ? iArr[i] : (mi[ym]!==undefined ? CR.instalado[mi[ym]]/1000 : 0));
-      pArr = M.map((ym,i)=> ym<dbYM0 ? pArr[i] : (mi[ym]!==undefined ? CR.fabricado[mi[ym]]/1000 : 0));
+      /* obra com faseamento: vale o TOTAL do faseamento (todas as fases), sem somar curva do plano; o que cair antes do 1º mês do eixo entra no 1º mês */
+      const dobra = arr => { const out = M.map(()=>0); CR.meses.forEach((ym,k)=>{ const v = arr[k]/1000; if(!v) return; const i = ym < M[0] ? 0 : M.indexOf(ym); if(i>=0) out[i] += v; }); return out; };
+      iArr = dobra(CR.instalado); pArr = dobra(CR.fabricado);
       fontes[o.nome] = { fonte:'cronograma', cron:cr.nome, ton:iArr.reduce((s,v)=>s+v,0), tonCron:CR.totKg/1000, fim:CR.maxInst };
       obrasComCron[o.nome] = true;
       CR.lotes.forEach(l=> lotesCron.push({ obra:o.nome, bloco: l.etapa ? ('Etapa '+l.etapa+' · '+l.fase+(l.pct<0.999?' ('+Math.round(l.pct*100)+'%)':'')) : ('Fase '+l.fase+' · parc. '+l.parcela), frente:l.desc, lote:String(l.n), abr:'',
@@ -9827,7 +9828,9 @@ function plcCapCalcular(C, cfg, opts){
     const jaFeita = f => !!(f.fimLB && f.fimLB <= dbISO);
     fases.forEach(f=>{ if(jaFeita(f)){ ex[f.cod] = true; jan[f.cod] = { ini:f.iniLB||f.fimLB, fim:f.fimLB }; } });
     const pend = fases.filter(f=>!ex[f.cod]);
-    const D = p.alvoAnt || p.alvo || (pend.length ? pend.map(f=>f.fimLB).filter(Boolean).sort().slice(-1)[0] : null);
+    let D = p.alvoAnt || p.alvo || (pend.length ? pend.map(f=>f.fimLB).filter(Boolean).sort().slice(-1)[0] : null);
+    /* obra sem deadline nem datas de instalação: segue o calendário de pagamentos dela (fica depois das que têm prazo menor, nunca passa à frente) */
+    if(!D && pend.length){ try{ D = plcCalcBase(ob).maxInst || null; }catch(e){ D = null; } }
     const rMax = Math.max(capInst, p.efetivo*(p.prodInstMax||p.prodInst)); let rNec = 0;
     if(pend.length && D){
       const totP = pend.reduce((a,f)=>a+f.kg/1000,0), mesesD = Math.max(0.25, pliDiffDias(D, pliAddDias(dbISO, p.iniInstDias))/p.diasMes);
@@ -11479,7 +11482,7 @@ function pliHtmlResumo(P, R){
   const fontesCard = `<div class="pli-card"><h3>De onde vem cada obra</h3>
     <table class="pli-t"><thead><tr><th>Obra</th><th>Fonte da fábrica, instalação e compras</th><th class="n">Tonelagem usada</th><th>Término da instalação</th></tr></thead><tbody>
     ${P.obras.map(o=>{ const f = R.fontes[o.nome]; const ult = R.M.filter((m,i)=>R.inst[o.nome][i]>0.05).slice(-1)[0];
-      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>'}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= ${pliFmtT(f.ton-f.tonCron,1)} t realizado até a data base (plano) + ${pliFmtT(f.tonCron,1)} t do cronograma${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
+      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>'}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= total do faseamento${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
     </tbody></table>
     <div class="pli-note">Cada cronograma financeiro importado (aba "Cronograma financeiro") substitui, a partir da data base, a curva de fábrica e de instalação da obra correspondente e gera os lotes de compra dela. O vínculo é automático pelo nome (ou escolhido no cronograma). Importar de novo o mesmo cronograma atualiza tudo.</div></div>`;
   return fontesCard + `
