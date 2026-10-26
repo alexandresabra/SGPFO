@@ -2010,10 +2010,10 @@
           <div class="toolbar">
             <div id="pliStatus" class="pli-note" style="margin:0;"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <label class="btn small" style="cursor:pointer;margin:0;">Importar planilha(s) (.xlsx)<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label>
+              <label class="btn small" style="cursor:pointer;margin:0;">Importar faseamento (.xlsx)<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label>
               <button class="btn small secondary" onclick="pliExportarPDF(false)">PDF da aba</button>
               <button class="btn small secondary" onclick="pliExportarPDF(true)">PDF completo</button>
-              <button class="btn small secondary" onclick="pliLimpar()">Remover planejamento</button>
+              <button class="btn small secondary" onclick="pliExcluirPlanilhas()" title="Apaga curvas, fluxos e lotes de planilha; mantém só o faseamento">Excluir planilhas enviadas</button>
             </div>
           </div>
           <div id="pliControles" class="pli-controles" style="display:none;">
@@ -9569,7 +9569,7 @@ function pliLerCronograma(wb, nomeArquivo){
     if(!g || String(g).toUpperCase()==='TOTAL') break;
     fluxo.push({ grupo:String(g), parcela:String(pliCel(pr,'B'+r)||''), venc:pliDataCel(pr,'C'+r), valor:pliNum(pr,'D'+r) });
   }
-  if(!fases.length || !fluxo.length) throw new Error('Não encontrei as fases e o fluxo de pagamentos na aba PREMISSAS.');
+  if(!fases.length) throw new Error('Não encontrei as fases (faseamento) na aba PREMISSAS.');
   // aba LOTES da própria planilha (fila de fábrica e instalação já calculadas)
   const lotesPlan = [];
   const ls = wb.Sheets['LOTES'];
@@ -9587,7 +9587,7 @@ function pliLerCronograma(wb, nomeArquivo){
   const gFases = new Set(fases.map(f=>f.grupo));
   const modoPlanilha = lotesPlan.length>0 && fluxo.some(x=>!gFases.has(x.grupo));
   return {
-    lotesPlan, modoPlanilha,
+    lotesPlan:[], modoPlanilha:false,
     id:uid(), nome, arquivo:nomeArquivo, importadoEm:new Date().toISOString(),
     prem:{
       entregaDias:pliNum(pr,'B4',15), iniFabDias:pliNum(pr,'B5',20), capFab:pliNum(pr,'B6',30), iniInstDias:pliNum(pr,'B7',20),
@@ -9595,7 +9595,7 @@ function pliLerCronograma(wb, nomeArquivo){
       preco:pliNum(pr,'B13',43.5), folhaFab:pliNum(pr,'B14',740000), prodRef:pliNum(pr,'B15',30),
       efetivo:pliNum(pr,'K4',30), alvo:pliDataCel(pr,'K5'), compPct:pliNum(pr,'K6',0.3), comp1:pliNum(pr,'K7',28), comp2:pliNum(pr,'K8',56)
     },
-    fases, fluxo
+    fases, fluxo:[]
   };
 }
 
@@ -9623,6 +9623,7 @@ function pliCalc(P){
     let iArr = M.map((_,i)=> o.ton*(bi[i]||0));
     let pArr = M.map((_,i)=> o.ton*(bp[i]||0));
     fontes[o.nome] = { fonte:'plano', ton:o.ton };
+    if(!P.usaCurvas && !pliCronDaObra(o.nome, crons)){ iArr = M.map(()=>0); pArr = M.map(()=>0); fontes[o.nome] = { fonte:'plano', ton:0, semFaseamento:true }; }
     const cr = pliCronDaObra(o.nome, crons);
     if(cr){ try {
       const CR = plcCalc(cr), mi = {}; CR.meses.forEach((m,k)=>mi[m]=k);
@@ -9814,7 +9815,7 @@ function plcCapCalcular(C, cfg, opts){
   const P = pliLoad(), dbISO = P ? P.dataBase : todayISO();
   const capMes = ym => P ? (ym < P.cap.de ? P.cap.atual : ((opts && opts.capNova!=null) ? opts.capNova : P.cap.nova)) : 30;
   const aj = (P && P.ajusteProd) || {};
-  const planOnly = P ? P.obras.filter(o=>!pliCronDaObra(o.nome, C.obras)) : [];
+  const planOnly = (P && P.usaCurvas) ? P.obras.filter(o=>!pliCronDaObra(o.nome, C.obras)) : [];
   const cargaPlano = ym => { if(!P) return 0; const i = P.meses.indexOf(ym);
     return planOnly.reduce((s,o)=>{ const a = (aj[o.nome]||{})[ym]; if(a!==undefined) return s+a; const bp = (P.base[P.cenario].PROD[o.nome]||[]); return s + (i>=0 ? o.ton*(bp[i]||0) : 0); }, 0); };
   const dmes = ym => new Date(Date.UTC(+ym.slice(0,4), +ym.slice(5,7), 0)).getUTCDate();
@@ -9861,7 +9862,7 @@ function plcCapCalcular(C, cfg, opts){
      precisa estar pronta (instalação da semana − defasagem) e é encaixada o mais tarde possível */
   const S = [];
   U.forEach(u=>{
-    u.dias = []; u.delay = 0; u.exec = false;
+    u.dias = []; u.mes = {}; u.pc = []; u.delay = 0; u.exec = false;
     if(!u.j){ return; }
     const win = Math.max(1, pliDiffDias(u.j.fim, u.j.ini));
     if(u.exec || u.j.fim <= dbISO){ u.exec = true; return; }
@@ -9876,15 +9877,33 @@ function plcCapCalcular(C, cfg, opts){
   S.forEach(sl=>{
     const u = sl.u; let res = fillBack(sl.t, sl.due, u.earliest);
     if(res.rest > 1e-6) res = fillFwd(sl.t, u.earliest);
-    res.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.dias.push(d); });
+    res.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.pc.push([d,x]); });
     const fim = res.aloc.map(x=>x[0]).sort().slice(-1)[0];
     if(fim){ const dl = pliDiffDias(pliAddDias(fim,1), sl.due); if(dl > u.delay) u.delay = dl; }
   });
+  /* nivelamento: onde sobra capacidade, a produção é puxada para antes (antecipa a compra) até o limite de antecipação */
+  { const antD = Math.round(((P && P.antecipaMeses!=null) ? P.antecipaMeses : 6) * 30.4);
+    if(antD > 0){
+      const PCS = []; U.forEach(u=>{ if(!u.exec && u.j) u.pc.forEach(pc=>PCS.push({ u, d:pc[0], x:pc[1] })); });
+      PCS.sort((a,b)=> a.d<b.d?-1:(a.d>b.d?1:(a.u.oi-b.u.oi)));
+      const moved = [];
+      PCS.forEach(pc=>{
+        let rem = pc.x; const lb = (()=>{ const l = pliAddDias(pc.d, -antD); return l > pc.u.earliest ? l : pc.u.earliest; })();
+        for(let e = lb; e < pc.d && rem > 1e-9; e = pliAddDias(e,1)){
+          const free = capDia(e) - (used[e]||0); if(free <= 1e-9) continue;
+          const m = Math.min(free, rem); used[e] = (used[e]||0) + m; used[pc.d] -= m; rem -= m; moved.push({ u:pc.u, d:e, x:m });
+        }
+        if(rem > 1e-9) moved.push({ u:pc.u, d:pc.d, x:rem });
+      });
+      U.forEach(u=>{ if(!u.exec && u.j) u.pc = []; }); moved.forEach(m=>m.u.pc.push([m.d, m.x]));
+    }
+    U.forEach(u=>{ if(u.exec || !u.j) return; u.dias = []; u.mes = {}; u.pc.forEach(([d,x])=>{ u.dias.push(d); const ym = d.slice(0,7); u.mes[ym] = (u.mes[ym]||0) + x; }); });
+  }
   const prevInst = {}, byObra = {}, alertas = [];
   U.forEach(u=>{
     const p = u.ob.prem; let iniI, fimI;
     if(!u.j){
-      const r = fillFwd(u.t, u.earliest); r.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.dias.push(d); });
+      const r = fillFwd(u.t, u.earliest); r.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.dias.push(d); const ym = d.slice(0,7); u.mes[ym] = (u.mes[ym]||0) + x; });
     }
     if(u.dias.length){ const ds = u.dias.slice().sort(); u.iniFab = ds[0]; u.fimFab = pliAddDias(ds[ds.length-1], 1); }
     else if(u.j){ u.iniFab = pliAddDias(u.j.ini, -u.lag); u.fimFab = pliAddDias(u.j.fim, -u.lag); }
@@ -9900,10 +9919,39 @@ function plcCapCalcular(C, cfg, opts){
       else { iniI = pliAddDias(u.iniFab, u.lag); if(prev && prev > iniI) iniI = prev; fimI = pliAddDias(iniI, u.dur); }
       if(!u.exec) prev = fimI;
       u.iniInst = iniI; u.fimInst = fimI; u.atraso = u.j && !u.exec ? Math.max(0, pliDiffDias(iniI, u.j.ini)) : 0;
-      (byObra[ob.id] = byObra[ob.id] || {})[u.f.cod] = { iniFab:u.iniFab, fimFab:u.fimFab, iniInst:iniI, fimInst:fimI, cap:true, chegada:u.chegada, atraso:u.atraso, prodInst:u.rate/Math.max(1,p.efetivo) };
+      (byObra[ob.id] = byObra[ob.id] || {})[u.f.cod] = { iniFab:u.iniFab, fimFab:u.fimFab, iniInst:iniI, fimInst:fimI, cap:true, chegada:u.chegada, atraso:u.atraso, fabMes:(u.exec?null:u.mes), prodInst:u.rate/Math.max(1,p.efetivo) };
     });
   });
+  /* equipes de instalação: 1 equipe por obra; terminada uma obra, a equipe é realocada para a próxima (com remobilização) */
+  const OBS = [];
+  C.obras.forEach((ob,oi)=>{ const us = U.filter(u=>u.oi===oi && !u.exec); if(!us.length) return;
+    OBS.push({ ob, oi, us, ini:us.map(u=>u.iniInst).sort()[0], fim:us.map(u=>u.fimInst).sort().slice(-1)[0], D:us[0].D||'9999', desl:0 }); });
+  OBS.sort((a,b)=> a.ini<b.ini?-1:(a.ini>b.ini?1:(a.D<b.D?-1:1)));
+  const NEq = (P && P.equipesMax>0) ? P.equipesMax : Infinity, remob = (P && P.remobDias!=null) ? P.remobDias : 15, eq = [];
+  OBS.forEach(o=>{
+    let t = eq.filter(e=>pliAddDias(e.livre, remob) <= o.ini).sort((a,b)=>a.livre<b.livre?1:-1)[0];
+    if(!t){
+      if(eq.length < NEq){ t = { n:eq.length+1, livre:'0000-00-00', obras:[] }; eq.push(t); }
+      else { t = eq.slice().sort((a,b)=>a.livre<b.livre?-1:1)[0]; const sh = pliDiffDias(pliAddDias(t.livre, remob), o.ini);
+        if(sh > 0){ o.us.forEach(u=>{ u.iniInst = pliAddDias(u.iniInst, sh); u.fimInst = pliAddDias(u.fimInst, sh); const e = byObra[o.ob.id][u.f.cod]; e.iniInst = u.iniInst; e.fimInst = u.fimInst; });
+          o.ini = pliAddDias(o.ini, sh); o.fim = pliAddDias(o.fim, sh); o.desl = sh; } }
+    }
+    t.obras.push({ nome:o.ob.nome, ini:o.ini, fim:o.fim, desl:o.desl }); t.livre = o.fim;
+  });
+  /* equipe ociosa: no intervalo sem obra própria, a equipe reforça outra obra em andamento (mesmo custo de folha; a obra termina antes) */
+  const refAl = [];
+  eq.forEach(t=>{ for(let k=0;k+1<t.obras.length;k++){
+    const g0 = pliAddDias(t.obras[k].fim, 1), g1 = pliAddDias(t.obras[k+1].ini, -(remob||0)), gd = pliDiffDias(g1, g0);
+    if(gd < 7) continue;
+    const alvo = OBS.filter(o=>o.ini < g1 && o.fim > g0 && !t.obras.some(x=>x.nome===o.ob.nome)).sort((a,b)=>a.D<b.D?-1:1)[0];
+    if(!alvo) { refAl.push({ eq:t.n, g0, g1, gd, alvo:null }); continue; }
+    const ov = Math.min(pliDiffDias(alvo.fim, g0), gd), pr = alvo.ob.prem, rm = (alvo.us[0].rMax||alvo.us[0].rate), r0 = alvo.us[0].rate;
+    const extra = Math.max(0, Math.min(rm, r0) * ov / (pr.diasMes||30)), ganho = Math.round(extra / Math.max(0.1, r0 + Math.min(rm, r0)) * (pr.diasMes||30));
+    refAl.push({ eq:t.n, g0, g1, gd, alvo:alvo.ob.nome, ganho, extra });
+  } });
   const fm = pliFmtData, nome = u=>u.ob.nome+' · fase '+u.f.cod;
+  refAl.forEach(r=>alertas.push({ nivel:'info', t: r.alvo ? `Equipe ${r.eq} sem obra de ${fm(r.g0)} a ${fm(r.g1)} (${r.gd} dias): realocar como reforço em <b>${esc(r.alvo)}</b>` : `Equipe ${r.eq} ociosa de ${fm(r.g0)} a ${fm(r.g1)} (${r.gd} dias)`,
+    d: r.alvo ? `a folha da equipe já é custo fixo, então o reforço não aumenta o R$/kg de instalação; adianta o término de ${esc(r.alvo)} em cerca de ${r.ganho} dias (≈ ${pliFmtT(r.extra,1)} t).` : 'nenhuma outra obra está em instalação nesse intervalo.' }));
   C.obras.forEach((ob,oi)=>{
     const us = U.filter(u=>u.oi===oi && !u.exec), p = ob.prem; if(!us.length) return;
     const fimO = us.map(u=>u.fimInst).sort().slice(-1)[0], D = us[0].D;
@@ -9924,8 +9972,10 @@ function plcCapCalcular(C, cfg, opts){
   });
   const tot = U.reduce((s,u)=>s+u.t,0), ult = U.map(u=>u.due).filter(d=>d<'9999').sort().slice(-1)[0];
   if(ult){ const meses = Math.max(1, pliDiffDias(ult, dbISO)/30.4); alertas.push({ nivel:'info', t:`Fábrica: demanda de <b>${pliFmtT(tot,0)} t</b> até ${fm(ult)}`, d:`equivale a ${pliFmtT(tot/meses,1)} t/mês em média (capacidade ${pliFmtT(capMes(dbISO.slice(0,7)),0)} → ${pliFmtT(capMes('2999-01'),0)} t/mês).` }); }
+  if(eq.length){ const ef = OBS[0] ? OBS[0].ob.prem.efetivo : 30; alertas.push({ nivel:'info', t:`Instalação: <b>${eq.length} equipe(s)</b> de ${ef} pessoas (${eq.length*ef} pessoas no total)`, d:eq.map(e=>'Equipe '+e.n+': '+e.obras.map(x=>x.nome).join(' → ')).join(' · ')+(Number.isFinite(NEq)?` · limite de ${NEq} equipe(s)`:' · sem limite de equipes (o sistema dimensiona)')+'. Cada equipe é realocada para a obra seguinte ao terminar (remobilização '+remob+' dias).' }); }
+  OBS.filter(o=>o.desl>0).forEach(o=>alertas.push({ nivel:'atenc', t:`<b>${esc(o.ob.nome)}</b>: instalação adiada ${o.desl} dias por falta de equipe livre`, d:`todas as ${NEq} equipes estão ocupadas; a obra só começa em ${fm(o.ini)}.` }));
   U.forEach(x=>{ x.com = Array.from(new Set(U.filter(y=>y!==x && y.oi!==x.oi && y.iniFab < x.fimFab && y.fimFab > x.iniFab).map(y=>y.ob.nome))); });
-  return { cfg, modo:'cap', byObra, alertas, fases:U.map(x=>({ obra:x.ob.nome, cod:x.f.cod, desc:x.f.desc, kg:x.kg, pronto:pliAddDias(x.chegada, x.ob.prem.iniFabDias), iniFab:x.iniFab, fimFab:x.fimFab, iniInst:x.iniInst, fimInst:x.fimInst, com:x.com, prazo:plcPrazoFase(x.ob, x.f) })) };
+  return { cfg, modo:'cap', byObra, alertas, equipes:eq, fases:U.map(x=>({ obra:x.ob.nome, cod:x.f.cod, desc:x.f.desc, kg:x.kg, pronto:pliAddDias(x.chegada, x.ob.prem.iniFabDias), iniFab:x.iniFab, fimFab:x.fimFab, iniInst:x.iniInst, fimInst:x.fimInst, com:x.com, prazo:plcPrazoFase(x.ob, x.f) })) };
 }
 /* Fábrica: cada fase (linha de produção) roda direto, sem interrupção, dividindo a capacidade do mês
    com no máximo (maxObras-1) outras obras. Uma fase só começa com o material (minMat %) na fábrica. */
@@ -10619,7 +10669,7 @@ function plcRecalcAcoes(L, hoje, pr){
   if(L.depois.ok) ac.push({ t:'ok', txt:`Resultado: termina em <b>${f(L.depois.fim)}</b>, dentro do deadline (${f(L.limite)})${L.folgaMin!=null?' — menor folga por fase: '+L.folgaMin+' dias':''}.` });
   else {
     ac.push({ t:'falha', txt:`<b>Ainda não cabe:</b> termina em ${f(L.depois.fim)}, ${L.atrasoDias} dias depois do deadline (${f(L.limite)})${L.foraFases.length?'; fases fora: '+L.foraFases.join(', '):''}.` });
-    ac.push({ t:'sug', txt:'Para fechar a conta: (1) rode o Otimizador — ele ajusta capacidade da fábrica e obras em paralelo; (2) negociar prazo de entrega do fornecedor'+(L.entregaDias?' (hoje '+L.entregaDias+' d)':'')+'; (3) revisar a folga de meses antes dos marcos; (4) escalonar a entrega por marco, priorizando as fases do investidor; (5) renegociar o marco com a incorporação.' });
+    ac.push({ t:'sug', txt:'Para fechar a conta: (1) rever prazos/deadlines das obras na ordem de prioridade; (2) negociar prazo de entrega do fornecedor'+(L.entregaDias?' (hoje '+L.entregaDias+' d)':'')+'; (3) revisar a folga de meses antes dos marcos; (4) escalonar a entrega por marco, priorizando as fases do investidor; (5) renegociar o marco com a incorporação.' });
   }
   return ac;
 }
@@ -10670,7 +10720,7 @@ function pliHtmlRecalc(){
       <div style="margin-bottom:8px">${tabs}</div>${comp}
       <div class="pli-note"><b>${esc(sel.titulo)}:</b> ${esc(sel.desc)}</div>${det}
       <div class="form-actions" style="margin-top:8px"><button class="btn" onclick="plcRecalcAplicar()">Aplicar "${esc(sel.titulo)}"</button> <button class="btn secondary" onclick="plcRecalcDescartar()">Descartar</button></div>
-      <div class="pli-note">A fabricação segue a capacidade e a ordem da fábrica (Otimizador / Ordem de produção). O início da instalação aqui é o <b>real</b>: depende da 1ª compra + entrega do material + fabricação — diferente do início “de linha de balanço” usado na aba Compras.</div>`;
+      <div class="pli-note">A fabricação segue a capacidade e a ordem da fábrica (Ordem de produção). O início da instalação aqui é o <b>real</b>: depende da 1ª compra + entrega do material + fabricação — diferente do início “de linha de balanço” usado na aba Compras.</div>`;
   }
   return `<div class="pli-card"><h3>Recalcular prazos</h3>
     <div class="pli-note" style="margin-top:0;">Refaz a cadeia inteira — <b>1ª compra → entrega do material → fabricação → instalação</b> — a partir dos <b>deadlines</b> (prazo alvo, habite-se, investidor e obra, menos a folga) e das <b>premissas</b> de cada obra. Apresenta 4 opções (1ª compra na data informada — padrão: data do sistema —, recomendada, compra o mais cedo possível e manter a 1ª compra cadastrada) com plano de ação; só grava ao clicar em Aplicar.</div>
@@ -10922,7 +10972,7 @@ function renderBackup(){
       <button class="btn" onclick="backupExportar()">Baixar backup agora</button>
       <label class="btn secondary" style="margin-left:8px;cursor:pointer">Importar backup… <input type="file" accept=".json,application/json" style="display:none" onchange="backupImportar(this)"></label></div></div>
     <div class="panel"><div class="panel-head">Versões do plano (Planejamento Integrado)</div><div class="panel-body">
-      <div class="step-note" style="margin-bottom:10px">Cada "Aplicar" (Recalcular prazos ou Otimizador) guarda automaticamente o plano anterior. Guarde versões manuais antes de testar cenários. Restaurar volta cronograma financeiro, ajustes, marcos e premissas.</div>
+      <div class="step-note" style="margin-bottom:10px">Cada "Aplicar" (Recalcular prazos) guarda automaticamente o plano anterior. Guarde versões manuais antes de testar cenários. Restaurar volta cronograma financeiro, ajustes, marcos e premissas.</div>
       <button class="btn small" onclick="planoSalvarVersao()">Guardar versão agora</button>
       ${hist.length ? `<table style="margin-top:10px"><thead><tr><th>Data</th><th>Por</th><th>Versão</th><th></th></tr></thead><tbody>${hist.map(h=>`<tr><td>${new Date(h.em).toLocaleString('pt-BR')}</td><td>${esc(h.por)}</td><td>${esc(h.rotulo)}</td><td style="text-align:right;white-space:nowrap"><button class="btn small secondary" onclick="planoRestaurar('${h.id}')">Restaurar</button> <button class="btn small danger" onclick="planoExcluirVersao('${h.id}')">Excluir</button></td></tr>`).join('')}</tbody></table>` : '<div class="step-note" style="margin-top:10px">Nenhuma versão guardada ainda.</div>'}</div></div>`;
 }
@@ -10959,6 +11009,7 @@ function pliHtmlCompraReal(){
 }
 
 function pliHtmlOtimizador(){
+  return ''; /* Otimizador removido: o cronograma é gerado pela capacidade (plcCapCalcular) */
   const c = plcLoad(); if(!c.obras.length) return '';
   const par = plcOtmParams(), r = PLI_UI.otm, P = pliLoad();
   const num = (k, lab, hint)=>`<label>${lab} <input type="text" value="${String(par[k]).replace('.',',')}" style="width:90px" onchange="plcOtmSet('${k}',this.value)" title="${hint}"></label>`;
@@ -11043,7 +11094,7 @@ function plcGastoDiagnostico(C){
       const compMax = g.alu>0 ? (g.ag-g.fab-g.inst-g.alu)/g.alu : 0;
       if(compMax>=0 && compMax<p.compPct) sug.push('Componentes: reduzir de '+Math.round(p.compPct*100)+'% para até '+Math.round(compMax*1000)/10+'% do alumínio.');
       else if(compMax<0) sug.push('Só reduzir componentes não resolve: alumínio + MO já passam do à gastar.');
-      if(g.fab+g.inst>0) sug.push('Mão de obra (fábrica + instalação) é '+Math.round((g.fab+g.inst)/g.total*100)+'% do total: rode o Otimizador (ele encurta a janela de instalação e evita efetivo parado).');
+      if(g.fab+g.inst>0) sug.push('Mão de obra (fábrica + instalação) é '+Math.round((g.fab+g.inst)/g.total*100)+'% do total: revise a janela de instalação para evitar efetivo parado.');
       sug.push('Ou elevar o à gastar em '+pliFmtR(falta)+'.');
       out.push({ sev:'erro', obra:ob.nome, msg:'Total previsto '+pliFmtR(g.total)+' passa do à gastar '+pliFmtR(g.ag)+' em '+pliFmtR(falta)+' (alumínio '+pliFmtR(g.alu)+' · componentes '+pliFmtR(g.comp)+' · MO fab. '+pliFmtR(g.fab)+' · MO inst. '+pliFmtR(g.inst)+').', sug });
     }
@@ -11054,10 +11105,10 @@ function plcGastoDiagnostico(C){
       sug.push('Distribuir as compras em pelo menos '+nmin+' meses (hoje há pagamento em '+g.ins.filter(v=>v>0).length+').');
       if(folga.length) sug.push('Mover o excesso para meses com folga: '+folga.map(x=>mesTxt(x.m)+' (cabem '+pliFmtR(x.f)+')').join(', ')+'.');
       sug.push('Ou subir o limite para '+(Math.ceil(g.pico/g.ag*1000)/10).toString().replace('.',',')+'% do à gastar por mês.');
-      sug.push('O Otimizador já considera esse limite ao antecipar/comprimir os pagamentos.');
+      
       out.push({ sev:'erro', obra:ob.nome, msg:'Compra de insumos acima de '+String(g.pct).replace('.',',')+'% do à gastar ('+pliFmtR(g.lim)+') em '+g.exc.length+' mês(es): '+g.exc.slice(0,6).map(x=>mesTxt(x.m)+' '+pliFmtR(x.v)).join(' · ')+(g.exc.length>6?' …':'')+'.', sug });
     }
-    const R2 = R; if(!plcAtende(ob, R2)) out.push({ sev:'aviso', obra:ob.nome, msg:'Não cumpre os prazos de instalação com o fluxo atual.', sug:['Rode o Otimizador: ele antecipa compras e ajusta efetivo sem passar do à gastar.'] });
+    const R2 = R; if(!plcAtende(ob, R2)) out.push({ sev:'aviso', obra:ob.nome, msg:'Não cumpre os prazos de instalação com o fluxo atual.', sug:['Antecipe compras ou revise o prazo da obra, sem passar do à gastar.'] });
   });
   if(algum && totAg>0 && totPrev>totAg) out.unshift({ sev:'erro', obra:'TOTAL', msg:'Soma das obras: previsto '+pliFmtR(totPrev)+' contra à gastar '+pliFmtR(totAg)+'.', sug:[] });
   return out;
@@ -11158,7 +11209,7 @@ function plcCalcBase(ob, ovr){
       if(PG.modo==='faturado'){ const n = PG.prazos.length; let acc = 0; PG.prazos.forEach((d,k)=>{ const v = k===n-1 ? Math.round((val-acc)*100)/100 : Math.round(val/n*100)/100; acc += v; pagos.push({ venc:pliAddDias(chegada,d), valor:v, parcela:(k+1)+'/'+n }); }); }
       else pagos.push({ venc:pliAddDias(chegada,-p.entregaDias), valor:val, parcela:'à vista' });
       pagos.forEach(g=>capFlux.push({ grupo:grp, parcela:'Fase '+f.cod+' · '+g.parcela, venc:g.venc, valor:g.valor, pedido:pagos[0].venc }));
-      lotes.push({ n:lotes.length+1, grupo:grp, parcela:'Fase '+f.cod, fase:f.cod, desc:f.desc, venc:pagos[0].venc, valor:val, kg:f.kg, chegada, liberado:pliAddDias(chegada,p.iniFabDias), iniFab:o.iniFab, diasFab:pliDiffDias(o.fimFab,o.iniFab), fimFab:o.fimFab, iniInst:o.iniInst, diasInst:pliDiffDias(o.fimInst,o.iniInst), fimInst:o.fimInst }); });
+      lotes.push({ n:lotes.length+1, grupo:grp, parcela:'Fase '+f.cod, fase:f.cod, desc:f.desc, venc:pagos[0].venc, valor:val, kg:f.kg, chegada, liberado:pliAddDias(chegada,p.iniFabDias), iniFab:o.iniFab, diasFab:pliDiffDias(o.fimFab,o.iniFab), fimFab:o.fimFab, iniInst:o.iniInst, diasInst:pliDiffDias(o.fimInst,o.iniInst), fimInst:o.fimInst, fabMes:o.fabMes||null }); });
     return;
   }
   if(FL.pers){
@@ -11236,7 +11287,7 @@ function plcCalcBase(ob, ovr){
   });
   const datas = [];
   flux.forEach(x=>datas.push(x.venc));
-  lotes.forEach(l=>datas.push(l.chegada, l.fimInst));
+  lotes.forEach(l=>datas.push(l.chegada, l.fimInst, l.fimFab));
   compFat.forEach(c=>datas.push(c.data));
   const ords = datas.filter(Boolean).sort();
   const meses = ords.length ? pliMesesEntre(pliYM(ords[0]), pliYM(ords[ords.length-1])) : [];
@@ -11251,7 +11302,7 @@ function plcCalcBase(ob, ovr){
   };
   lotes.forEach(l=>{
     entregue[idx[pliYM(l.chegada)]] += l.kg;
-    dist(fabricado, l.iniFab, l.fimFab, l.kg);
+    if(l.fabMes){ Object.keys(l.fabMes).forEach(ym=>{ const k = idx[ym]; if(k!==undefined) fabricado[k] += l.fabMes[ym]*1000; }); } else dist(fabricado, l.iniFab, l.fimFab, l.kg);
     dist(instalado, l.iniInst, l.fimInst, l.kg);
   });
   const minInst = mn(lotes,'iniInst'), maxInst = mx(lotes,'fimInst');
@@ -11300,6 +11351,7 @@ function renderPlanejInt(){
   pliAutoWood();
   pliAutoReajuste();
   semAcesso.style.display='none'; conteudo.style.display='block';
+  if(!pliLoad()){ try{ pliSave(pliBlank(null)); }catch(e){ console.error(e); } }
   const P = pliLoadX();
   if(!PLI_TABS.some(t=>t[0]===PLI_UI.tab)) PLI_UI.tab = 'resumo';
   document.getElementById('pliTabs').innerHTML = PLI_TABS.map(([k,l])=>`<button class="btn small ${PLI_UI.tab===k?'':'secondary'}" onclick="pliSetTab('${k}')">${l}</button>`).join('')
@@ -11307,7 +11359,7 @@ function renderPlanejInt(){
   const area = document.getElementById('pliArea');
   const nCron = plcLoad().obras.length;
   document.getElementById('pliStatus').innerHTML = P
-    ? `Planejamento importado de <b>${esc(P.arquivo||'planilha')}</b> em ${pliFmtData(P.importadoEm)} · data base <b>${pliFmtData(P.dataBase)}</b> · ${P.obras.length} obras${nCron?` · ${nCron} cronograma(s) financeiro(s)`:''}`
+    ? `Planejamento gerado a partir do <b>faseamento</b> · data base <b>${pliFmtData(P.dataBase)}</b> · ${P.obras.length} obras${nCron?` · ${nCron} obra(s) com faseamento`:''}`
     : 'Nenhuma planilha importada ainda.';
   document.getElementById('pliControles').style.display = P ? 'flex' : 'none';
   if(P){
@@ -11337,6 +11389,28 @@ function pliGarantirXLSX(){
 function pliLerArquivoBuf(f){
   return new Promise((res,rej)=>{ const rd=new FileReader(); rd.onload=e=>res(e.target.result); rd.onerror=()=>rej(new Error('falha ao abrir o arquivo')); rd.readAsArrayBuffer(f); });
 }
+/* Planejamento sem planilha: só premissas gerais. As obras vêm do faseamento (cronogramas). */
+function pliBlank(old){
+  const db = (old && old.dataBase) || (todayISO().slice(0,7)+'-01');
+  const ym0 = pliYM(db), fim = pliAddMeses(db, 72);
+  const P = { importadoEm:new Date().toISOString(), arquivo:'criado no sistema', dataBase:db, cenario:'META', prodModo:'A',
+    meses:pliMesesEntre(ym0, pliYM(fim)), obras:[], base:{ META:{INST:{},PROD:{},FRENTES:{}}, OFICIAL:{INST:{},PROD:{},FRENTES:{}} }, frentes:[], orcado:[], compras:[], estoqueInicial:0,
+    cap:{ atual:17, nova:40, de:'2027-02' }, capDefinida:true, capAtual17:true, efetivoAtualInst:30, efetivoFab:24, folhaInst:288859, pessoasFolha:30, custoPessoa:288859/30, prodB:0.5,
+    custoTFab:650569/40, limiar:1, prazos:{ lista:15, cotacao:30, otim:60, cons:75, fab2:2, fab3:3, fab4:4 }, duo:{}, comprados:{} };
+  if(old){ ['cenario','prodModo','cap','capDefinida','capAtual17','efetivoAtualInst','efetivoFab','folhaInst','pessoasFolha','custoPessoa','prodB','custoTFab','limiar','prazos','equipeInst','custoFabDet','pagtoPadrao','iniFabDias','iniInstDias','instCapMin','instCapMax','equipesMax','remobDias','antecipaMeses','baseInst','reducaoInst','baseFab','reducaoFab','usaCurvas','ajusteProd'].forEach(k=>{ if(old[k]!==undefined) P[k] = old[k]; }); P.ajusteProd = old.ajusteProd||undefined; }
+  return P;
+}
+/* Exclui as planilhas enviadas (planejamento integrado e fluxos/lotes dos cronogramas); mantém só o faseamento e as premissas */
+function pliExcluirPlanilhas(){
+  if(!pliTemAcesso()) return;
+  if(!confirm('Excluir TODAS as planilhas enviadas?\n\nFica só o faseamento de cada obra (fases, kg e datas) e as premissas gerais. Curvas, fluxos de pagamento, lotes e compras vindos de planilha são apagados; o sistema passa a gerar o cronograma sozinho.')) return;
+  const old = pliLoad();
+  pliSave(pliBlank(old));
+  const c = plcLoad();
+  c.obras.forEach(o=>{ o.fluxo = []; delete o.lotesPlan; o.modoPlanilha = false; delete o.fluxoPers; delete o.reparcelar; delete o.ajuste; });
+  plcSave(c);
+  renderPlanejInt(); toast('Planilhas excluídas. Ficou só o faseamento das obras.');
+}
 async function pliImportarArquivo(ev){
   if(!pliTemAcesso()){ toast('Apenas a Gerência pode importar o planejamento.'); return; }
   const arqs = Array.from((ev.target.files)||[]);
@@ -11360,12 +11434,7 @@ async function pliImportarArquivo(ev){
     if(it.erro){ falhas.push(nm+': '+it.erro); continue; }
     try{
       if(it.tipo==='int'){
-        const anterior = pliLoad();
-        const novo = pliLerIntegrado(it.wb, nm);
-        if(anterior){ novo.duo = anterior.duo||{}; novo.comprados = anterior.comprados||{}; if(anterior.ajusteProd) novo.ajusteProd = anterior.ajusteProd; }
-        pliSave(novo);
-        PLI_UI.tab = 'resumo';
-        ok.push('Planejamento integrado ('+novo.obras.length+' obras, '+novo.compras.length+' lotes)');
+        falhas.push(nm+': planilha do Planejamento Integrado não é mais aceita — o sistema gera o cronograma a partir do faseamento (importe o faseamento da obra ou crie no editor).');
       } else if(it.tipo==='cron'){
         const ob = pliLerCronograma(it.wb, nm);
         const c = plcLoad();
@@ -11482,10 +11551,26 @@ function pliHtmlResumo(P, R){
   const fontesCard = `<div class="pli-card"><h3>De onde vem cada obra</h3>
     <table class="pli-t"><thead><tr><th>Obra</th><th>Fonte da fábrica, instalação e compras</th><th class="n">Tonelagem usada</th><th>Término da instalação</th></tr></thead><tbody>
     ${P.obras.map(o=>{ const f = R.fontes[o.nome]; const ult = R.M.filter((m,i)=>R.inst[o.nome][i]>0.05).slice(-1)[0];
-      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>'}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= total do faseamento${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
+      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:(f.semFaseamento?'<span class="pli-tag" style="background:#b00020">Sem faseamento — crie o cronograma da obra</span>':'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>')}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= total do faseamento${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
     </tbody></table>
     <div class="pli-note">Cada cronograma financeiro importado (aba "Cronograma financeiro") substitui, a partir da data base, a curva de fábrica e de instalação da obra correspondente e gera os lotes de compra dela. O vínculo é automático pelo nome (ou escolhido no cronograma). Importar de novo o mesmo cronograma atualiza tudo.</div></div>`;
-  return fontesCard + `
+  const ordemCard = (()=>{ try{
+    const SQ = plcSeqGet(), C = plcLoad().obras, L = [];
+    const mn = (x,k)=>x.map(f=>f[k]).filter(Boolean).sort()[0]||'', mx = (x,k)=>x.map(f=>f[k]).filter(Boolean).sort().slice(-1)[0]||'';
+    C.forEach(ob=>{ const fs = (SQ && SQ.fases) ? SQ.fases.filter(f=>f.obra===ob.nome) : []; if(!fs.length) return;
+      L.push({ nome:ob.nome, d:plcAlvoP(ob.prem)||'', usaAnt:!!ob.prem.alvoAnt, fonte:'faseamento', fa:mn(fs,'iniFab'), fb:mx(fs,'fimFab'), ia:mn(fs,'iniInst'), ib:mx(fs,'fimInst') }); });
+    Object.keys(R.fontes).forEach(nm=>{ if(R.fontes[nm].fonte!=='plano') return; const ms = R.M.filter((m,i)=>(R.prod[nm]||[])[i]>0.05), mi = R.M.filter((m,i)=>(R.inst[nm]||[])[i]>0.05);
+      if(!ms.length && !mi.length) return; L.push({ nome:nm, d:'', fonte:'curva do plano', fa:ms[0]?ms[0]+'-01':'', fb:ms.length?ms[ms.length-1]+'-28':'', ia:mi[0]?mi[0]+'-01':'', ib:mi.length?mi[mi.length-1]+'-28':'' }); });
+    L.sort((a,b)=>{ const ka = a.d || a.ib || '9999', kb = b.d || b.ib || '9999'; return ka<kb?-1:(ka>kb?1:0); });
+    L.forEach((l,i)=>{ const ant = L.slice(0,i).filter(x=>x.fa && l.fa && l.fa < x.fa && (x.d||x.ib) < (l.d||l.ib)); l.alerta = ant.length ? 'começa a fabricar antes de '+ant.map(x=>x.nome).join(', ')+' (prazo menor)' : ''; });
+    const dm = d => d ? pliFmtData(d) : '—';
+    return `<div class="pli-card"><h3>Ordem de prioridade por deadline</h3><div class="pli-note" style="margin-top:0;">Compra, produção e instalação seguem a ordem do deadline (antecipado, se definido). Obras sem faseamento entram pela curva do plano, com o término da instalação como referência.</div>
+    <table class="pli-t pli-c"><thead><tr><th>#</th><th>Obra</th><th>Deadline</th><th>Fonte</th><th>Fábrica</th><th>Instalação</th><th>Situação</th></tr></thead><tbody>${L.map((l,i)=>`<tr><td>${i+1}</td><td><b>${esc(l.nome)}</b></td><td>${l.d?dm(l.d)+(l.usaAnt?' <span class="pli-note">(antecip.)</span>':''):'—'}</td><td>${esc(l.fonte)}</td><td>${dm(l.fa)} → ${dm(l.fb)}</td><td>${dm(l.ia)} → ${dm(l.ib)}</td><td>${l.alerta?`<b style="color:#b00020">⚠ ${esc(l.alerta)}</b>`:'<span style="color:#2e7d32">✔ na ordem</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  }catch(e){ console.error('Ordem de prioridade', e); return ''; } })();
+  const equipesCard = (()=>{ try{ const SQ = plcSeqGet(); if(!SQ || !SQ.equipes || !SQ.equipes.length) return '';
+    return `<div class="pli-card"><h3>Equipes de instalação — realocação entre obras</h3><div class="pli-note" style="margin-top:0;">1 equipe por obra. A equipe que termina uma obra é realocada para a próxima, com a remobilização das premissas.</div>
+    <table class="pli-t pli-c"><thead><tr><th>Equipe</th><th>Sequência de obras</th></tr></thead><tbody>${SQ.equipes.map(e=>`<tr><td><b>Equipe ${e.n}</b></td><td>${e.obras.map(x=>`${esc(x.nome)} <span class="pli-note">${pliFmtData(x.ini)} → ${pliFmtData(x.fim)}${x.desl?' · adiada '+x.desl+' d':''}</span>`).join(' &nbsp;➜&nbsp; ')}</td></tr>`).join('')}</tbody></table></div>`; }catch(e){ return ''; } })();
+  return ordemCard + equipesCard + fontesCard + `
   <div class="pli-kpis">
     ${pliKpi('Carga de fábrica (a partir da data base)', pliFmtT(dem,0)+' t', 'Capacidade planejada no período: '+pliFmtT(capTot,0)+' t')}
     ${pliKpi('Pico de ocupação da fábrica', pliFmtPct(pico), dashMesCurto(mesPico), pico>1.0001?'var(--danger)':'var(--ok)')}
@@ -11636,6 +11721,9 @@ function pliHtmlPremissas(P, R){
     <table class="pli-t" style="margin-top:10px;"><tbody>
      <tr><td>Capacidade de instalação da equipe padrão — mínima (t/mês)</td><td>${pliInput('instCapMin',P.instCapMin!=null?P.instCapMin:15)}</td><td>${pliFmtT((P.instCapMin!=null?P.instCapMin:15)/Math.max(1,P.pessoasFolha||30),3)} t/pessoa/mês · o cronograma parte desta capacidade</td></tr>
      <tr><td>Capacidade de instalação da equipe padrão — máxima (t/mês)</td><td>${pliInput('instCapMax',P.instCapMax!=null?P.instCapMax:20)}</td><td>${pliFmtT((P.instCapMax!=null?P.instCapMax:20)/Math.max(1,P.pessoasFolha||30),3)} t/pessoa/mês · usada só para cumprir o prazo; equipes de outro tamanho escalam proporcionalmente</td></tr>
+     <tr><td>Número de equipes de instalação (0 = quantas precisar)</td><td>${pliInput('equipesMax',P.equipesMax||0)}</td><td>1 equipe por obra; ao terminar uma obra a equipe vai para a seguinte</td></tr>
+     <tr><td>Antecipação máxima da produção/compra (meses)</td><td>${pliInput('antecipaMeses',P.antecipaMeses!=null?P.antecipaMeses:6)}</td><td>Onde sobra capacidade na fábrica, a produção é puxada para antes (e a compra junto) até este limite; 0 = só no último momento</td></tr>
+     <tr><td>Remobilização entre obras (dias)</td><td>${pliInput('remobDias',P.remobDias!=null?P.remobDias:15)}</td><td>Intervalo entre sair de uma obra e começar a outra</td></tr>
      <tr><td>Produtividade – referência (t/pessoa/mês)</td><td>${pliInput('prodB',P.prodB)}</td><td>Observada: ${pliFmtT(R.prodA,3)}</td></tr>
      <tr><td>Custo de instalação — base (R$/kg de mão de obra)</td><td><input type="number" step="0.01" value="${LM.baseInst}" style="width:100px;" onchange="pliEditarPrem('baseInst',this.value)"></td><td>Valor base atual de mão de obra</td></tr>
      <tr><td>Redução meta da instalação (R$/kg)</td><td><input type="number" step="0.01" value="${LM.redInst}" style="width:100px;" onchange="pliEditarPrem('reducaoInst',this.value)"></td><td>Limite de instalação = <b>R$ ${LM.inst.toFixed(2).replace('.',',')}/kg</b>. Alerta quando a obra passa deste valor</td></tr>
@@ -12105,7 +12193,6 @@ function pliHtmlCruzamento(){
   ${pliHtmlMarcos()}
   ${pliHtmlCenarios()}
   ${pliHtmlCompraReal()}
-  ${pliHtmlOtimizador()}
   ${pliHtmlCapNec()}
   ${ordem}
   <div class="pli-card"><h3>Carga da fábrica por obra (t/mês)</h3><div class="pli-note" style="margin-top:0;">Quanto mais escuro, maior a carga da obra no mês. Linha TOTAL: verde = folga, amarelo = acima de 90% da capacidade, vermelho = acima da capacidade.</div>${fabTab}</div>
