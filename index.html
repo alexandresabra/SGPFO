@@ -9855,11 +9855,13 @@ function plcCapCalcular(C, cfg, opts){
       const j = jan[f.cod] || null;
       /* a fábrica só pode começar depois: 1ª compra (ou data base) + entrega do material + início da fabricação (premissas) */
       let pc1 = ''; try{ pc1 = plcPrimeiraCompra(ob, true) || ob.inicio1 || ''; }catch(e){ pc1 = ob.inicio1 || ''; }
+      /* data de 1ª compra preenchida = âncora: a 1ª fase a comprar é comprada nessa data e fabricada logo que o material chega */
+      const ancora = !!(pc1 && !ob.inicioAuto) && pend.length > 0 && pend[0].cod === f.cod;
       if(ob.inicioAuto || !pc1 || pc1 < dbISO) pc1 = dbISO;
       let earliest = pliAddDias(pc1, (p.entregaDias||0) + (p.iniFabDias||0));
       const cr = ob.compraReal && (ob.compraReal[f.cod] || ob.compraReal[f.cod+'@'+f.grupo]);
       if(cr && cr.entrega){ const e = pliAddDias(cr.entrega, p.iniFabDias); if(e > earliest) earliest = e; }
-      U.push({ oi, ob, f, fi, kg:f.kg, t:f.kg/1000, j, lag:p.iniInstDias, earliest, capInst, exec:!!ex[f.cod], dur:dur(f), D, rate:capInst, rNec, rMax,
+      U.push({ oi, ob, f, fi, kg:f.kg, t:f.kg/1000, j, lag:p.iniInstDias, earliest, ancora, capInst, exec:!!ex[f.cod], dur:dur(f), D, rate:capInst, rNec, rMax,
                due: j ? pliAddDias(j.fim, -p.iniInstDias) : '9999-12-31', latest: j ? pliAddDias(j.ini, -p.iniInstDias) : null });
     });
   });
@@ -9882,7 +9884,7 @@ function plcCapCalcular(C, cfg, opts){
       let b = pliAddDias(a,7); if(b > u.j.fim) b = u.j.fim;
       if(b <= dbISO) continue;
       const frac = pliDiffDias(b,a)/win;
-      S.push({ u, b, t:u.t*frac, due:pliAddDias(b, -u.lag) });
+      S.push({ u, b, t:u.t*frac, due:pliAddDias(b, -u.lag), anc:!!u.ancora });
     }
   });
   /* prioridade por deadline: a obra com prazo menor escolhe a vaga na fábrica primeiro, ; a de prazo maior só ocupa a sobra
@@ -9893,7 +9895,7 @@ function plcCapCalcular(C, cfg, opts){
   const iniRank = {};
   S.forEach(sl=>{
     const u = sl.u; let piso = u.earliest;
-    let res = fillBack(sl.t, sl.due, piso);
+    let res = sl.anc ? fillFwd(sl.t, piso) : fillBack(sl.t, sl.due, piso);
     if(res.rest > 1e-6) res = fillFwd(sl.t, piso);
     res.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.pc.push([d,x]); if(!iniRank[sl.rk] || d < iniRank[sl.rk]) iniRank[sl.rk] = d; });
     const fim = res.aloc.map(x=>x[0]).sort().slice(-1)[0];
