@@ -9616,7 +9616,7 @@ function pliCronDaObra(nomeObra, crons){
    As compras da obra também passam a ser os lotes do cronograma. */
 function pliCalc(P){
   const M = P.meses, cen = P.cenario;
-  const inst = {}, prod = {}, prodBase = {}, fontes = {}, lotesCron = [], obrasComCron = {};
+  const inst = {}, prod = {}, prodBase = {}, fontes = {}, lotesCron = [], obrasComCron = {}, prodObra = {};
   const crons = plcLoad().obras;
   const dbYM0 = pliYM(P.dataBase);
   P.obras.forEach(o=>{
@@ -9630,7 +9630,7 @@ function pliCalc(P){
       const CR = plcCalc(cr), mi = {}; CR.meses.forEach((m,k)=>mi[m]=k);
       /* obra com faseamento: vale o TOTAL do faseamento (todas as fases), sem somar curva do plano; o que cair antes do 1º mês do eixo entra no 1º mês */
       const dobra = arr => { const out = M.map(()=>0); CR.meses.forEach((ym,k)=>{ const v = arr[k]/1000; if(!v) return; const i = ym < M[0] ? 0 : M.indexOf(ym); if(i>=0) out[i] += v; }); return out; };
-      iArr = dobra(CR.instalado); pArr = dobra(CR.fabricado);
+      iArr = dobra(CR.instalado); pArr = dobra(CR.fabricado); prodObra[o.nome] = CR.prodEf || 0;
       fontes[o.nome] = { fonte:'cronograma', cron:cr.nome, ton:iArr.reduce((s,v)=>s+v,0), tonCron:CR.totKg/1000, fim:CR.maxInst };
       obrasComCron[o.nome] = true;
       CR.lotes.forEach(l=> lotesCron.push({ obra:o.nome, bloco: l.etapa ? ('Etapa '+l.etapa+' · '+l.fase+(l.pct<0.999?' ('+Math.round(l.pct*100)+'%)':'')) : ('Fase '+l.fase+' · parc. '+l.parcela), frente:l.desc, lote:String(l.n), abr:'',
@@ -9658,7 +9658,9 @@ function pliCalc(P){
     efFabCap.push(ceil(cap[i]/prodFab)); efFabDem.push(ceil(demanda[i]/prodFab));
   });
   const duo = M.map(ym=> (P.duo||{})[ym]||0);
-  const efInstA = tInst.map((t,i)=> ceil(t/prodA) + duo[i]);
+  /* a produtividade da instalação é a da premissa (equipe fixa por obra), não a observada hoje */
+  const pObra = n => (prodObra[n] > 0 ? prodObra[n] : prodA);
+  const efInstA = tInst.map((t,i)=> ceil(P.obras.reduce((a,o)=> a + inst[o.nome][i]/pObra(o.nome), 0)) + duo[i]);
   const efInstB = tInst.map((t,i)=> ceil(t/P.prodB) + duo[i]);
   const efInst = P.prodModo==='B' ? efInstB : efInstA;
   const custoInst = efInst.map(e=> e*P.custoPessoa);
@@ -9666,7 +9668,7 @@ function pliCalc(P){
   const S = a => a.reduce((s,v)=>s+v,0);
   const porObra = P.obras.map(o=>{
     const fab = prod[o.nome].map(t=> t*P.custoTFab);
-    const iA = inst[o.nome].map(t=> ceil(t/prodA)*P.custoPessoa);
+    const iA = inst[o.nome].map(t=> ceil(t/pObra(o.nome))*P.custoPessoa);
     const iB = inst[o.nome].map(t=> ceil(t/P.prodB)*P.custoPessoa);
     const iU = P.prodModo==='B' ? iB : iA;
     const ref = P.orcado.find(x=>x.obra===o.nome) || {};
@@ -9883,7 +9885,7 @@ function plcCapCalcular(C, cfg, opts){
     if(res.rest > 1e-6) res = fillFwd(sl.t, u.earliest);
     res.aloc.forEach(([d,x])=>{ used[d] = (used[d]||0) + x; u.pc.push([d,x]); });
     const fim = res.aloc.map(x=>x[0]).sort().slice(-1)[0];
-    if(fim){ const dl = pliDiffDias(pliAddDias(fim,1), sl.due); if(dl > u.delay) u.delay = dl; }
+    if(fim){ const dl = pliDiffDias(fim, sl.due); if(dl > u.delay) u.delay = dl; }
   });
   /* nivelamento: onde sobra capacidade, a produção é puxada para antes (antecipa a compra) até o limite de antecipação */
   { const antD = Math.round(((P && P.antecipaMeses!=null) ? P.antecipaMeses : 6) * 30.4);
@@ -9985,7 +9987,7 @@ function plcCapCalcular(C, cfg, opts){
    com no máximo (maxObras-1) outras obras. Uma fase só começa com o material (minMat %) na fábrica. */
 function plcSeqCalcular(Cparam, opts){
   const C = Cparam || plcLoad(), cfg = Object.assign({}, PLC_CFG_PADRAO, C.cfgFab||{});
-  if(cfg.modoCap!==false && C.obras.length){ try{ return plcCapCalcular(C, cfg, opts); }catch(e){ console.error('Lógica por capacidade', e); } }
+  if(C.obras.length) /* o Planejamento Integrado manda: financeiro, instalação e PCP derivam dele */{ try{ return plcCapCalcular(C, cfg, opts); }catch(e){ console.error('Lógica por capacidade', e); } }
   if(!cfg.concentrar || !C.obras.length) return null;
   const P = pliLoad();
   const dbISO = P ? P.dataBase : todayISO();
@@ -11567,9 +11569,9 @@ function pliHtmlResumo(P, R){
   const fontesCard = `<div class="pli-card"><h3>De onde vem cada obra</h3>
     <table class="pli-t"><thead><tr><th>Obra</th><th>Fonte da fábrica, instalação e compras</th><th class="n">Tonelagem usada</th><th>Término da instalação</th></tr></thead><tbody>
     ${P.obras.map(o=>{ const f = R.fontes[o.nome]; const ult = R.M.filter((m,i)=>R.inst[o.nome][i]>0.05).slice(-1)[0];
-      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Cronograma financeiro — ${esc(f.cron)}</span>`:(f.semFaseamento?'<span class="pli-tag" style="background:#b00020">Sem faseamento — crie o cronograma da obra</span>':'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>')}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= total do faseamento${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
+      return `<tr><td>${esc(o.nome)}</td><td>${f.fonte==='cronograma'?`<span class="pli-tag" style="background:#1c7c3e">Faseamento — ${esc(f.cron)}</span>`:(f.semFaseamento?'<span class="pli-tag" style="background:#b00020">Sem faseamento — crie o cronograma da obra</span>':'<span class="pli-tag" style="background:#7a7d82">Curva do planejamento importado</span>')}</td><td class="n">${pliFmtT(f.ton,1)} t${f.fonte==='cronograma'?` <span class="pli-note">= total do faseamento${Math.abs(f.ton-o.ton)>0.5?' · plano: '+pliFmtT(o.ton,0)+' t':''}</span>`:''}</td><td>${ult?dashMesCurto(ult):'—'}</td></tr>`; }).join('')}
     </tbody></table>
-    <div class="pli-note">Cada cronograma financeiro importado (aba "Cronograma financeiro") substitui, a partir da data base, a curva de fábrica e de instalação da obra correspondente e gera os lotes de compra dela. O vínculo é automático pelo nome (ou escolhido no cronograma). Importar de novo o mesmo cronograma atualiza tudo.</div></div>`;
+    <div class="pli-note">O faseamento de cada obra, com o deadline e as premissas, define a fábrica, a instalação e os lotes de compra. O vínculo é automático pelo nome.</div></div>`;
   const ordemCard = (()=>{ try{
     const SQ = plcSeqGet(), C = plcLoad().obras, L = [];
     const mn = (x,k)=>x.map(f=>f[k]).filter(Boolean).sort()[0]||'', mx = (x,k)=>x.map(f=>f[k]).filter(Boolean).sort().slice(-1)[0]||'';
