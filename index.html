@@ -2013,6 +2013,7 @@
               <label class="btn small" style="cursor:pointer;margin:0;">Importar faseamento (.xlsx)<input type="file" multiple accept=".xlsx,.xls" style="display:none" onchange="pliImportarArquivo(event)"></label>
               <button class="btn small secondary" onclick="pliExportarPDF(false)">PDF da aba</button>
               <button class="btn small secondary" onclick="pliExportarPDF(true)">PDF completo</button>
+              <button class="btn small secondary" onclick="pliZerarTudo()" title="Apaga todas as obras e premissas do planejamento">Zerar planejamento</button>
               <button class="btn small secondary" onclick="pliExcluirPlanilhas()" title="Apaga curvas, fluxos e lotes de planilha; mantém só o faseamento">Excluir planilhas enviadas</button>
             </div>
           </div>
@@ -9837,6 +9838,9 @@ function plcCapCalcular(C, cfg, opts){
       const totP = pend.reduce((a,f)=>a+f.kg/1000,0), mesesD = Math.max(0.25, pliDiffDias(D, pliAddDias(dbISO, p.iniInstDias))/p.diasMes);
       rNec = totP/mesesD; capInst = Math.min(rMax, Math.max(capInst, rNec));
     }
+    /* custo-alvo: equipe fixa, então a produtividade sobe até o limite de R$/kg de instalação (teto = produtividade máxima da equipe) */
+    { const lim = (p.limInst!=null ? p.limInst : pliLimites(P).inst), cp = (p.custoPessoa||0)*p.efetivo;
+      u_rCusto: { if(!(lim>0) || !(cp>0)) break u_rCusto; const rC = cp/(lim*1000); rNec = Math.max(rNec, rC); capInst = Math.min(rMax, Math.max(capInst, rC)); } }
     if(pend.length && D){
       let fim = D; const tmp = {};
       for(let i=pend.length-1;i>=0;i--){ const f = pend[i], ini = pliAddDias(fim, -dur(f)); tmp[f.cod] = { ini, fim }; fim = ini; }
@@ -11310,7 +11314,8 @@ function plcCalcBase(ob, ovr){
   const instW = z();
   lotes.forEach(l=>{ const f = fases.find(x=>x.cod===l.fase); dist(instW, l.iniInst, l.fimInst, l.kg*plcFatorInst(ob, f)); });
   const modoCusto = plcModoCustoInst(ob);
-  const pessoasMes = instalado.map((k,i)=> efetivo[i] > 0 ? Math.min(efetivo[i], k/1000/Math.max(0.0001,p.prodInst)) : 0);
+  const prodEf = CAP ? Math.max(p.prodInst, ...fases.map(f=>(ovr[f.cod]&&ovr[f.cod].prodInst)||0)) : p.prodInst;
+  const pessoasMes = instalado.map((k,i)=> efetivo[i] > 0 ? Math.min(efetivo[i], k/1000/Math.max(0.0001,prodEf)) : 0);
   const custoInst = efetivo.map((e,i)=> (modoCusto==='carga' ? pessoasMes[i] : e)*p.custoPessoa*(instalado[i]>0 ? instW[i]/instalado[i] : 1));
   const picoPessoas = Math.max(0, ...pessoasMes);
   const custoFab = fabricado.map(k=> k/1000*(p.folhaFab/p.prodRef));
@@ -11319,7 +11324,7 @@ function plcCalcBase(ob, ovr){
   const totKg = fases.reduce((s,f)=>s+f.kg,0);
   return { fluxo:flux, fasesGrupo, reparcelado:(CAP?false:FL.seq), lotes, resumo, meses, pagto, comp, entregue, fabricado, instalado, acE, acF, acI, efetivo, pessoasMes, picoPessoas, modoCusto, custoInst, custoFab,
            ocup:fabricado.map(k=>k/1000/p.capFab), compFat, totKg, totalPago:flux.reduce((s,x)=>s+x.valor,0),
-           capInst, minInst, maxInst, iniFab:mn(lotes,'iniFab'), fimFab:mx(lotes,'fimFab'),
+           capInst, prodEf, minInst, maxInst, iniFab:mn(lotes,'iniFab'), fimFab:mx(lotes,'fimFab'),
            atendeAlvo: plcAlvoP(p) ? maxInst <= plcAlvoP(p) : null, totalComp:compFat.reduce((s,c)=>s+c.valor,0) };
 }
 
@@ -11468,6 +11473,17 @@ function pliMudarControle(){
   P.cenario = document.getElementById('pliCenario').value;
   P.prodModo = document.getElementById('pliProdModo').value;
   pliSave(P); renderPlanejInt();
+}
+/* Zera o Planejamento Integrado: apaga todas as obras/cronogramas e volta as premissas ao padrão */
+function pliZerarTudo(){
+  if(!pliTemAcesso()) return;
+  if(!confirm('ZERAR o Planejamento Integrado?\n\nApaga TODAS as obras do planejamento (faseamento, prazos, compras reais, ajustes) e volta as premissas ao padrão. Os outros módulos não são afetados. Não dá para desfazer.')) return;
+  try{ planoSnapshot('Antes de zerar o planejamento'); }catch(e){}
+  plcSave({ obras:[] });
+  localStorage.setItem(DB_PREFIX+PLI_KEY, 'null');
+  pliSave(pliBlank(null));
+  PLI_UI.tab = 'resumo';
+  renderPlanejInt(); toast('Planejamento zerado. Importe ou crie o faseamento das obras para recomeçar.');
 }
 function pliLimpar(){
   if(!pliTemAcesso()) return;
@@ -12539,7 +12555,7 @@ function pliHtmlPrazosObra(k, ob){
       <div style="font-size:22px;font-weight:700;color:${ok?'#2e7d32':'#b00020'}">${rk(c)}/kg</div><div class="pli-note" style="margin:2px 0 0;">Limite ${rk(lim)}/kg · ${ok?'dentro do limite':'acima em '+rk(c-lim)+'/kg ('+pliFmtR((c-lim)*kg)+' na obra)'}</div></div>`; };
     let nec = '';
     if(plcAlvoP(p) && R.minInst && kg){ const meses = Math.max(0.5, pliDiffDias(plcAlvoP(p), R.minInst)/p.diasMes), tNec = kg/1000/meses/Math.max(1,p.efetivo);
-      nec = `<div class="pli-note" style="margin:8px 0 0;">Produtividade da equipe (${p.efetivo} pessoas): cronograma atual usa <b>${pliFmtT(p.prodInst,3)}</b> t/pessoa/mês · necessária para terminar no deadline de instalação: <b>${pliFmtT(tNec,3)}</b> · necessária para ficar no limite de R$ ${String(limI).replace('.',',')}/kg: <b>${pliFmtT(p.custoPessoa/(limI*1000),3)}</b></div>`; }
+      nec = `<div class="pli-note" style="margin:8px 0 0;">Produtividade da equipe (${p.efetivo} pessoas): cronograma atual usa <b>${pliFmtT(R.prodEf||p.prodInst,3)}</b> t/pessoa/mês · necessária para terminar no deadline de instalação: <b>${pliFmtT(tNec,3)}</b> · necessária para ficar no limite de R$ ${String(limI).replace('.',',')}/kg: <b>${pliFmtT(p.custoPessoa/(limI*1000),3)}</b></div>`; }
     ind = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">${bx('Custo de instalação (mão de obra)', cI, limI)}${bx('Custo de fabricação (mão de obra)', cF, limF)}</div>${nec}`;
   }catch(err){ console.error('indicadores R$/kg', err); }
   return `<div class="pli-card" style="margin:10px 0;"><h3 style="margin:0 0 4px;">Prazos — ${esc(ob.nome)}</h3>
