@@ -9336,12 +9336,12 @@ function plcGeral(){
     g = { pagto:{ modo:pg.modo==='faturado'?'faturado':'antecipado', prazos:pg.prazos.slice() },
       prem:{ entregaDias:pg.entregaDias, iniFabDias:P.iniFabDias!=null?P.iniFabDias:15, iniInstDias:P.iniInstDias!=null?P.iniInstDias:10 } };
     if(P.custoPessoa>0) g.prem.custoPessoa = P.custoPessoa;
-    { const L = pliLimites(P); if(P.custoPessoa>0 && L.inst>0) g.prem.prodInst = P.custoPessoa/(L.inst*1000); else if(P.prodB>0) g.prem.prodInst = P.prodB; }
+    { const clt = Math.max(1, P.pessoasFolha||30), cmin = P.instCapMin!=null ? P.instCapMin : 15, cmax = P.instCapMax!=null ? P.instCapMax : 20; g.prem.efetivo = clt; g.prem.prodInst = cmin/clt; g.prem.prodInstMax = Math.max(cmin,cmax)/clt; }
     if(P.custoFabDet && cap>0){ const t = (+P.custoFabDet.clt||0)+(+P.custoFabDet.pj||0)+(+P.custoFabDet.oper||0); g.prem.folhaFab = Math.round(t*100)/100; g.prem.prodRef = cap; g.prem.capFab = cap; }
   } }catch(e){ g = null; }
   PLC_GER_CACHE = { raw, g }; return g;
 }
-function plcLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLC_KEY)); if(o && o.obras){ const G = plcGeral(); if(G) o.obras.forEach(x=>{ x.prem = Object.assign(x.prem||{}, G.prem); x.pagto = Object.assign({}, G.pagto); }); o.obras.forEach(x=>{ x.nome = pliNomeObra(x.nome); if(x.vinculo) x.vinculo = pliNomeObra(x.vinculo);
+function plcLoad(){ try{ const o = JSON.parse(localStorage.getItem(DB_PREFIX+PLC_KEY)); if(o && o.obras){ const G = plcGeral(); if(G) o.obras.forEach(x=>{ { const gp = Object.assign({}, G.prem); if(x.efetivoEd) delete gp.efetivo; x.prem = Object.assign(x.prem||{}, gp); } x.pagto = Object.assign({}, G.pagto); }); o.obras.forEach(x=>{ x.nome = pliNomeObra(x.nome); if(x.vinculo) x.vinculo = pliNomeObra(x.vinculo);
     if(!x.alvoDefinido && x.prem){ const n = pliNorm(x.nome); if(n.includes('JARDIM')) x.prem.alvo = '2027-11-30'; else if(n.includes('BOTANICA')) x.prem.alvo = '2028-02-29'; else if(n.includes('WAVE')) x.prem.alvo = '2029-10-31'; }
     if(!x.alvoDefinido && x.marcos && x.marcos.obra && x.prem) x.prem.alvo = pliAddMeses(x.marcos.obra, -((o.cfgFab && o.cfgFab.folgaMeses!=null) ? o.cfgFab.folgaMeses : 2)); }); return o; } return {obras:[]}; }catch(e){ return {obras:[]}; } }
 function plcSave(c){
@@ -9820,7 +9820,7 @@ function plcCapCalcular(C, cfg, opts){
   const capDia = d => { const ym = d.slice(0,7); return Math.max(0, capMes(ym) - cargaPlano(ym)) / dmes(ym); };
   const used = {}, U = [];
   C.obras.forEach((ob,oi)=>{
-    const p = ob.prem, capInst = Math.max(0.0001, p.efetivo*p.prodInst);
+    const p = ob.prem; let capInst = Math.max(0.0001, p.efetivo*p.prodInst);
     let fases = plcJuntas(ob).fases.filter(f=>f.kg>0);
     if(fases.length && fases.every(f=>f.iniLB)) fases = fases.slice().sort((a,b)=>a.iniLB<b.iniLB?-1:(a.iniLB>b.iniLB?1:0));
     const jan = {}, ex = {}, dur = f => Math.max(1, Math.round(f.kg/1000/capInst*p.diasMes));
@@ -9828,6 +9828,11 @@ function plcCapCalcular(C, cfg, opts){
     fases.forEach(f=>{ if(jaFeita(f)){ ex[f.cod] = true; jan[f.cod] = { ini:f.iniLB||f.fimLB, fim:f.fimLB }; } });
     const pend = fases.filter(f=>!ex[f.cod]);
     const D = p.alvoAnt || p.alvo || (pend.length ? pend.map(f=>f.fimLB).filter(Boolean).sort().slice(-1)[0] : null);
+    const rMax = Math.max(capInst, p.efetivo*(p.prodInstMax||p.prodInst)); let rNec = 0;
+    if(pend.length && D){
+      const totP = pend.reduce((a,f)=>a+f.kg/1000,0), mesesD = Math.max(0.25, pliDiffDias(D, pliAddDias(dbISO, p.iniInstDias))/p.diasMes);
+      rNec = totP/mesesD; capInst = Math.min(rMax, Math.max(capInst, rNec));
+    }
     if(pend.length && D){
       let fim = D; const tmp = {};
       for(let i=pend.length-1;i>=0;i--){ const f = pend[i], ini = pliAddDias(fim, -dur(f)); tmp[f.cod] = { ini, fim }; fim = ini; }
@@ -9838,7 +9843,7 @@ function plcCapCalcular(C, cfg, opts){
       const j = jan[f.cod] || null; let earliest = dbISO;
       const cr = ob.compraReal && (ob.compraReal[f.cod] || ob.compraReal[f.cod+'@'+f.grupo]);
       if(cr && cr.entrega){ const e = pliAddDias(cr.entrega, p.iniFabDias); if(e > earliest) earliest = e; }
-      U.push({ oi, ob, f, fi, kg:f.kg, t:f.kg/1000, j, lag:p.iniInstDias, earliest, capInst, exec:!!ex[f.cod], dur:dur(f), D,
+      U.push({ oi, ob, f, fi, kg:f.kg, t:f.kg/1000, j, lag:p.iniInstDias, earliest, capInst, exec:!!ex[f.cod], dur:dur(f), D, rate:capInst, rNec, rMax,
                due: j ? pliAddDias(j.fim, -p.iniInstDias) : '9999-12-31', latest: j ? pliAddDias(j.ini, -p.iniInstDias) : null });
     });
   });
@@ -9892,17 +9897,17 @@ function plcCapCalcular(C, cfg, opts){
       else { iniI = pliAddDias(u.iniFab, u.lag); if(prev && prev > iniI) iniI = prev; fimI = pliAddDias(iniI, u.dur); }
       if(!u.exec) prev = fimI;
       u.iniInst = iniI; u.fimInst = fimI; u.atraso = u.j && !u.exec ? Math.max(0, pliDiffDias(iniI, u.j.ini)) : 0;
-      (byObra[ob.id] = byObra[ob.id] || {})[u.f.cod] = { iniFab:u.iniFab, fimFab:u.fimFab, iniInst:iniI, fimInst:fimI, cap:true, chegada:u.chegada, atraso:u.atraso };
+      (byObra[ob.id] = byObra[ob.id] || {})[u.f.cod] = { iniFab:u.iniFab, fimFab:u.fimFab, iniInst:iniI, fimInst:fimI, cap:true, chegada:u.chegada, atraso:u.atraso, prodInst:u.rate/Math.max(1,p.efetivo) };
     });
   });
   const fm = pliFmtData, nome = u=>u.ob.nome+' · fase '+u.f.cod;
   C.obras.forEach((ob,oi)=>{
     const us = U.filter(u=>u.oi===oi && !u.exec), p = ob.prem; if(!us.length) return;
     const fimO = us.map(u=>u.fimInst).sort().slice(-1)[0], D = us[0].D;
-    if(D && fimO > D){
-      const dias = pliDiffDias(fimO, D), tot = us.reduce((s,u)=>s+u.t,0), meses = Math.max(0.5, pliDiffDias(D, pliAddDias(dbISO, p.iniInstDias))/p.diasMes), ef = Math.ceil(tot/meses/Math.max(0.0001,p.prodInst));
+    if(D && pliDiffDias(fimO, D) > 3){
+      const dias = pliDiffDias(fimO, D), tot = us.reduce((s,u)=>s+u.t,0), meses = Math.max(0.5, pliDiffDias(D, pliAddDias(dbISO, p.iniInstDias))/p.diasMes), ef = Math.ceil(tot/meses/Math.max(0.0001,(p.prodInstMax||p.prodInst)));
       const f1 = us.filter(u=>u.delay>0)[0];
-      alertas.push({ nivel:'crit', t:`<b>${esc(ob.nome)}</b> não cabe: instalação termina em ${fm(fimO)}, ${dias} dias depois do prazo (${fm(D)})`, d:`com a equipe fixa de ${p.efetivo} pessoas a ${pliFmtT(p.prodInst,3)} t/pessoa/mês (produtividade do limite de custo) a instalação precisa de ${pliDiffDias(fimO, us[0].iniInst)} dias. `+(f1?`A fábrica não entrega a fase ${esc(f1.f.cod)} a tempo (capacidade). `:'')+(ef > p.efetivo ? `Para cumprir o prazo seriam necessárias cerca de ${ef} pessoas (hoje ${p.efetivo}).` : `A equipe seria suficiente (cerca de ${ef} pessoas); o atraso vem da capacidade da fábrica no início — antecipar a compra ou ampliar a capacidade.`) });
+      alertas.push({ nivel:'crit', t:`<b>${esc(ob.nome)}</b> não cabe: instalação termina em ${fm(fimO)}, ${dias} dias depois do prazo (${fm(D)})`, d:`com 1 equipe de ${p.efetivo} pessoas (${pliFmtT(us[0].rate,1)} t/mês, máximo possível ${pliFmtT(us[0].rMax,1)}) a instalação precisa de ${pliDiffDias(fimO, us[0].iniInst)} dias; para o prazo seriam necessárias ${pliFmtT(us[0].rNec,1)} t/mês. `+(f1?`A fábrica não entrega a fase ${esc(f1.f.cod)} a tempo (capacidade). `:'')+(ef > p.efetivo ? `Para cumprir o prazo seriam necessárias cerca de ${ef} pessoas (hoje ${p.efetivo}).` : `A equipe seria suficiente (cerca de ${ef} pessoas); o atraso vem da capacidade da fábrica no início — antecipar a compra ou ampliar a capacidade.`) });
     }
   });
   C.obras.forEach((ob,oi)=>{
@@ -11117,7 +11122,7 @@ function plcSetPagto(i, campo, v){
   plcSave(c); renderPlanejInt();
 }
 function plcCalcBase(ob, ovr){
-  const p = ob.prem, fases = plcJuntas(ob).fases;
+  let p = ob.prem; const fases = plcJuntas(ob).fases;
   const FL = plcFluxoEfetivo(ob), fluxPedido = FL.fluxo;
   const PG = plcPagto(ob);
   const precoFase = f => f.kg * p.preco;
@@ -11143,6 +11148,7 @@ function plcCalcBase(ob, ovr){
                  chegada, liberado, iniFab, diasFab, fimFab, iniInst, diasInst, fimInst });
   };
   const CAP = !!(ovr && fases.some(f=>f.kg>0) && fases.filter(f=>f.kg>0).every(f=>ovr[f.cod] && ovr[f.cod].cap)), capFlux = [];
+  if(CAP){ const o1 = ovr[fases.filter(f=>f.kg>0)[0].cod]; if(o1 && o1.prodInst>0) p = Object.assign({}, p, { prodInst:o1.prodInst }); }
   const construir = ()=>{
   if(CAP){
     fases.filter(f=>f.kg>0).forEach(f=>{ const o = ovr[f.cod], grp = String(f.cod), val = f.kg*p.preco, chegada = o.chegada, pagos = [];
@@ -11625,6 +11631,8 @@ function pliHtmlPremissas(P, R){
     </tbody><tfoot><tr><td><b>Total da instalação</b></td><td class="n"><b>${T.pessoas}</b></td><td></td><td></td><td class="n"><b>${pliFmtR(T.tot)}</b></td><td></td><td></td></tr></tfoot></table>
     <div class="pli-filtros"><button class="btn small secondary" onclick="pliEquipeAdd()">+ Cargo</button><button class="btn small secondary" onclick="pliEquipeRestaurar()">Equipe padrão</button><span class="pli-note" style="margin:0;align-self:center;">Efetivo (sem PJ): ${T.clt} · custo por pessoa: ${pliFmtR(P.custoPessoa)}/mês</span></div>
     <table class="pli-t" style="margin-top:10px;"><tbody>
+     <tr><td>Capacidade de instalação da equipe padrão — mínima (t/mês)</td><td>${pliInput('instCapMin',P.instCapMin!=null?P.instCapMin:15)}</td><td>${pliFmtT((P.instCapMin!=null?P.instCapMin:15)/Math.max(1,P.pessoasFolha||30),3)} t/pessoa/mês · o cronograma parte desta capacidade</td></tr>
+     <tr><td>Capacidade de instalação da equipe padrão — máxima (t/mês)</td><td>${pliInput('instCapMax',P.instCapMax!=null?P.instCapMax:20)}</td><td>${pliFmtT((P.instCapMax!=null?P.instCapMax:20)/Math.max(1,P.pessoasFolha||30),3)} t/pessoa/mês · usada só para cumprir o prazo; equipes de outro tamanho escalam proporcionalmente</td></tr>
      <tr><td>Produtividade – referência (t/pessoa/mês)</td><td>${pliInput('prodB',P.prodB)}</td><td>Observada: ${pliFmtT(R.prodA,3)}</td></tr>
      <tr><td>Custo de instalação — base (R$/kg de mão de obra)</td><td><input type="number" step="0.01" value="${LM.baseInst}" style="width:100px;" onchange="pliEditarPrem('baseInst',this.value)"></td><td>Valor base atual de mão de obra</td></tr>
      <tr><td>Redução meta da instalação (R$/kg)</td><td><input type="number" step="0.01" value="${LM.redInst}" style="width:100px;" onchange="pliEditarPrem('reducaoInst',this.value)"></td><td>Limite de instalação = <b>R$ ${LM.inst.toFixed(2).replace('.',',')}/kg</b>. Alerta quando a obra passa deste valor</td></tr>
@@ -12378,7 +12386,7 @@ function plcEditar(i, campo, valor){
   const c = plcLoad(); const v = parseFloat(String(valor).replace(',','.'));
   if(!c.obras[i] || !isFinite(v)) return;
   if(campo==='capFab'||campo==='folhaFab'||campo==='prodRef'){ toast('A capacidade e o custo da fábrica são definidos nas Premissas gerais.'); return; }
-  c.obras[i].prem[campo] = v; plcSave(c); renderPlanejInt();
+  c.obras[i].prem[campo] = v; if(campo==='efetivo') c.obras[i].efetivoEd = true; plcSave(c); renderPlanejInt();
 }
 function plcFabSeguir(i){ const c = plcLoad(); if(!c.obras[i]) return; delete c.obras[i].fabCustom; plcSave(c); const P = pliLoad(); if(P&&P.custoFabDet) pliFabAplicar(P); renderPlanejInt(); }
 function plcEditarOrc(i, campo, valor, qual){
