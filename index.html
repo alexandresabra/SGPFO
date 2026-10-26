@@ -725,6 +725,7 @@
       <div class="nav-item" data-section="obras"><span class="ico">▤</span><span class="label">Obras</span></div>
       <div class="nav-item" data-section="responsaveis"><span class="ico">🛈</span><span class="label">Responsáveis (Gerente/Eng/Adm/Almox)</span></div>
       <div class="nav-item" data-section="funcionarios"><span class="ico">☺</span><span class="label">Funcionários (Divisão Alumínio)</span></div>
+      <div class="nav-item" data-section="avaliacoes"><span class="ico">★</span><span class="label">Avaliação de desempenho</span></div>
       <div class="nav-item" data-section="perfiscatalogo"><span class="ico">⌇</span><span class="label">Cadastro de Perfis</span></div>
       <div class="nav-item" data-section="vidroscatalogo"><span class="ico">▦</span><span class="label">Cadastro de Vidro</span></div>
       <div class="nav-item" data-section="tecnicos"><span class="ico">◇</span><span class="label">Técnicos</span></div>
@@ -1874,6 +1875,16 @@
       </section>
 
       <!-- ============ FUNCIONÁRIOS ============ -->
+      <section class="section" id="sec-avaliacoes">
+        <div class="atc-bar" id="avTabs">
+          <button class="btn small" data-avt="agenda" onclick="avAba('agenda')">Agenda</button>
+          <button class="btn small secondary" data-avt="lista" onclick="avAba('lista')">Avaliações</button>
+          <button class="btn small secondary" data-avt="result" onclick="avAba('result')">Resultados</button>
+          <span style="flex:1"></span>
+          <button class="btn small" onclick="avNovaModal()">+ Nova avaliação</button>
+        </div>
+        <div id="avCorpo"></div>
+      </section>
       <section class="section" id="sec-funcionarios">
         <div class="toolbar">
           <input type="text" id="funcSearch" placeholder="Buscar funcionário por nome ou matrícula...">
@@ -7041,6 +7052,7 @@ const sectionTitles = {
   obras: ['Obras','Cadastro de obras da Divisão Alumínio'],
   responsaveis: ['Responsáveis','Gerentes, Engenheiros, Administrativos e Almoxarifes'],
   funcionarios: ['Funcionários','Cadastro exclusivo da Divisão Alumínio'],
+  avaliacoes: ['Avaliação de desempenho','Experiência aos 3 meses, depois semestral — RH/DP, Encarregado, Analista, Coordenador e Gerente'],
   perfiscatalogo: ['Cadastro de Perfis','Perfis usados no Memorial de Cálculo (Jx, Wx)'],
   vidroscatalogo: ['Cadastro de Vidro','Tipos de vidro usados nos cálculos e especificações da divisão'],
   tecnicos: ['Técnicos','Cadastro de técnicos e colaboradores'],
@@ -7104,6 +7116,7 @@ function showSection(id){
     if(id==='obras') renderObras();
     if(id==='responsaveis') renderResponsaveis();
     if(id==='funcionarios') renderFuncionarios();
+    if(id==='avaliacoes') renderAvaliacoes();
     if(id==='perfiscatalogo') renderPerfisCatalogo();
     if(id==='vidroscatalogo') renderVidrosCatalogo();
     if(id==='tecnicos') renderTecnicos();
@@ -24287,6 +24300,282 @@ const FUNCIONARIOS_PLANILHA_SEED = [
   toggleOrigemPressaoVidro();
   renderDashboard();
 })();
+
+/* =====================================================================
+   AVALIAÇÃO DE DESEMPENHO — vários avaliadores, fluxo por etapas
+   Dados em 'avaliacoesDesempenho' (lista com id). Fluxo:
+   RH/DP → Encarregado → Analista → Coordenador → Gerente (aprova).
+   ===================================================================== */
+const AV_ESCALA = [[0,'Péssimo / não atende'],[1,'Muito abaixo do esperado'],[2,'Abaixo do esperado'],[3,'Adequado / dentro do esperado'],[4,'Acima do esperado'],[5,'Excelente / destaque']];
+const AV_FAIXAS = [[90,'Muito bom','#2e7d32'],[75,'Bom','#558b2f'],[60,'Satisfatório','#e69500'],[40,'Necessita melhorias','#ef6c00'],[0,'Insatisfatório','#b00020']];
+const AV_ETAPAS = [['rh','RH/DP'],['encarregado','Encarregado'],['analista','Analista'],['coordenador','Coordenador'],['gerente','Gerente']];
+const AV_MODELOS = { instalacao:'Instalação (obra)', fabrica:'Fábrica', adm:'Administrativo / apoio' };
+const AV_TIPOS = { experiencia:'Experiência (3 meses)', periodica:'Periódica (semestral)', promocao:'Promoção / extra' };
+const AV_MOTIVOS_COM = [0,1,5];
+let AV_UI = { aba:'agenda', aberta:null, filtro:'', modelo:null };
+
+function avBlocos(modelo){
+  const b3 = {
+    instalacao:[['a','Executa suas funções conforme esperado','enc'],['b','Qualidade da instalação','ana'],['c','Cumpre prazos compatíveis com as atividades','ana'],['d','Organização e responsabilidade','enc'],['e','Atenção e cuidado na execução das tarefas','enc'],['f','Capacidade de adaptação','enc'],['g','Uso correto de ferramentas e equipamentos','enc']],
+    fabrica:[['a','Executa suas funções conforme esperado','enc'],['b','Qualidade e precisão do trabalho','enc'],['c','Cumpre prazos e ritmo de produção','enc'],['d','Organização e limpeza do posto','enc'],['e','Atenção e cuidado na execução das tarefas','enc'],['f','Capacidade de adaptação','enc'],['g','Retrabalho e desperdício de material','enc']],
+    adm:[['a','Executa suas funções conforme esperado','enc'],['b','Qualidade e correção das informações','enc'],['c','Cumpre prazos de entrega','enc'],['d','Organização e responsabilidade','enc'],['e','Atenção e cuidado na execução das tarefas','enc'],['f','Capacidade de adaptação','enc'],['g','Domínio dos sistemas e ferramentas','enc']]
+  }[modelo] || [];
+  const raw = [
+    { n:1, t:'Assiduidade e pontualidade', c:[['a','Frequência / número de faltas','rh'],['b','Pontualidade','rh'],['c','Evita saídas antecipadas','rh'],['d','Compromisso com horários','rh']] },
+    { n:2, t:'Disciplina e conduta', c:[['a','Cumpre regras da empresa','rh'],['b','Uso correto dos EPIs','enc'],['c','Mantém conduta adequada no ambiente de trabalho','rh'],['d','Respeito com colegas e liderança','enc'],['e','Evita conflitos internos','rh'],['f','Contribui para ambiente harmonioso','enc']] },
+    { n:3, t:'Desempenho operacional', c:b3 },
+    { n:4, t:'Comprometimento e atitude', c:[['a','Proatividade','coo'],['b','Dedicação ao trabalho','coo'],['c','Demonstra vontade de aprender','coo'],['d','Envolvimento com objetivos da empresa','coo'],['e','Disponibilidade em momentos de urgência','coo'],['f','Trabalho em equipe','coo'],['g','Pode ser considerado referência / destaque profissional','coo']] }
+  ];
+  const dono = d => d==='rh' ? 'rh' : d==='coo' ? 'coordenador' : (modelo==='adm' ? 'coordenador' : (d==='ana' ? 'analista' : 'encarregado'));
+  return raw.map(b=>({ n:b.n, t:b.t, c:b.c.map(x=>({ id:b.n+x[0], l:x[0], t:x[1], dono:dono(x[2]) })) }));
+}
+function avEtapasDo(modelo){
+  const donos = new Set(); avBlocos(modelo).forEach(b=>b.c.forEach(c=>donos.add(c.dono)));
+  return AV_ETAPAS.map(e=>e[0]).filter(e=>e==='gerente' || e==='coordenador' || donos.has(e));
+}
+function avEtapaNome(k){ const e = AV_ETAPAS.find(x=>x[0]===k); return e ? e[1] : (k==='fechada'?'Concluída':k); }
+function avLista(){ return load('avaliacoesDesempenho'); }
+function avSalvarLista(l){ save('avaliacoesDesempenho', l); }
+function avGet(id){ return avLista().find(a=>a.id===id); }
+function avSalvar(a){ const l = avLista(), i = l.findIndex(x=>x.id===a.id); if(i>=0) l[i] = a; else l.push(a); avSalvarLista(l); }
+function avNum(){ const yy = String(new Date().getFullYear()).slice(2); const n = avLista().filter(a=>String(a.numero||'').startsWith(yy+'.')).length + 1; return yy+'.'+String(n).padStart(2,'0'); }
+
+/* ---- quem sou eu ---- */
+function avMinhaChave(){ const sel = getCurrentUserSelection(); if(!sel) return null; return (sel.tipo==='funcionario'?'f:':'r:')+sel.registro.id; }
+function avPapeis(){
+  const sel = getCurrentUserSelection();
+  if(!sel) return ['gerente','coordenador','rh','encarregado','analista'];
+  const out = [];
+  if(sel.tipo==='responsavel'){
+    const p = sel.registro.papel;
+    if(papelConcedeAcesso(p,['Gerente'])) out.push('gerente');
+    if(papelConcedeAcesso(p,['Coordenador'])) out.push('coordenador');
+    if(papelConcedeAcesso(p,['RH/DP','RH','DP'])) out.push('rh');
+  } else {
+    const c = normalizarTextoPapel(sel.registro.cargo);
+    if(c.indexOf('gerente')>=0) out.push('gerente');
+    if(c.indexOf('coordenador')>=0) out.push('coordenador');
+    if(/\brh\b|recursos humanos|\bdp\b|departamento pessoal/.test(c)) out.push('rh');
+    if(c.indexOf('encarregado')>=0) out.push('encarregado');
+    if(c.indexOf('analista')>=0) out.push('analista');
+  }
+  return out;
+}
+function avEhGestao(){ const p = avPapeis(); return p.indexOf('gerente')>=0 || p.indexOf('coordenador')>=0 || p.indexOf('rh')>=0; }
+function avPodeAgir(a){
+  if(!a || a.etapa==='fechada') return false;
+  const p = avPapeis(); if(p.indexOf(a.etapa)<0) return false;
+  if(a.etapa==='encarregado' || a.etapa==='analista'){ const n = a[a.etapa+'Chave']; const eu = avMinhaChave(); if(n && eu && n!==eu) return false; }
+  return true;
+}
+function avVisivel(a){
+  if(avEhGestao()) return true;
+  const eu = avMinhaChave(); if(!eu) return true;
+  return a.encarregadoChave===eu || a.analistaChave===eu;
+}
+
+/* ---- cálculo ---- */
+function avClasse(p){ for(const f of AV_FAIXAS) if(p*100 >= f[0]-1e-9) return { nome:f[1], cor:f[2] }; return { nome:AV_FAIXAS[4][1], cor:AV_FAIXAS[4][2] }; }
+function avCalc(a){
+  const blocos = avBlocos(a.modelo); let tot = 0, max = 0, falta = 0;
+  const bs = blocos.map(b=>{ let s = 0, m = 0; b.c.forEach(c=>{ const n = (a.notas||{})[c.id]; if(!n || n.v===undefined) { falta++; return; } if(n.v===null) return; s += n.v; m += 5; }); tot += s; max += m; return { n:b.n, t:b.t, soma:s, max:m, pct:m?s/m:null }; });
+  const pct = max ? tot/max : 0;
+  return { blocos:bs, total:tot, max, pct, classe:avClasse(pct), falta };
+}
+function avSomaMeses(iso, n){ const d = new Date(iso+'T12:00:00'); d.setMonth(d.getMonth()+n); return d.toISOString().slice(0,10); }
+function avProxima(f){
+  const feitas = avLista().filter(a=>a.funcId===f.id && a.etapa==='fechada').sort((x,y)=>(y.fechadaEm||'').localeCompare(x.fechadaEm||''));
+  const aberta = avLista().find(a=>a.funcId===f.id && a.etapa!=='fechada');
+  if(feitas.length) return { data:avSomaMeses((feitas[0].referencia||feitas[0].fechadaEm||'').slice(0,10), 6), tipo:'periodica', aberta };
+  if(!f.dataAdmissao) return { data:'', tipo:'experiencia', aberta };
+  return { data:avSomaMeses(f.dataAdmissao, 3), tipo:'experiencia', aberta };
+}
+function avHoje(){ return new Date().toISOString().slice(0,10); }
+function avDias(a, b){ return Math.round((new Date(b+'T12:00:00') - new Date(a+'T12:00:00'))/86400000); }
+
+/* ---- criação ---- */
+function avNovaModal(funcId, tipo){
+  const fs = load('funcionarios').filter(f=>f.status==='ativo').sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  const f0 = fs.find(f=>f.id===funcId) || fs[0];
+  const pessoas = (load('funcionarios').filter(f=>f.status==='ativo').map(f=>['f:'+f.id, f.nome+' — '+(f.cargo||'')]).concat(load('responsaveis').filter(r=>r.status==='ativo').map(r=>['r:'+r.id, r.nome+' — '+(r.papel||'')]))).sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
+  const opt = pessoas.map(p=>`<option value="${p[0]}">${esc(p[1])}</option>`).join('');
+  const mod = f0 ? ({inst:'instalacao',fab:'fabrica',ind:'adm'})[moTipoFuncionario(f0)] || 'instalacao' : 'instalacao';
+  qsModal('Nova avaliação de desempenho', `<div class="form-grid">
+    <div class="field"><label>Colaborador</label><select id="avn_func" onchange="avNovaModelo()">${fs.map(f=>`<option value="${f.id}" ${f0&&f.id===f0.id?'selected':''}>${esc(f.nome)} — ${esc(f.cargo||'')}</option>`).join('')}</select></div>
+    <div class="field"><label>Tipo</label><select id="avn_tipo">${Object.keys(AV_TIPOS).map(k=>`<option value="${k}" ${k===(tipo||'experiencia')?'selected':''}>${AV_TIPOS[k]}</option>`).join('')}</select></div>
+    <div class="field"><label>Formulário</label><select id="avn_modelo">${Object.keys(AV_MODELOS).map(k=>`<option value="${k}" ${k===mod?'selected':''}>${AV_MODELOS[k]}</option>`).join('')}</select></div>
+    <div class="field"><label>Data de referência</label><input type="date" id="avn_ref" value="${avHoje()}"></div>
+    <div class="field"><label>Encarregado avaliador</label><select id="avn_enc"><option value="">— qualquer encarregado —</option>${opt}</select></div>
+    <div class="field"><label>Analista avaliador</label><select id="avn_ana"><option value="">— qualquer analista —</option>${opt}</select></div>
+  </div><div class="step-note">Fluxo: RH/DP → Encarregado → Analista → Coordenador → aprovação do Gerente. Etapas sem critérios para o formulário escolhido são puladas.</div>
+  <div class="toolbar" style="margin-top:12px;"><button class="btn" onclick="avCriar()">Criar avaliação</button></div>`);
+}
+function avNovaModelo(){ const f = load('funcionarios').find(x=>x.id===document.getElementById('avn_func').value); if(f) document.getElementById('avn_modelo').value = ({inst:'instalacao',fab:'fabrica',ind:'adm'})[moTipoFuncionario(f)] || 'instalacao'; }
+function avCriar(){
+  const f = load('funcionarios').find(x=>x.id===document.getElementById('avn_func').value); if(!f){ toast('Escolha o colaborador.'); return; }
+  const modelo = document.getElementById('avn_modelo').value, et = avEtapasDo(modelo);
+  if(avLista().some(a=>a.funcId===f.id && a.etapa!=='fechada') && !confirm('Já existe uma avaliação em andamento para '+f.nome+'. Criar outra mesmo assim?')) return;
+  const sc = ((load('setores')||[]).find(x=>x.id===f.setor)||{}).nome || '';
+  const a = { id:uid(), numero:avNum(), rev:'00', funcId:f.id, nome:f.nome, cargo:f.cargo||'', setor:sc||f.setor||'', admissao:f.dataAdmissao||'',
+    tipo:document.getElementById('avn_tipo').value, modelo, referencia:document.getElementById('avn_ref').value||avHoje(), criadaEm:new Date().toISOString(),
+    encarregadoChave:document.getElementById('avn_enc').value, analistaChave:document.getElementById('avn_ana').value,
+    etapa:et[0], notas:{}, obs:'', plano:[], promocao:{ recomenda:false }, historico:[{ em:new Date().toISOString(), por:avQuem(), acao:'Avaliação criada' }] };
+  avSalvar(a); closeModal('modalQS'); AV_UI.aberta = a.id; avRender();
+}
+function avQuem(){ const s = getCurrentUserSelection(); return s ? s.registro.nome : 'Sem login'; }
+
+/* ---- preenchimento ---- */
+function avNota(id, crit, v){
+  const a = avGet(id); if(!a || !avPodeAgir(a)) return;
+  const c = avBlocos(a.modelo).flatMap(b=>b.c).find(x=>x.id===crit); if(!c || c.dono!==a.etapa) return;
+  a.notas = a.notas||{}; const atual = a.notas[crit] || {};
+  a.notas[crit] = Object.assign({}, atual, { v: v==='na' ? null : parseInt(v,10), por:avQuem(), papel:a.etapa });
+  avSalvar(a); avRender();
+}
+function avCom(id, crit, txt){ const a = avGet(id); if(!a || !avPodeAgir(a)) return; a.notas = a.notas||{}; a.notas[crit] = Object.assign({}, a.notas[crit]||{}, { c:txt }); avSalvar(a); }
+function avCampo(id, campo, v){ const a = avGet(id); if(!a || !avPodeAgir(a)) return; if(campo.indexOf('.')>0){ const [g,k] = campo.split('.'); a[g] = a[g]||{}; a[g][k] = v; } else a[campo] = v; avSalvar(a); }
+function avPromoChk(id, v){ const a = avGet(id); if(!a || !avPodeAgir(a)) return; a.promocao = a.promocao||{}; a.promocao.recomenda = !!v; avSalvar(a); avRender(); }
+function avPlanoAdd(id){ const a = avGet(id); if(!a || !avPodeAgir(a)) return; a.plano = a.plano||[]; a.plano.push({ ponto:'', acao:'', prazo:'', resp:'', status:'aberta' }); avSalvar(a); avRender(); }
+function avPlanoDel(id,i){ const a = avGet(id); if(!a || !avPodeAgir(a)) return; a.plano.splice(i,1); avSalvar(a); avRender(); }
+function avPlanoCampo(id,i,k,v){ const a = avGet(id); if(!a || !avPodeAgir(a)) return; a.plano[i][k] = v; avSalvar(a); }
+function avConcluir(id){
+  const a = avGet(id); if(!a || !avPodeAgir(a)) return;
+  const meus = avBlocos(a.modelo).flatMap(b=>b.c).filter(c=>c.dono===a.etapa), faltam = [], semCom = [];
+  meus.forEach(c=>{ const n = (a.notas||{})[c.id]; if(!n || n.v===undefined) faltam.push(c.id); else if(n.v!==null && AV_MOTIVOS_COM.indexOf(n.v)>=0 && !(n.c||'').trim()) semCom.push(c.id); });
+  if(faltam.length){ toast('Faltam notas nos critérios: '+faltam.join(', ')+' (use N/A se não se aplica).'); return; }
+  if(semCom.length){ toast('Notas 0, 1 ou 5 exigem comentário. Critérios: '+semCom.join(', ')+'.'); return; }
+  if(a.etapa==='coordenador' && a.promocao && a.promocao.recomenda && !(a.promocao.novoCargo||'').trim()){ toast('Informe o novo cargo da recomendação de promoção.'); return; }
+  const et = avEtapasDo(a.modelo), prox = et[et.indexOf(a.etapa)+1];
+  a.historico.push({ em:new Date().toISOString(), por:avQuem(), acao:'Etapa '+avEtapaNome(a.etapa)+' concluída' });
+  a.etapa = prox; avSalvar(a); toast('Etapa concluída. Próxima: '+avEtapaNome(prox)+'.'); avRender();
+}
+function avDevolver(id){
+  const a = avGet(id); if(!a || a.etapa!=='gerente' || !avPodeAgir(a)) return;
+  const et = avEtapasDo(a.modelo).filter(e=>e!=='gerente');
+  const dest = prompt('Devolver para qual etapa?\n'+et.map((e,i)=>(i+1)+' = '+avEtapaNome(e)).join('\n'), String(et.length)); const i = parseInt(dest,10)-1; if(!(i>=0 && i<et.length)) return;
+  const mot = prompt('Motivo da devolução (obrigatório):',''); if(!mot||!mot.trim()){ toast('Informe o motivo.'); return; }
+  a.historico.push({ em:new Date().toISOString(), por:avQuem(), acao:'Devolvida para '+avEtapaNome(et[i])+': '+mot.trim() }); a.etapa = et[i]; avSalvar(a); avRender();
+}
+function avAjustar(id, crit){
+  const a = avGet(id); if(!a || a.etapa!=='gerente' || !avPodeAgir(a)) return;
+  const n = (a.notas||{})[crit]||{}; const novo = prompt('Nova nota para '+crit+' (0 a 5, ou NA). Nota atual: '+(n.v===null?'NA':n.v),''); if(novo===null) return;
+  const v = /^na$/i.test(novo.trim()) ? null : parseInt(novo,10); if(v!==null && !(v>=0 && v<=5)){ toast('Nota inválida.'); return; }
+  const j = prompt('Justificativa do ajuste (obrigatória):',''); if(!j||!j.trim()){ toast('Informe a justificativa.'); return; }
+  a.historico.push({ em:new Date().toISOString(), por:avQuem(), acao:'Gerente ajustou '+crit+' de '+(n.v===null?'NA':n.v)+' para '+(v===null?'NA':v)+': '+j.trim() });
+  a.notas[crit] = Object.assign({}, n, { v, ajustada:true }); avSalvar(a); avRender();
+}
+function avAprovar(id){
+  const a = avGet(id); if(!a || a.etapa!=='gerente' || !avPodeAgir(a)) return;
+  if(!confirm('Aprovar e concluir esta avaliação? Depois disso ela fica travada.')) return;
+  const c = avCalc(a); a.resultado = { pct:c.pct, classe:c.classe.nome, total:c.total, max:c.max };
+  a.etapa = 'fechada'; a.fechadaEm = avHoje();
+  if(a.promocao && a.promocao.recomenda){ a.promocao.status = 'aguardando'; }
+  a.historico.push({ em:new Date().toISOString(), por:avQuem(), acao:'Aprovada pelo Gerente'+(a.promocao&&a.promocao.recomenda?' — promoção aprovada, aguardando lançamento pelo RH/DP':'') });
+  avSalvar(a); toast('Avaliação aprovada.'); avRender();
+}
+function avLancar(id){
+  const a = avGet(id); if(!a || !(a.promocao&&a.promocao.status==='aguardando')) return; if(avPapeis().indexOf('rh')<0 && avPapeis().indexOf('gerente')<0){ toast('Somente o RH/DP lança a promoção.'); return; }
+  if(!confirm('Confirmar que a promoção foi lançada no cadastro do funcionário?')) return;
+  a.promocao.status = 'lancada'; a.promocao.lancadaEm = avHoje(); a.promocao.lancadaPor = avQuem();
+  a.historico.push({ em:new Date().toISOString(), por:avQuem(), acao:'Promoção lançada no cadastro' }); avSalvar(a); avRender();
+}
+function avExcluir(id){ if(!avPapeis().includes('gerente')){ toast('Somente o Gerente exclui avaliações.'); return; } if(!confirm('Excluir esta avaliação definitivamente?')) return; avSalvarLista(avLista().filter(a=>a.id!==id)); AV_UI.aberta = null; avRender(); }
+function avAbrir(id){ AV_UI.aberta = id; avRender(); window.scrollTo(0,0); }
+function avVoltar(){ AV_UI.aberta = null; avRender(); }
+function avAba(k){ AV_UI.aba = k; AV_UI.aberta = null; avRender(); }
+
+/* ---- telas ---- */
+function renderAvaliacoes(){ avRender(); }
+function avRender(){
+  const el = document.getElementById('avCorpo'); if(!el) return;
+  document.querySelectorAll('[data-avt]').forEach(b=>b.classList.toggle('secondary', b.dataset.avt!==AV_UI.aba));
+  const tabs = document.getElementById('avTabs'); if(tabs) tabs.style.display = AV_UI.aberta ? 'none' : 'flex';
+  if(AV_UI.aberta){ const a = avGet(AV_UI.aberta); el.innerHTML = a && avVisivel(a) ? avHtmlFicha(a) : '<div class="empty-state">Avaliação não encontrada.</div>'; return; }
+  el.innerHTML = AV_UI.aba==='lista' ? avHtmlLista() : AV_UI.aba==='result' ? avHtmlResultados() : avHtmlAgenda();
+}
+function avPill(a){ if(a.etapa==='fechada'){ const c = avClasse((a.resultado||{}).pct||0); return `<span style="background:${c.cor};color:#fff;border-radius:10px;padding:1px 9px;font-size:11px;">${esc((a.resultado||{}).classe||'Concluída')}</span>`; } return `<span style="background:#e8eaf6;color:#283593;border-radius:10px;padding:1px 9px;font-size:11px;">Etapa: ${esc(avEtapaNome(a.etapa))}</span>`; }
+function avHtmlAgenda(){
+  const hoje = avHoje(), fs = load('funcionarios').filter(f=>f.status==='ativo');
+  const linhas = fs.map(f=>{ const p = avProxima(f); const d = p.data ? avDias(hoje, p.data) : null; return { f, p, d }; })
+    .sort((x,y)=>(x.d==null?99999:x.d)-(y.d==null?99999:y.d));
+  const meus = avLista().filter(a=>a.etapa!=='fechada' && avPodeAgir(a));
+  const promo = avLista().filter(a=>a.promocao && a.promocao.status==='aguardando');
+  const sit = x => x.p.aberta ? '<span class="pli-note" style="margin:0">em andamento</span>' : x.d==null ? '<span style="color:#888">sem data de admissão</span>' : x.d<0 ? `<b style="color:#b00020">atrasada ${-x.d} dias</b>` : x.d<=30 ? `<b style="color:#e69500">vence em ${x.d} dias</b>` : `em dia (${x.d} dias)`;
+  return `${meus.length?`<div class="panel"><div class="panel-head">Aguardando a sua etapa (${meus.length})</div><div class="panel-body"><table><thead><tr><th>Nº</th><th>Colaborador</th><th>Tipo</th><th>Sua etapa</th><th></th></tr></thead><tbody>${meus.map(a=>`<tr><td>${esc(a.numero)}</td><td>${esc(a.nome)}<div class="step-note">${esc(a.cargo)}</div></td><td>${esc(AV_TIPOS[a.tipo]||a.tipo)}</td><td>${esc(avEtapaNome(a.etapa))}</td><td><button class="btn small" onclick="avAbrir('${a.id}')">Avaliar</button></td></tr>`).join('')}</tbody></table></div></div>`:''}
+  ${promo.length?`<div class="panel"><div class="panel-head">Promoções aprovadas, aguardando lançamento no cadastro (${promo.length})</div><div class="panel-body"><table><thead><tr><th>Colaborador</th><th>Novo cargo</th><th>Vigência</th><th></th></tr></thead><tbody>${promo.map(a=>`<tr><td>${esc(a.nome)}</td><td>${esc(a.promocao.novoCargo||'')}</td><td>${fmtDate(a.promocao.vigencia)}</td><td><button class="btn small secondary" onclick="avAbrir('${a.id}')">Abrir</button></td></tr>`).join('')}</tbody></table></div></div>`:''}
+  ${avEhGestao()?`<div class="panel"><div class="panel-head">Agenda de avaliações — experiência aos 3 meses, depois semestral</div><div class="panel-body"><div style="overflow-x:auto"><table><thead><tr><th>Colaborador</th><th>Cargo</th><th>Admissão</th><th>Próxima</th><th>Prazo</th><th></th></tr></thead><tbody>${linhas.map(x=>`<tr><td>${esc(x.f.nome)}</td><td>${esc(x.f.cargo||'')}</td><td>${fmtDate(x.f.dataAdmissao)}</td><td>${x.p.data?fmtDate(x.p.data):'—'} <span class="step-note">${x.p.tipo==='experiencia'?'experiência':'semestral'}</span></td><td>${sit(x)}</td><td>${x.p.aberta?`<button class="btn small secondary" onclick="avAbrir('${x.p.aberta.id}')">Abrir</button>`:`<button class="btn small" onclick="avNovaModal('${x.f.id}','${x.p.tipo}')">Iniciar</button>`}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-state">Nenhum funcionário ativo cadastrado.</td></tr>'}</tbody></table></div></div></div>`:(meus.length?'':'<div class="empty-state">Nenhuma avaliação aguardando você.</div>')}`;
+}
+function avHtmlLista(){
+  const f = AV_UI.filtro; let l = avLista().filter(avVisivel).sort((a,b)=>(b.criadaEm||'').localeCompare(a.criadaEm||''));
+  if(f==='andamento') l = l.filter(a=>a.etapa!=='fechada'); else if(f==='fechada') l = l.filter(a=>a.etapa==='fechada');
+  return `<div class="atc-bar"><select onchange="AV_UI.filtro=this.value;avRender()"><option value="">Todas</option><option value="andamento" ${f==='andamento'?'selected':''}>Em andamento</option><option value="fechada" ${f==='fechada'?'selected':''}>Concluídas</option></select></div>
+  <div class="panel"><div class="panel-body"><div style="overflow-x:auto"><table><thead><tr><th>Nº</th><th>Colaborador</th><th>Setor</th><th>Tipo</th><th>Referência</th><th>Resultado</th><th>Situação</th><th></th></tr></thead><tbody>${l.map(a=>`<tr><td>${esc(a.numero)}</td><td><b>${esc(a.nome)}</b><div class="step-note">${esc(a.cargo)}</div></td><td>${esc(a.setor||'')}</td><td>${esc(AV_TIPOS[a.tipo]||a.tipo)}</td><td>${fmtDate(a.referencia)}</td><td>${a.etapa==='fechada'?Math.round(a.resultado.pct*1000)/10+'%':'—'}</td><td>${avPill(a)}</td><td><button class="btn small secondary" onclick="avAbrir('${a.id}')">Abrir</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty-state">Nenhuma avaliação.</td></tr>'}</tbody></table></div></div></div>`;
+}
+function avHtmlResultados(){
+  if(!avEhGestao()) return '<div class="empty-state">Os resultados consolidados são restritos ao RH/DP, Coordenador e Gerente.</div>';
+  const f = avLista().filter(a=>a.etapa==='fechada'); if(!f.length) return '<div class="empty-state">Ainda não há avaliações concluídas.</div>';
+  const med = f.reduce((s,a)=>s+a.resultado.pct,0)/f.length;
+  const dist = {}; AV_FAIXAS.forEach(x=>dist[x[1]]=0); f.forEach(a=>{ dist[a.resultado.classe] = (dist[a.resultado.classe]||0)+1; });
+  const mx = Math.max(1,...Object.values(dist));
+  const porSetor = {}; f.forEach(a=>{ const k = a.setor||'—'; (porSetor[k] = porSetor[k]||[]).push(a.resultado.pct); });
+  const kpi = (n,l)=>`<div class="kpi"><div class="num">${n}</div><div class="lbl">${l}</div></div>`;
+  const barra = (rot,v,cor,txt)=>`<div class="row" style="display:grid;grid-template-columns:150px 1fr 60px;gap:8px;align-items:center;margin:4px 0;font-size:13px;"><span>${esc(rot)}</span><div style="background:#eee;height:14px;border-radius:2px;"><i style="display:block;height:14px;border-radius:2px;width:${(v*100).toFixed(0)}%;background:${cor}"></i></div><b>${txt}</b></div>`;
+  return `<div class="kpi-row">${kpi(f.length,'Avaliações concluídas')}${kpi((med*100).toFixed(1).replace('.',',')+'%','Média geral')}${kpi(avLista().filter(a=>a.etapa!=='fechada').length,'Em andamento')}${kpi(f.filter(a=>a.resultado.pct<0.6).length,'Abaixo de 60%','#c62828')}</div>
+  <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;">
+   <div class="panel"><div class="panel-head">Distribuição por classificação</div><div class="panel-body">${AV_FAIXAS.map(x=>barra(x[1],dist[x[1]]/mx,x[2],dist[x[1]])).join('')}</div></div>
+   <div class="panel"><div class="panel-head">Média por setor</div><div class="panel-body">${Object.entries(porSetor).map(([k,v])=>{ const m = v.reduce((a,b)=>a+b,0)/v.length; return barra(k,m,avClasse(m).cor,(m*100).toFixed(0)+'%'); }).join('')}</div></div></div>`;
+}
+function avHtmlFicha(a){
+  const c = avCalc(a), podeAgir = avPodeAgir(a), blocos = avBlocos(a.modelo), et = avEtapasDo(a.modelo);
+  const func = load('funcionarios').find(f=>f.id===a.funcId) || {};
+  const ver = et.map(e=>{ const i = et.indexOf(e), at = et.indexOf(a.etapa); const feito = a.etapa==='fechada' || i<at, atual = e===a.etapa; return `<span style="padding:3px 10px;border-radius:12px;font-size:12px;${feito?'background:#2e7d32;color:#fff':atual?'background:#bd0c1d;color:#fff':'background:#eee;color:#555'}">${feito?'✓ ':''}${esc(avEtapaNome(e))}</span>`; }).join(' → ');
+  const linhaCrit = cr=>{
+    const n = (a.notas||{})[cr.id]||{}, meu = podeAgir && cr.dono===a.etapa, rotulo = AV_ESCALA.map(x=>x[0]+' = '+x[1]).join(' · ');
+    const radios = [0,1,2,3,4,5].map(v=>`<label title="${esc(AV_ESCALA[v][1])}" style="margin:0 3px;cursor:${meu?'pointer':'default'}"><input type="radio" name="n_${cr.id}" ${n.v===v?'checked':''} ${meu?'':'disabled'} onchange="avNota('${a.id}','${cr.id}','${v}')"> ${v}</label>`).join('')
+      + `<label style="margin:0 3px;"><input type="radio" name="n_${cr.id}" ${n.v===null?'checked':''} ${meu?'':'disabled'} onchange="avNota('${a.id}','${cr.id}','na')"> N/A</label>`;
+    const ajuste = (a.etapa==='gerente' && podeAgir) ? ` <button class="btn small secondary" onclick="avAjustar('${a.id}','${cr.id}')">Ajustar</button>` : '';
+    return `<tr><td style="width:36px"><b>${cr.id}</b></td><td>${esc(cr.t)}<div class="step-note">avalia: ${esc(avEtapaNome(cr.dono))}${n.por?' · '+esc(n.por):''}${n.ajustada?' · ajustada pelo Gerente':''}</div></td><td style="white-space:nowrap">${radios}${ajuste}</td>
+      <td style="min-width:200px"><input type="text" placeholder="${AV_MOTIVOS_COM.indexOf(n.v)>=0?'comentário obrigatório':'comentário (opcional)'}" value="${esc(n.c||'')}" ${meu?'':'disabled'} style="width:100%;${AV_MOTIVOS_COM.indexOf(n.v)>=0&&!(n.c||'').trim()?'border-color:#c62828;':''}" onchange="avCom('${a.id}','${cr.id}',this.value)"></td></tr>`;
+  };
+  const sub = c.blocos;
+  const tabela = blocos.map((b,i)=>`<div class="panel"><div class="panel-head">${b.n}. ${esc(b.t)} <span style="float:right;font-weight:400">${sub[i].soma} / ${sub[i].max} pts</span></div><div class="panel-body" style="overflow-x:auto"><table><tbody>${b.c.map(linhaCrit).join('')}</tbody></table></div></div>`).join('');
+  const p = a.promocao||{}, podeEdTxt = podeAgir && (a.etapa==='coordenador' || a.etapa==='gerente');
+  const verSal = avEhGestao() && (typeof temAcessoSalarioFuncionario==='function' ? temAcessoSalarioFuncionario({ ...func, cargo:a.cargo }) : true);
+  const promo = `<div class="panel"><div class="panel-head">Promoção</div><div class="panel-body">
+    <label><input type="checkbox" ${p.recomenda?'checked':''} ${podeEdTxt?'':'disabled'} onchange="avPromoChk('${a.id}',this.checked)"> Recomendar promoção</label>
+    ${p.recomenda?`<div class="form-grid" style="margin-top:8px;"><div class="field"><label>Novo cargo</label><input type="text" value="${esc(p.novoCargo||'')}" ${podeEdTxt?'':'disabled'} onchange="avCampo('${a.id}','promocao.novoCargo',this.value)"></div>
+      ${verSal?`<div class="field"><label>Novo salário (R$)</label><input type="number" step="any" value="${p.novoSalario||''}" ${podeEdTxt?'':'disabled'} onchange="avCampo('${a.id}','promocao.novoSalario',parseFloat(this.value)||0)"></div>`:''}
+      <div class="field"><label>Vigência</label><input type="date" value="${p.vigencia||''}" ${podeEdTxt?'':'disabled'} onchange="avCampo('${a.id}','promocao.vigencia',this.value)"></div>
+      <div class="field" style="grid-column:1/-1"><label>Justificativa</label><input type="text" value="${esc(p.justificativa||'')}" ${podeEdTxt?'':'disabled'} onchange="avCampo('${a.id}','promocao.justificativa',this.value)"></div></div>`:''}
+    ${p.status==='aguardando'?`<div style="margin-top:8px;padding:8px;background:#fff8e1;border-radius:4px;">Promoção <b>aprovada</b> — aguardando lançamento no cadastro pelo RH/DP. <button class="btn small" onclick="avLancar('${a.id}')">Marcar como lançada</button></div>`:''}
+    ${p.status==='lancada'?`<div style="margin-top:8px;color:#2e7d32;">Promoção lançada em ${fmtDate(p.lancadaEm)} por ${esc(p.lancadaPor||'')}.</div>`:''}</div></div>`;
+  const plano = `<div class="panel"><div class="panel-head">Plano de melhoria</div><div class="panel-body" style="overflow-x:auto">${(a.plano||[]).length?`<table><thead><tr><th>Ponto a melhorar</th><th>Ação recomendada</th><th>Prazo</th><th>Responsável</th><th></th></tr></thead><tbody>${a.plano.map((x,i)=>`<tr><td><input type="text" value="${esc(x.ponto)}" ${podeEdTxt?'':'disabled'} onchange="avPlanoCampo('${a.id}',${i},'ponto',this.value)"></td><td><input type="text" value="${esc(x.acao)}" ${podeEdTxt?'':'disabled'} onchange="avPlanoCampo('${a.id}',${i},'acao',this.value)"></td><td><input type="date" value="${x.prazo||''}" ${podeEdTxt?'':'disabled'} onchange="avPlanoCampo('${a.id}',${i},'prazo',this.value)"></td><td><input type="text" value="${esc(x.resp||'')}" ${podeEdTxt?'':'disabled'} onchange="avPlanoCampo('${a.id}',${i},'resp',this.value)"></td><td>${podeEdTxt?`<button class="btn small secondary" onclick="avPlanoDel('${a.id}',${i})">✕</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="step-note">Nenhum item.</div>'}${podeEdTxt?`<button class="btn small secondary" style="margin-top:6px;" onclick="avPlanoAdd('${a.id}')">+ Item</button>`:''}</div></div>`;
+  const obs = `<div class="panel"><div class="panel-head">Observações</div><div class="panel-body"><textarea rows="3" style="width:100%;" ${podeEdTxt?'':'disabled'} onchange="avCampo('${a.id}','obs',this.value)">${esc(a.obs||'')}</textarea></div></div>`;
+  const hist = `<div class="panel"><div class="panel-head">Histórico</div><div class="panel-body">${(a.historico||[]).map(h=>`<div class="step-note">${new Date(h.em).toLocaleString('pt-BR')} — <b>${esc(h.por)}</b>: ${esc(h.acao)}</div>`).join('')}</div></div>`;
+  const barraAcao = a.etapa==='fechada' ? '' : (podeAgir ? `<div class="toolbar" style="margin:10px 0;">${a.etapa==='gerente'?`<button class="btn" onclick="avAprovar('${a.id}')">Aprovar e concluir</button><button class="btn secondary" onclick="avDevolver('${a.id}')">Devolver para ajuste</button>`:`<button class="btn" onclick="avConcluir('${a.id}')">Concluir minha etapa (${esc(avEtapaNome(a.etapa))})</button>`}</div>` : `<div class="step-note" style="margin:10px 0;">Etapa atual: <b>${esc(avEtapaNome(a.etapa))}</b>. Você não é o avaliador desta etapa — só consulta.</div>`);
+  return `<div class="toolbar" style="margin-bottom:8px;"><button class="btn small secondary" onclick="avVoltar()">← Voltar</button><button class="btn small secondary" onclick="avImprimir('${a.id}')">Imprimir formulário</button>${avPapeis().includes('gerente')?`<button class="btn small secondary" onclick="avExcluir('${a.id}')">Excluir</button>`:''}</div>
+  <div class="panel"><div class="panel-body"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;"><div><h3 style="margin:0;">${esc(a.nome)}</h3><div class="step-note">${esc(a.cargo)} · ${esc(a.setor||'')} · formulário: ${esc(AV_MODELOS[a.modelo])} · ${esc(AV_TIPOS[a.tipo]||a.tipo)} · ref. ${fmtDate(a.referencia)}</div><div class="step-note">Nº ${esc(a.numero)} · Rev. ${esc(a.rev)}</div></div>
+    <div style="text-align:right"><div style="font-size:30px;font-weight:700;color:${c.classe.cor}">${(c.pct*100).toFixed(1).replace('.',',')}%</div><div><b style="color:${c.classe.cor}">${esc(c.classe.nome)}</b> · ${c.total}/${c.max} pts${c.falta?` · <span style="color:#e69500">${c.falta} sem nota</span>`:''}</div></div></div>
+    <div style="margin-top:10px;">${ver}</div>
+    <div class="step-note" style="margin-top:8px;">Escala: ${AV_ESCALA.map(x=>x[0]+' = '+x[1]).join(' · ')}. Notas 0, 1 e 5 exigem comentário. Use N/A se o critério não se aplica ao cargo.</div></div></div>
+  ${barraAcao}${tabela}${promo}${plano}${obs}${barraAcao}${hist}`;
+}
+function avImprimir(id){
+  const a = avGet(id); if(!a) return; const c = avCalc(a), blocos = avBlocos(a.modelo);
+  const verSal = avEhGestao();
+  const cab = `<table style="width:100%;margin-bottom:8px"><tr><td style="width:55%"><b>SISTEMA DE GESTÃO DA QUALIDADE - SGQ</b><br>FORMULÁRIO</td><td><b>AVALIAÇÃO DE DESEMPENHO INDIVIDUAL</b></td><td>Nº. ${esc(a.numero)}</td><td>Rev. ${esc(a.rev)}</td><td>Data: ${fmtDate(a.fechadaEm||avHoje())}</td></tr></table>`;
+  const info = `<table><tr><td class="k">Nome</td><td>${esc(a.nome)}</td><td class="k">Cargo</td><td>${esc(a.cargo)}</td></tr><tr><td class="k">Setor</td><td>${esc(a.setor||'')}</td><td class="k">Tipo</td><td>${esc(AV_TIPOS[a.tipo]||a.tipo)} — ref. ${fmtDate(a.referencia)}</td></tr>${a.promocao&&a.promocao.recomenda?`<tr><td class="k">Promoção</td><td>SIM</td><td class="k">Novo cargo</td><td>${esc(a.promocao.novoCargo||'')}${verSal&&a.promocao.novoSalario?' · R$ '+a.promocao.novoSalario.toLocaleString('pt-BR'):''}</td></tr>`:''}</table>`;
+  const esc5 = `<p style="font-size:11px"><b>Escala:</b> ${AV_ESCALA.map(x=>x[0]+' = '+x[1]).join(' · ')}</p>`;
+  const corpo = blocos.map((b,i)=>`<h3>${b.n}. ${esc(b.t).toUpperCase()}</h3><table><tr><th>Critério</th><th style="width:70px">Avaliador</th><th style="width:55px">Nota</th></tr>${b.c.map(cr=>{ const n = (a.notas||{})[cr.id]||{}; return `<tr><td>${cr.l}) ${esc(cr.t)}${n.c?`<div style="font-size:10px;color:#555">${esc(n.c)}</div>`:''}</td><td style="font-size:10px">${esc(avEtapaNome(cr.dono))}</td><td style="text-align:center">${n.v===null?'N/A':n.v===undefined?'':n.v}</td></tr>`; }).join('')}<tr><td colspan="2"><b>${b.n}. SUBTOTAL</b></td><td style="text-align:center"><b>${c.blocos[i].soma}</b></td></tr></table>`).join('');
+  const fim = `<h3>CÁLCULO FINAL</h3><table><tr><td class="k">Soma total obtida</td><td>${c.total}</td><td class="k">Pontuação máxima</td><td>${c.max}</td></tr><tr><td class="k">Percentual final</td><td>${(c.pct*100).toFixed(1).replace('.',',')}%</td><td class="k">Classificação</td><td><b>${esc(c.classe.nome)}</b></td></tr></table>
+    <table style="width:60%"><tr><th>Percentual</th><th>Classificação</th></tr>${AV_FAIXAS.map((f,i)=>`<tr><td>${i===0?'90% a 100%':i===4?'Abaixo de 40%':f[0]+'% a '+(AV_FAIXAS[i-1][0]-1)+'%'}</td><td>${f[1]}</td></tr>`).join('')}</table>
+    <h3>OBSERVAÇÕES</h3><div class="box">${esc(a.obs||'')}</div>
+    <h3>PLANO DE MELHORIA (SE NECESSÁRIO)</h3><table><tr><th>Ponto a melhorar</th><th>Ação recomendada</th><th style="width:80px">Prazo</th><th>Responsável</th></tr>${(a.plano||[]).map(x=>`<tr><td>${esc(x.ponto)}</td><td>${esc(x.acao)}</td><td>${fmtDate(x.prazo)}</td><td>${esc(x.resp||'')}</td></tr>`).join('')||'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>'}</table>
+    <p style="font-size:11px"><b>Avaliadores:</b> ${[...new Set((a.historico||[]).filter(h=>/concluída|Aprovada/.test(h.acao)).map(h=>h.por))].map(esc).join(', ')}</p>
+    <div class="sign"><div>Avaliador / Coordenador</div><div>Gerente</div><div>Ciente do colaborador</div></div>`;
+  atcImprimirHtml(`<html><head><meta charset="utf-8">${ATC_CSS}<style>h3{margin:8px 0 3px}td,th{padding:3px 6px;font-size:11px}</style></head><body style="margin:10mm 12mm">${cab}${info}${esc5}${corpo}${fim}</body></html>`);
+}
+
 </script>
 </body>
 </html>
