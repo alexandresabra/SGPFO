@@ -10371,7 +10371,7 @@ function plcEdSalvar(){
       ob.nome = nome; ob.prem.preco = e.preco||ob.prem.preco; ob.prem.efetivo = e.efetivo||ob.prem.efetivo;
       const total = ob.fases.reduce((t,f)=>t+f.kg*ob.prem.preco,0);
       ob.inicioAuto = !e.inicio; if(e.inicio) delete ob.inicio1;
-      ob.fluxo = [{ grupo:'A', parcela:'1/1', venc:e.inicio||ob.fluxo[0].venc, valor:total }];
+      ob.fluxo = [{ grupo:'A', parcela:'1/1', venc:e.inicio||((ob.fluxo&&ob.fluxo[0]&&ob.fluxo[0].venc)||ob.inicio1||(pliLoad()||{}).dataBase||todayISO()), valor:total }];
     }
     if(!ob.alvoDefinido && marcos.obra) ob.prem.alvo = pliAddMeses(marcos.obra, -folga);
     PLI_UI.cronObra = e.idx;
